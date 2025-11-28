@@ -22,6 +22,9 @@ Retrieval-Augmented Generation (RAG) has emerged as the dominant paradigm for gr
 
 Trueno-RAG addresses these by providing a complete RAG stack in pure Rust, integrated with the Sovereign AI ecosystem.
 
+> **Toyota Way Review: Elimination of Waste (Muda)**
+> By removing "dependency hell," we eliminate the *waste of waiting* and *waste of processing* associated with complex environments. However, we must ensure `aprender` and `realizar` do not introduce the *waste of overproduction* (reinventing wheels that already roll smoothly).
+
 ### 1.2 Design Principles
 
 - **Pure Rust** - No FFI, no Python, compiles to any target
@@ -55,6 +58,9 @@ Trueno-RAG builds on and integrates with:
 │                     (Citation tracking, prompt formatting)                   │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
+
+> **Toyota Way Review: Visual Control**
+> This value stream map is clear. To fully embrace *Jidoka* (built-in quality), consider explicitly visualizing where "defects" (failed chunks, bad embeddings) are detected and ejected from the pipeline to prevent downstream pollution (Andon).
 
 ### 2.2 Component Interaction
 
@@ -115,6 +121,9 @@ pub enum ChunkingStrategy {
     },
 }
 ```
+
+> **Toyota Way Review: Built-in Quality (Jidoka)**
+> *Fixed-size* chunking is prone to "defects" (cutting semantic context). *Semantic* chunking is preferred as it stops the line (the chunk) based on quality (meaning) rather than an arbitrary quota (size), reducing the *waste of correction* later.
 
 ### 3.2 Chunk Data Model
 
@@ -218,7 +227,12 @@ pub enum EmbeddingProvider {
         api_key: SecretString,
     },
 }
+```
 
+> **Toyota Way Review: Genchi Genbutsu (Go and See)**
+> Local inference (`Local`) allows for *Genchi Genbutsu*—processing data where it resides—reducing the *waste of transport* (sending data to external APIs) and increasing sovereignty.
+
+```rust
 /// Aprender's native embedding models
 pub enum AprenderEmbeddingModel {
     /// TF-IDF based (no neural network)
@@ -285,7 +299,12 @@ pub struct HnswConfig {
     /// Distance metric
     pub metric: DistanceMetric,
 }
+```
 
+> **Toyota Way Review: Standardized Work**
+> HNSW parameters (`m`, `ef_construction`) are critical standards. These should be tuned based on *Heijunka* (leveling) principles to balance indexing speed (load) with search accuracy (quality), avoiding overburdening (`Muri`) the system during ingestion.
+
+```rust
 pub enum DistanceMetric {
     Cosine,
     Euclidean,
@@ -370,7 +389,12 @@ impl BM25Index {
             idf * tf_norm
         }).sum()
     }
+```
 
+> **Toyota Way Review: Efficiency**
+> While BM25 is robust, this iterative scoring calculation must be scrutinized for *Muda* (computational waste). Ensure the `trueno` SIMD primitives are leveraged here to minimize cycle time.
+
+```rust
     /// Search with BM25
     pub fn search(&self, query: &str, k: usize) -> Vec<(ChunkId, f32)> {
         let terms = self.tokenize(query);
@@ -484,6 +508,9 @@ impl FusionStrategy {
     }
 }
 ```
+
+> **Toyota Way Review: Nemawashi (Decision Making)**
+> *Reciprocal Rank Fusion* acts as a consensus mechanism, integrating diverse "perspectives" (dense and sparse) to make a better decision. This aligns with making decisions slowly by consensus, then implementing rapidly.
 
 ### 7.2 Hybrid Retriever
 
@@ -663,6 +690,9 @@ impl ContextAssembler {
 }
 ```
 
+> **Toyota Way Review: Stop and Fix (Jidoka)**
+> Truncating chunks to fit context is a "stopgap," not a root cause fix. It creates "hidden defects" (missing info). A *Kaizen* opportunity exists here: summarize or re-rank rather than blindly chopping, which respects the value of the information.
+
 ### 9.2 Citation Tracking
 
 ```rust
@@ -788,6 +818,9 @@ impl MultiQueryRetriever {
     }
 }
 ```
+
+> **Toyota Way Review: Pull System**
+> Generating multiple queries allows the system to "pull" more relevant information based on customer (user) intent, rather than just "pushing" what matches the literal string. This improves value, though we must watch for the *waste of over-processing*.
 
 ## 11. Evaluation
 
@@ -916,6 +949,9 @@ impl RagPipeline {
     }
 }
 ```
+
+> **Toyota Way Review: One-Piece Flow**
+> Streaming results implements *continuous flow*, reducing the batch size to one. This eliminates the *waste of waiting* for the user, delivering value the moment it is created.
 
 ## 13. References
 
