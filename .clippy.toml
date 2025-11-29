@@ -1,0 +1,19 @@
+# Clippy configuration for trueno-rag
+
+# Cognitive complexity threshold
+cognitive-complexity-threshold = 25
+
+# Maximum number of lines in a function
+too-many-lines-threshold = 150
+
+# Maximum number of arguments
+too-many-arguments-threshold = 7
+
+# Disallowed methods for better code quality
+disallowed-methods = [
+    { path = "std::env::set_var", reason = "Use typed config instead" },
+    { path = "std::thread::sleep", reason = "Use tokio::time::sleep in async code" },
+]
+
+# Type complexity threshold
+type-complexity-threshold = 300
