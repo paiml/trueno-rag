@@ -933,6 +933,316 @@ mod tests {
         }
     }
 
+    // ============ Additional Coverage Tests ============
+
+    #[test]
+    fn test_context_assembler_grouped_strategy() {
+        let config = ContextAssemblerConfig {
+            strategy: AssemblyStrategy::DocumentGrouped,
+            ..Default::default()
+        };
+        let assembler = ContextAssembler::new(config);
+
+        // Create results from different documents
+        let doc1 = DocumentId::new();
+        let doc2 = DocumentId::new();
+
+        let chunk1 = Chunk::new(doc1, "Doc1 Chunk1".to_string(), 0, 11);
+        let chunk2 = Chunk::new(doc1, "Doc1 Chunk2".to_string(), 12, 23);
+        let chunk3 = Chunk::new(doc2, "Doc2 Chunk1".to_string(), 0, 11);
+
+        let results = vec![
+            RetrievalResult::new(chunk1).with_fused_score(0.9),
+            RetrievalResult::new(chunk3).with_fused_score(0.8),
+            RetrievalResult::new(chunk2).with_fused_score(0.7),
+        ];
+
+        let context = assembler.assemble(&results);
+
+        // Should have all 3 chunks
+        assert_eq!(context.len(), 3);
+        assert_eq!(context.citations.len(), 3);
+    }
+
+    #[test]
+    fn test_context_assembler_interleaved_strategy() {
+        let config = ContextAssemblerConfig {
+            strategy: AssemblyStrategy::Interleaved,
+            ..Default::default()
+        };
+        let assembler = ContextAssembler::new(config);
+
+        let results = vec![
+            create_result("Chunk A", 0.9),
+            create_result("Chunk B", 0.8),
+        ];
+
+        let context = assembler.assemble(&results);
+
+        assert_eq!(context.len(), 2);
+    }
+
+    #[test]
+    fn test_context_assembler_grouped_max_tokens() {
+        let config = ContextAssemblerConfig {
+            max_tokens: 10, // Very small
+            strategy: AssemblyStrategy::DocumentGrouped,
+            include_citations: true,
+        };
+        let assembler = ContextAssembler::new(config);
+
+        let results = vec![
+            create_result(&"A".repeat(100), 0.9),
+            create_result(&"B".repeat(100), 0.8),
+        ];
+
+        let context = assembler.assemble(&results);
+
+        // Should have stopped due to token limit
+        assert!(context.len() < 2);
+    }
+
+    #[test]
+    fn test_context_assembler_grouped_no_citations() {
+        let config = ContextAssemblerConfig {
+            strategy: AssemblyStrategy::DocumentGrouped,
+            include_citations: false,
+            ..Default::default()
+        };
+        let assembler = ContextAssembler::new(config);
+
+        let results = vec![create_result("Content", 0.9)];
+        let context = assembler.assemble(&results);
+
+        assert_eq!(context.chunks[0].citation_id, 0);
+    }
+
+    #[test]
+    fn test_pipeline_builder_with_vector_store() {
+        let custom_store = VectorStore::with_dimension(128);
+
+        let pipeline = RagPipelineBuilder::new()
+            .embedder(MockEmbedder::new(128))
+            .reranker(NoOpReranker::new())
+            .vector_store(custom_store)
+            .build()
+            .unwrap();
+
+        assert_eq!(pipeline.document_count(), 0);
+    }
+
+    #[test]
+    fn test_pipeline_builder_with_sparse_index() {
+        let custom_index = BM25Index::with_params(1.5, 0.8);
+
+        let pipeline = RagPipelineBuilder::new()
+            .embedder(MockEmbedder::new(64))
+            .reranker(NoOpReranker::new())
+            .sparse_index(custom_index)
+            .build()
+            .unwrap();
+
+        assert_eq!(pipeline.chunk_count(), 0);
+    }
+
+    #[test]
+    fn test_pipeline_builder_function() {
+        // Test the simplified pipeline_builder() function
+        let builder = pipeline_builder();
+        let pipeline = builder
+            .embedder(MockEmbedder::new(64))
+            .reranker(NoOpReranker::new())
+            .build()
+            .unwrap();
+
+        assert_eq!(pipeline.document_count(), 0);
+    }
+
+    #[test]
+    fn test_pipeline_chunker_method() {
+        let pipeline = RagPipelineBuilder::new()
+            .embedder(MockEmbedder::new(64))
+            .reranker(NoOpReranker::new())
+            .chunker(RecursiveChunker::new(256, 32))
+            .build()
+            .unwrap();
+
+        // Access chunker through public method
+        let chunker = pipeline.chunker();
+        let doc = Document::new("Test document content for chunking.");
+        let estimate = chunker.estimate_chunks(&doc);
+        assert!(estimate >= 1);
+    }
+
+    #[test]
+    fn test_pipeline_embedder_method() {
+        let pipeline = RagPipelineBuilder::new()
+            .embedder(MockEmbedder::new(128))
+            .reranker(NoOpReranker::new())
+            .build()
+            .unwrap();
+
+        // Access embedder through public method
+        let embedder = pipeline.embedder();
+        assert_eq!(embedder.dimension(), 128);
+    }
+
+    #[test]
+    fn test_pipeline_assemble_context_method() {
+        let mut pipeline = RagPipelineBuilder::new()
+            .embedder(MockEmbedder::new(64))
+            .reranker(NoOpReranker::new())
+            .build()
+            .unwrap();
+
+        pipeline
+            .index_document(&Document::new("Test document content."))
+            .unwrap();
+
+        let results = pipeline.query("test", 5).unwrap();
+
+        // Use public assemble_context method
+        let context = pipeline.assemble_context(&results);
+        assert!(context.len() <= results.len());
+    }
+
+    #[test]
+    fn test_pipeline_assembler_method() {
+        let pipeline = RagPipelineBuilder::new()
+            .embedder(MockEmbedder::new(64))
+            .reranker(NoOpReranker::new())
+            .max_context_tokens(1000)
+            .build()
+            .unwrap();
+
+        // Access assembler through public method
+        let assembler = pipeline.assembler();
+        assert_eq!(assembler.config.max_tokens, 1000);
+    }
+
+    #[test]
+    fn test_assembled_context_with_page_metadata() {
+        let mut context = AssembledContext::new();
+
+        let mut chunk = Chunk::new(DocumentId::new(), "Page content".to_string(), 0, 12);
+        chunk.metadata.page = Some(5);
+        chunk.metadata.title = Some("Document Title".to_string());
+
+        let result = RetrievalResult::new(chunk).with_fused_score(0.9);
+        let id = context.add_citation(&result);
+        context.add_chunk(&result, id);
+
+        assert_eq!(context.citations[0].page, Some(5));
+        assert_eq!(context.citations[0].title, Some("Document Title".to_string()));
+    }
+
+    #[test]
+    fn test_citation_without_title_uses_untitled() {
+        let mut context = AssembledContext::new();
+
+        // Create result without title
+        let chunk = Chunk::new(DocumentId::new(), "content".to_string(), 0, 7);
+        let result = RetrievalResult::new(chunk).with_fused_score(0.9);
+
+        context.add_citation(&result);
+        let list = context.citation_list();
+
+        assert!(list.contains("Untitled"));
+    }
+
+    #[test]
+    fn test_rag_pipeline_config_default() {
+        let config = RagPipelineConfig::default();
+
+        assert_eq!(config.chunk_size, 512);
+        assert_eq!(config.chunk_overlap, 50);
+        assert_eq!(config.embedding_dimension, 384);
+        assert_eq!(config.context.max_tokens, 4096);
+    }
+
+    #[test]
+    fn test_assembly_strategy_serialization() {
+        let strategies = vec![
+            AssemblyStrategy::Sequential,
+            AssemblyStrategy::DocumentGrouped,
+            AssemblyStrategy::Interleaved,
+        ];
+
+        for strategy in strategies {
+            let json = serde_json::to_string(&strategy).unwrap();
+            let deserialized: AssemblyStrategy = serde_json::from_str(&json).unwrap();
+            assert_eq!(
+                std::mem::discriminant(&strategy),
+                std::mem::discriminant(&deserialized)
+            );
+        }
+    }
+
+    #[test]
+    fn test_context_assembler_config_serialization() {
+        let config = ContextAssemblerConfig {
+            max_tokens: 2048,
+            strategy: AssemblyStrategy::DocumentGrouped,
+            include_citations: false,
+        };
+
+        let json = serde_json::to_string(&config).unwrap();
+        let deserialized: ContextAssemblerConfig = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(config.max_tokens, deserialized.max_tokens);
+        assert!(!deserialized.include_citations);
+    }
+
+    #[test]
+    fn test_citation_serialization() {
+        let citation = Citation {
+            id: 1,
+            document_id: DocumentId::new(),
+            chunk_id: crate::ChunkId::new(),
+            title: Some("Test".to_string()),
+            url: Some("https://example.com".to_string()),
+            page: Some(10),
+        };
+
+        let json = serde_json::to_string(&citation).unwrap();
+        let deserialized: Citation = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(citation.id, deserialized.id);
+        assert_eq!(citation.title, deserialized.title);
+        assert_eq!(citation.url, deserialized.url);
+        assert_eq!(citation.page, deserialized.page);
+    }
+
+    #[test]
+    fn test_context_chunk_serialization() {
+        let chunk = ContextChunk {
+            content: "Test content".to_string(),
+            citation_id: 1,
+            retrieval_score: 0.9,
+            rerank_score: Some(0.95),
+        };
+
+        let json = serde_json::to_string(&chunk).unwrap();
+        let deserialized: ContextChunk = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(chunk.content, deserialized.content);
+        assert_eq!(chunk.citation_id, deserialized.citation_id);
+    }
+
+    #[test]
+    fn test_assembled_context_serialization() {
+        let mut context = AssembledContext::new();
+        let result = create_result("Test", 0.9);
+        let id = context.add_citation(&result);
+        context.add_chunk(&result, id);
+
+        let json = serde_json::to_string(&context).unwrap();
+        let deserialized: AssembledContext = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(context.len(), deserialized.len());
+        assert_eq!(context.citations.len(), deserialized.citations.len());
+    }
+
     // ============ Property-Based Tests ============
 
     use proptest::prelude::*;

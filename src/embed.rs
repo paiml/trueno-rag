@@ -473,8 +473,8 @@ mod tests {
 
         let doc_id = DocumentId::new();
         let mut chunks = vec![
-            crate::chunk::Chunk::new(doc_id, "First chunk".to_string(), 0, 11),
-            crate::chunk::Chunk::new(doc_id, "Second chunk".to_string(), 12, 24),
+            Chunk::new(doc_id, "First chunk".to_string(), 0, 11),
+            Chunk::new(doc_id, "Second chunk".to_string(), 12, 24),
         ];
 
         embedder.embed_chunks(&mut chunks).unwrap();

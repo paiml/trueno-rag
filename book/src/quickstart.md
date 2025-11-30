@@ -76,6 +76,21 @@ let pipeline = RagPipelineBuilder::new()
     .build()?;
 ```
 
+## Running Examples
+
+Try the included examples to see Trueno-RAG in action:
+
+```bash
+# Run all examples
+make examples
+
+# Or run individually
+cargo run --example basic_rag
+cargo run --example chunking_strategies
+cargo run --example hybrid_search
+cargo run --example metrics_evaluation
+```
+
 ## Next Steps
 
 - Learn about [Document Chunking](./concepts/chunking.md)

@@ -32,6 +32,30 @@ make test-fast
 make coverage
 ```
 
+## Running Examples
+
+Trueno-RAG includes several examples demonstrating key features:
+
+```bash
+# Run all examples
+make examples
+
+# Run individual examples
+cargo run --example basic_rag
+cargo run --example chunking_strategies
+cargo run --example hybrid_search
+cargo run --example metrics_evaluation
+```
+
+### Available Examples
+
+| Example | Description |
+|---------|-------------|
+| `basic_rag` | Complete RAG pipeline with indexing and querying |
+| `chunking_strategies` | Comparison of different chunking approaches |
+| `hybrid_search` | Dense + sparse hybrid retrieval with fusion |
+| `metrics_evaluation` | Retrieval quality metrics (Recall, MRR, NDCG) |
+
 ## Feature Flags
 
 Currently all features are enabled by default. Future releases may include optional features for different embedding backends.

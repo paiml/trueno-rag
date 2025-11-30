@@ -612,6 +612,146 @@ mod tests {
         assert_eq!(results.len(), 2);
     }
 
+    // ============ Additional Coverage Tests ============
+
+    #[test]
+    fn test_hybrid_retriever_store_accessors() {
+        let embedder = MockEmbedder::new(64);
+        let dense = VectorStore::with_dimension(64);
+        let sparse = BM25Index::new();
+
+        let mut retriever = HybridRetriever::new(dense, sparse, embedder);
+
+        // Test immutable accessors
+        let _dense_store = retriever.dense_store();
+        let _sparse_index = retriever.sparse_index();
+
+        // Test mutable accessors
+        let dense_mut = retriever.dense_store_mut();
+        assert!(dense_mut.is_empty());
+
+        let sparse_mut = retriever.sparse_index_mut();
+        let _ = sparse_mut; // Just verify it compiles and works
+    }
+
+    #[test]
+    fn test_hybrid_retriever_is_empty() {
+        let embedder = MockEmbedder::new(64);
+        let dense = VectorStore::with_dimension(64);
+        let sparse = BM25Index::new();
+
+        let mut retriever = HybridRetriever::new(dense, sparse, embedder);
+        assert!(retriever.is_empty());
+
+        retriever
+            .index(create_test_chunk("test", vec![0.0; 64]))
+            .unwrap();
+        assert!(!retriever.is_empty());
+    }
+
+    #[test]
+    fn test_sparse_retriever_default() {
+        let retriever = SparseRetriever::default();
+        let results = retriever.retrieve("test", 10);
+        assert!(results.is_empty());
+    }
+
+    #[test]
+    fn test_retrieval_result_best_score_sparse_fallback() {
+        let chunk = Chunk::new(DocumentId::new(), "test".to_string(), 0, 4);
+
+        // Only sparse score available
+        let result = RetrievalResult::new(chunk).with_sparse_score(0.75);
+        assert!((result.best_score() - 0.75).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_hybrid_retriever_with_dense_disabled() {
+        let embedder = MockEmbedder::new(3);
+        let dense = VectorStore::with_dimension(3);
+        let sparse = BM25Index::new();
+
+        let config = HybridRetrieverConfig {
+            candidates_per_source: 50,
+            fusion: FusionStrategy::default(),
+            use_dense: false,
+            use_sparse: true,
+        };
+
+        let mut retriever = HybridRetriever::new(dense, sparse, embedder).with_config(config);
+
+        retriever
+            .index(create_test_chunk(
+                "machine learning test",
+                vec![1.0, 0.0, 0.0],
+            ))
+            .unwrap();
+
+        // Should still work, using only sparse
+        let results = retriever.retrieve("machine", 10).unwrap();
+        // Results depend on sparse-only fusion
+        assert!(results.len() <= 10);
+    }
+
+    #[test]
+    fn test_hybrid_retriever_with_sparse_disabled() {
+        let embedder = MockEmbedder::new(3);
+        let dense = VectorStore::with_dimension(3);
+        let sparse = BM25Index::new();
+
+        let config = HybridRetrieverConfig {
+            candidates_per_source: 50,
+            fusion: FusionStrategy::default(),
+            use_dense: true,
+            use_sparse: false,
+        };
+
+        let mut retriever = HybridRetriever::new(dense, sparse, embedder).with_config(config);
+
+        retriever
+            .index(create_test_chunk("test content", vec![1.0, 0.0, 0.0]))
+            .unwrap();
+
+        // Should still work, using only dense
+        let results = retriever.retrieve("test", 10).unwrap();
+        assert!(results.len() <= 10);
+    }
+
+    #[test]
+    fn test_hybrid_retriever_config_serialization() {
+        let config = HybridRetrieverConfig {
+            candidates_per_source: 100,
+            fusion: FusionStrategy::RRF { k: 60.0 },
+            use_dense: true,
+            use_sparse: false,
+        };
+
+        let json = serde_json::to_string(&config).unwrap();
+        let deserialized: HybridRetrieverConfig = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(config.candidates_per_source, deserialized.candidates_per_source);
+        assert_eq!(config.use_dense, deserialized.use_dense);
+        assert_eq!(config.use_sparse, deserialized.use_sparse);
+    }
+
+    #[test]
+    fn test_retrieval_result_serialization() {
+        let chunk = Chunk::new(DocumentId::new(), "test content".to_string(), 0, 12);
+        let result = RetrievalResult::new(chunk)
+            .with_dense_score(0.9)
+            .with_sparse_score(0.8)
+            .with_fused_score(0.85)
+            .with_rerank_score(0.95);
+
+        let json = serde_json::to_string(&result).unwrap();
+        let deserialized: RetrievalResult = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(result.dense_score, deserialized.dense_score);
+        assert_eq!(result.sparse_score, deserialized.sparse_score);
+        assert_eq!(result.fused_score, deserialized.fused_score);
+        assert_eq!(result.rerank_score, deserialized.rerank_score);
+    }
+
     // ============ Property-Based Tests ============
 
     use proptest::prelude::*;
