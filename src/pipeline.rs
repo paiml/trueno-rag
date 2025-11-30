@@ -622,7 +622,7 @@ mod tests {
 
         let formatted = context.format_plain();
         assert_eq!(formatted, "Plain content");
-        assert!(!formatted.contains("["));
+        assert!(!formatted.contains('['));
     }
 
     #[test]

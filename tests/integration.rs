@@ -75,7 +75,7 @@ fn test_different_chunking_strategies() {
     // Test SentenceChunker
     let sent_chunker = SentenceChunker::new(2, 0);
     let sent_chunks = sent_chunker.chunk(&doc).expect("SentenceChunker failed");
-    assert!(sent_chunks.len() >= 1);
+    assert!(!sent_chunks.is_empty());
 
     // Test StructuralChunker with markdown
     let md_doc = Document::new(

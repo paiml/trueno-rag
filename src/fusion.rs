@@ -450,7 +450,7 @@ mod tests {
         let results = strategy.fuse(&dense, &sparse);
 
         // Should use dense score
-        assert_eq!(results[0].1, 0.9);
+        assert!((results[0].1 - 0.9).abs() < f32::EPSILON);
     }
 
     // ============ Intersection Fusion Tests ============

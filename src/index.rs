@@ -744,7 +744,10 @@ mod tests {
 
         let chunk1 = create_test_chunk_with_embedding("north", vec![1.0, 0.0, 0.0]);
         let chunk2 = create_test_chunk_with_embedding("east", vec![0.0, 1.0, 0.0]);
-        let chunk3 = create_test_chunk_with_embedding("diagonal", vec![0.7071, 0.7071, 0.0]);
+        let chunk3 = create_test_chunk_with_embedding(
+            "diagonal",
+            vec![std::f32::consts::FRAC_1_SQRT_2, std::f32::consts::FRAC_1_SQRT_2, 0.0],
+        );
 
         let id1 = chunk1.id;
         let id3 = chunk3.id;

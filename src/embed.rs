@@ -568,7 +568,7 @@ mod tests {
         let a = vec![1.0, 0.0];
         let b = vec![1.0, 0.0, 0.0];
         let sim = cosine_similarity(&a, &b);
-        assert_eq!(sim, 0.0);
+        assert!(sim.abs() < f32::EPSILON);
     }
 
     #[test]
@@ -576,7 +576,7 @@ mod tests {
         let a = vec![0.0, 0.0, 0.0];
         let b = vec![1.0, 0.0, 0.0];
         let sim = cosine_similarity(&a, &b);
-        assert_eq!(sim, 0.0);
+        assert!(sim.abs() < f32::EPSILON);
     }
 
     #[test]

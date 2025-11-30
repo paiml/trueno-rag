@@ -1,11 +1,12 @@
 //! Benchmarks for retrieval operations
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{criterion_group, criterion_main, Criterion};
+use std::hint::black_box;
 use trueno_rag::{
     chunk::{Chunk, Chunker, RecursiveChunker},
     embed::MockEmbedder,
     index::{BM25Index, SparseIndex, VectorStore},
-    Document, DocumentId,
+    Document, DocumentId, Embedder,
 };
 
 fn create_test_chunk(content: &str, embedding: Vec<f32>) -> Chunk {

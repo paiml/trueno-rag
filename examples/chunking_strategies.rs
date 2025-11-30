@@ -14,7 +14,7 @@ fn main() -> trueno_rag::Result<()> {
     println!("=== Chunking Strategies Comparison ===\n");
 
     // Sample document
-    let content = r#"# Introduction to Machine Learning
+    let content = r"# Introduction to Machine Learning
 
 Machine learning is transforming industries. It enables computers to learn from data.
 
@@ -28,7 +28,7 @@ Unsupervised learning finds patterns in unlabeled data. Clustering and dimension
 
 ## Deep Learning
 
-Deep learning uses neural networks with many layers. It excels at complex pattern recognition tasks."#;
+Deep learning uses neural networks with many layers. It excels at complex pattern recognition tasks.";
 
     let doc = Document::new(content).with_title("ML Guide");
 

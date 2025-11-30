@@ -40,14 +40,20 @@ redundant_closure_for_method_calls = "warn"
 # Allow pedantic lints that conflict with RAG patterns
 cast_precision_loss = "allow"
 cast_possible_truncation = "allow"
+cast_possible_wrap = "allow"
+cast_sign_loss = "allow"
 module_name_repetitions = "allow"
 must_use_candidate = "allow"
 doc_markdown = "allow"
 multiple_crate_versions = "allow"
+uninlined_format_args = "allow"
+manual_div_ceil = "allow"
+manual_range_contains = "allow"
+needless_raw_string_hashes = "allow"
 
 [package]
 name = "trueno-rag"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 authors = ["Pragmatic AI Labs"]
 description = "Pure-Rust Retrieval-Augmented Generation pipeline built on Trueno"

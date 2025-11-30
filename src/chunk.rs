@@ -906,10 +906,12 @@ mod tests {
 
     #[test]
     fn test_chunk_metadata_serialization() {
-        let mut meta = ChunkMetadata::default();
-        meta.title = Some("Test".to_string());
-        meta.headers = vec!["Section 1".to_string()];
-        meta.page = Some(42);
+        let mut meta = ChunkMetadata {
+            title: Some("Test".to_string()),
+            headers: vec!["Section 1".to_string()],
+            page: Some(42),
+            ..Default::default()
+        };
         meta.custom
             .insert("key".to_string(), serde_json::json!("value"));
 
@@ -1159,7 +1161,9 @@ mod tests {
         let actual = chunker.chunk(&doc).unwrap().len();
 
         assert!(estimate > 0);
-        assert!((estimate as i32 - actual as i32).abs() <= 2);
+        #[allow(clippy::cast_possible_wrap)]
+        let diff = (estimate as isize - actual as isize).abs();
+        assert!(diff <= 2);
     }
 
     // ============ SentenceChunker Tests ============
@@ -1385,7 +1389,7 @@ mod tests {
 
         let chunks = chunker.chunk(&doc).unwrap();
         // Should split large sections
-        assert!(chunks.len() >= 1);
+        assert!(!chunks.is_empty());
     }
 
     #[test]
@@ -1468,7 +1472,9 @@ mod tests {
         let actual = chunker.chunk(&doc).unwrap().len();
 
         assert!(estimate > 0);
-        assert!((estimate as i32 - actual as i32).abs() <= 2);
+        #[allow(clippy::cast_possible_wrap)]
+        let diff = (estimate as isize - actual as isize).abs();
+        assert!(diff <= 2);
     }
 
     #[test]
