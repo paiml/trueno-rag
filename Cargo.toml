@@ -59,7 +59,7 @@ categories = ["text-processing", "science"]
 [dependencies]
 # Core compute
 trueno = "0.7.3"
-trueno-db = "0.3.3"
+trueno-db = "0.3.4"
 
 # Async runtime
 tokio = { version = "1.41", features = ["full"] }
