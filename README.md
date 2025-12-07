@@ -1,10 +1,24 @@
-# Trueno-RAG
+<div align="center">
 
-Pure-Rust Retrieval-Augmented Generation (RAG) pipeline built on Trueno compute primitives.
+<p align="center">
+  <img src=".github/trueno-rag-hero.svg" alt="trueno-rag" width="800">
+</p>
 
-[![Build Status](https://img.shields.io/badge/build-passing-brightgreen)]()
-[![Tests](https://img.shields.io/badge/tests-261%20passed-brightgreen)]()
-[![License](https://img.shields.io/badge/license-MIT-blue)]()
+<h1 align="center">trueno-rag</h1>
+
+<p align="center">
+  <b>Pure-Rust Retrieval-Augmented Generation Pipeline</b>
+</p>
+
+<p align="center">
+  <a href="https://github.com/paiml/trueno-rag"><img src="https://img.shields.io/badge/build-passing-brightgreen" alt="Build"></a>
+  <a href="https://github.com/paiml/trueno-rag"><img src="https://img.shields.io/badge/tests-261%20passed-brightgreen" alt="Tests"></a>
+  <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License"></a>
+</p>
+
+</div>
+
+---
 
 ## Features
 
