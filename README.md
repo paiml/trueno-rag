@@ -4,8 +4,7 @@
 
 **Pure-Rust Retrieval-Augmented Generation Pipeline**
 
-[![Crates.io](https://img.shields.io/crates/v/trueno-rag.svg)](https://crates.io/crates/trueno-rag)
-[![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![CI](https://github.com/paiml/trueno-rag/actions/workflows/ci.yml/badge.svg)](https://github.com/paiml/trueno-rag/actions)
 
 </div>
 
