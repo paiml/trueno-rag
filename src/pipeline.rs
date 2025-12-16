@@ -972,10 +972,7 @@ mod tests {
         };
         let assembler = ContextAssembler::new(config);
 
-        let results = vec![
-            create_result("Chunk A", 0.9),
-            create_result("Chunk B", 0.8),
-        ];
+        let results = vec![create_result("Chunk A", 0.9), create_result("Chunk B", 0.8)];
 
         let context = assembler.assemble(&results);
 
@@ -1133,7 +1130,10 @@ mod tests {
         context.add_chunk(&result, id);
 
         assert_eq!(context.citations[0].page, Some(5));
-        assert_eq!(context.citations[0].title, Some("Document Title".to_string()));
+        assert_eq!(
+            context.citations[0].title,
+            Some("Document Title".to_string())
+        );
     }
 
     #[test]

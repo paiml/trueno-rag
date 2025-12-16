@@ -157,7 +157,13 @@ fn test_index_with_chunk_size() {
 #[test]
 fn test_index_nonexistent_path_fails() {
     cli()
-        .args(["index", "--path", "/nonexistent/path", "--output", "/tmp/out"])
+        .args([
+            "index",
+            "--path",
+            "/nonexistent/path",
+            "--output",
+            "/tmp/out",
+        ])
         .assert()
         .failure()
         .stderr(predicate::str::contains("not found").or(predicate::str::contains("No such file")));
@@ -266,7 +272,11 @@ fn test_query_top_k() {
     let docs_dir = tmp.path().join("docs");
     fs::create_dir(&docs_dir).unwrap();
     for i in 0..5 {
-        fs::write(docs_dir.join(format!("doc{i}.txt")), format!("Document {i} content.")).unwrap();
+        fs::write(
+            docs_dir.join(format!("doc{i}.txt")),
+            format!("Document {i} content."),
+        )
+        .unwrap();
     }
 
     let index_path = tmp.path().join("index");

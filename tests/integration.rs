@@ -78,11 +78,11 @@ fn test_different_chunking_strategies() {
     assert!(!sent_chunks.is_empty());
 
     // Test StructuralChunker with markdown
-    let md_doc = Document::new(
-        "# Header 1\n\nContent 1.\n\n# Header 2\n\nContent 2.",
-    );
+    let md_doc = Document::new("# Header 1\n\nContent 1.\n\n# Header 2\n\nContent 2.");
     let struct_chunker = StructuralChunker::new(true, 500);
-    let struct_chunks = struct_chunker.chunk(&md_doc).expect("StructuralChunker failed");
+    let struct_chunks = struct_chunker
+        .chunk(&md_doc)
+        .expect("StructuralChunker failed");
     assert_eq!(struct_chunks.len(), 2);
 }
 
@@ -125,8 +125,7 @@ fn test_context_assembly_with_citations() {
         .build()
         .expect("Failed to build pipeline");
 
-    let doc = Document::new("Important content for citation.")
-        .with_title("Test Document");
+    let doc = Document::new("Important content for citation.").with_title("Test Document");
     pipeline.index_document(&doc).expect("Failed to index");
 
     let (_, context) = pipeline
@@ -161,7 +160,10 @@ fn test_large_document_chunking() {
     let chunks = chunker.chunk(&doc).expect("Chunking failed");
 
     // Should produce multiple chunks
-    assert!(chunks.len() > 1, "Large document should produce multiple chunks");
+    assert!(
+        chunks.len() > 1,
+        "Large document should produce multiple chunks"
+    );
 
     // Each chunk should be within size limit (with some tolerance)
     for chunk in &chunks {

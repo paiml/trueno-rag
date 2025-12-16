@@ -71,11 +71,11 @@ impl LexicalReranker {
         let exact_match = if content.contains(&query) { 1.0 } else { 0.0 };
 
         // Coverage score: what fraction of query terms appear in content
-        let matches: usize = query_terms
+        let matches = query_terms
             .iter()
             .filter(|term| content.contains(*term))
-            .count();
-        let coverage = matches as f32 / query_terms.len() as f32;
+            .count() as f32;
+        let coverage = matches / query_terms.len() as f32;
 
         // Position score: how early do query terms appear
         let position_score = query_terms

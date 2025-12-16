@@ -729,7 +729,10 @@ mod tests {
         let json = serde_json::to_string(&config).unwrap();
         let deserialized: HybridRetrieverConfig = serde_json::from_str(&json).unwrap();
 
-        assert_eq!(config.candidates_per_source, deserialized.candidates_per_source);
+        assert_eq!(
+            config.candidates_per_source,
+            deserialized.candidates_per_source
+        );
         assert_eq!(config.use_dense, deserialized.use_dense);
         assert_eq!(config.use_sparse, deserialized.use_sparse);
     }

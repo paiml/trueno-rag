@@ -101,12 +101,16 @@ impl RetrievalMetrics {
     }
 
     /// Compute Discounted Cumulative Gain@k
+    ///
+    /// Note: Each relevant item is counted at most once (at its first occurrence)
+    /// to ensure NDCG remains bounded by 1.0.
     fn dcg_at_k(retrieved: &[ChunkId], relevant: &HashSet<ChunkId>, k: usize) -> f32 {
+        let mut seen = HashSet::new();
         retrieved
             .iter()
             .take(k)
             .enumerate()
-            .filter(|(_, id)| relevant.contains(id))
+            .filter(|(_, id)| relevant.contains(id) && seen.insert(**id))
             .map(|(rank, _)| 1.0 / (rank as f32 + 2.0).log2())
             .sum()
     }

@@ -3,12 +3,8 @@
 //! Run with: cargo run --example basic_rag
 
 use trueno_rag::{
-    chunk::RecursiveChunker,
-    embed::MockEmbedder,
-    fusion::FusionStrategy,
-    pipeline::RagPipelineBuilder,
-    rerank::LexicalReranker,
-    Document,
+    chunk::RecursiveChunker, embed::MockEmbedder, fusion::FusionStrategy,
+    pipeline::RagPipelineBuilder, rerank::LexicalReranker, Document,
 };
 
 fn main() -> trueno_rag::Result<()> {
@@ -77,7 +73,12 @@ fn main() -> trueno_rag::Result<()> {
         println!("Top Results:");
         for (i, result) in results.iter().enumerate() {
             let preview = &result.chunk.content[..60.min(result.chunk.content.len())];
-            println!("  {}. [Score: {:.3}] {}...", i + 1, result.best_score(), preview);
+            println!(
+                "  {}. [Score: {:.3}] {}...",
+                i + 1,
+                result.best_score(),
+                preview
+            );
         }
 
         println!("\nAssembled Context:");

@@ -171,7 +171,11 @@ fn run_demo(query: &str, top_k: usize) -> Result<()> {
 
     // Index
     let chunk_count = pipeline.index_documents(&docs)?;
-    println!("Indexed {} documents ({} chunks)\n", docs.len(), chunk_count);
+    println!(
+        "Indexed {} documents ({} chunks)\n",
+        docs.len(),
+        chunk_count
+    );
 
     // Query
     println!("Query: \"{}\"\n", query);
@@ -182,18 +186,8 @@ fn run_demo(query: &str, top_k: usize) -> Result<()> {
     println!("{}", "-".repeat(50));
 
     for (i, result) in results.iter().enumerate() {
-        let title = result
-            .chunk
-            .metadata
-            .title
-            .as_deref()
-            .unwrap_or("Untitled");
-        println!(
-            "{}. [Score: {:.3}] {}",
-            i + 1,
-            result.best_score(),
-            title
-        );
+        let title = result.chunk.metadata.title.as_deref().unwrap_or("Untitled");
+        println!("{}. [Score: {:.3}] {}", i + 1, result.best_score(), title);
         let preview = &result.chunk.content[..80.min(result.chunk.content.len())];
         println!("   {}...\n", preview);
     }
@@ -326,7 +320,11 @@ fn run_query(query: &str, index_path: &str, top_k: usize, format: &str) -> Resul
 
     // Rebuild embedder from chunk content
     let mut embedder = TfIdfEmbedder::new(persisted.dimension);
-    let refs: Vec<&str> = persisted.chunks.iter().map(|c| c.content.as_str()).collect();
+    let refs: Vec<&str> = persisted
+        .chunks
+        .iter()
+        .map(|c| c.content.as_str())
+        .collect();
     embedder.fit(&refs);
 
     // Embed query

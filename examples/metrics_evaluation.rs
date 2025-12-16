@@ -42,7 +42,10 @@ fn main() {
         let precision = metrics.precision.get(k).unwrap_or(&0.0);
         let ndcg = metrics.ndcg.get(k).unwrap_or(&0.0);
 
-        println!("| {:2} | {:.3}    | {:.3}       | {:.3}  |", k, recall, precision, ndcg);
+        println!(
+            "| {:2} | {:.3}    | {:.3}       | {:.3}  |",
+            k, recall, precision, ndcg
+        );
     }
 
     println!();

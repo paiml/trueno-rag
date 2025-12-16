@@ -34,11 +34,23 @@ Deep learning uses neural networks with many layers. It excels at complex patter
 
     // Test different chunkers
     let chunkers: Vec<(&str, Box<dyn Chunker>)> = vec![
-        ("RecursiveChunker(100, 20)", Box::new(RecursiveChunker::new(100, 20))),
-        ("FixedSizeChunker(80, 10)", Box::new(FixedSizeChunker::new(80, 10))),
-        ("SentenceChunker(2, 0)", Box::new(SentenceChunker::new(2, 0))),
+        (
+            "RecursiveChunker(100, 20)",
+            Box::new(RecursiveChunker::new(100, 20)),
+        ),
+        (
+            "FixedSizeChunker(80, 10)",
+            Box::new(FixedSizeChunker::new(80, 10)),
+        ),
+        (
+            "SentenceChunker(2, 0)",
+            Box::new(SentenceChunker::new(2, 0)),
+        ),
         ("ParagraphChunker(1)", Box::new(ParagraphChunker::new(1))),
-        ("StructuralChunker(true, 500)", Box::new(StructuralChunker::new(true, 500))),
+        (
+            "StructuralChunker(true, 500)",
+            Box::new(StructuralChunker::new(true, 500)),
+        ),
     ];
 
     for (name, chunker) in chunkers {
@@ -54,7 +66,13 @@ Deep learning uses neural networks with many layers. It excels at complex patter
                 chunk.content.clone()
             };
             let preview = preview.replace('\n', "\\n");
-            println!("  {}: [{}..{}] {}", i + 1, chunk.start_offset, chunk.end_offset, preview);
+            println!(
+                "  {}: [{}..{}] {}",
+                i + 1,
+                chunk.start_offset,
+                chunk.end_offset,
+                preview
+            );
 
             if !chunk.metadata.headers.is_empty() {
                 println!("     Headers: {:?}", chunk.metadata.headers);

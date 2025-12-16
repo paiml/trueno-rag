@@ -3,7 +3,7 @@
 use proptest::prelude::*;
 use trueno_rag::{
     chunk::{Chunker, FixedSizeChunker, ParagraphChunker, RecursiveChunker},
-    embed::{cosine_similarity, MockEmbedder, Embedder},
+    embed::{cosine_similarity, Embedder, MockEmbedder},
     Document,
 };
 
