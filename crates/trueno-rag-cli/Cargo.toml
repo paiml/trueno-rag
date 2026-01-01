@@ -1,6 +1,6 @@
 [package]
 name = "trueno-rag-cli"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 authors = ["Pragmatic AI Labs"]
 description = "CLI for Trueno-RAG pipeline"
@@ -12,7 +12,7 @@ name = "trueno-rag"
 path = "src/main.rs"
 
 [dependencies]
-trueno-rag = { version = "0.1.3", path = "../.." }
+trueno-rag = { version = "0.1.4", path = "../.." }
 clap = { version = "4.5", features = ["derive"] }
 tokio = { version = "1.41", features = ["full"] }
 serde = { version = "1.0", features = ["derive"] }
