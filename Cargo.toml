@@ -53,7 +53,7 @@ needless_raw_string_hashes = "allow"
 
 [package]
 name = "trueno-rag"
-version = "0.1.4"
+version = "0.1.5"
 edition = "2021"
 authors = ["Pragmatic AI Labs"]
 description = "Pure-Rust Retrieval-Augmented Generation pipeline built on Trueno"
@@ -64,8 +64,8 @@ categories = ["text-processing", "science"]
 
 [dependencies]
 # Core compute
-trueno = "0.10.0"
-trueno-db = "0.3.8"
+trueno = "0.10.1"
+trueno-db = "0.3.9"
 
 # Async runtime
 tokio = { version = "1.41", features = ["full"] }
