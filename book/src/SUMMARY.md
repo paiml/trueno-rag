@@ -22,6 +22,7 @@
 - [Query Preprocessing](./advanced/preprocessing.md)
 - [Evaluation Metrics](./advanced/metrics.md)
 - [Performance Tuning](./advanced/performance.md)
+- [Index Compression (GH-2)](./advanced/compression.md)
 
 # API Reference
 
