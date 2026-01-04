@@ -38,9 +38,13 @@ pub enum Error {
     #[error("vector store error: {0}")]
     VectorStore(String),
 
-    /// Serialization error
+    /// Serialization error (serde_json)
     #[error("serialization error: {0}")]
     Serialization(#[from] serde_json::Error),
+
+    /// Serialization error (bincode/compression) - GH-2
+    #[error("serialization error: {0}")]
+    SerializationError(String),
 
     /// IO error
     #[error("IO error: {0}")]

@@ -81,6 +81,11 @@ thiserror = "2.0"
 uuid = { version = "1.11", features = ["v4", "serde"] }
 async-trait = "0.1"
 
+# Compression for index storage (GH-2)
+lz4_flex = { version = "0.11", optional = true }
+zstd = { version = "0.13", optional = true }
+bincode = { version = "1.3", optional = true }  # Binary serialization for indices
+
 [dev-dependencies]
 tokio-test = "0.4"
 proptest = "1.5"
@@ -93,6 +98,11 @@ harness = false
 [profile.release]
 lto = true
 codegen-units = 1
+
+[features]
+default = []
+# Compressed index serialization (GH-2)
+compression = ["dep:lz4_flex", "dep:zstd", "dep:bincode"]
 
 [lints]
 workspace = true

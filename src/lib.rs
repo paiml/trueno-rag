@@ -84,6 +84,8 @@
 #![allow(clippy::derivable_impls)]
 
 pub mod chunk;
+#[cfg(feature = "compression")]
+pub mod compressed;
 pub mod embed;
 pub mod error;
 pub mod fusion;
@@ -97,6 +99,8 @@ pub use chunk::{
     Chunk, ChunkId, ChunkMetadata, Chunker, ChunkingStrategy, FixedSizeChunker, ParagraphChunker,
     RecursiveChunker, SemanticChunker, SentenceChunker, StructuralChunker,
 };
+#[cfg(feature = "compression")]
+pub use compressed::Compression;
 pub use embed::{Embedder, EmbeddingConfig, PoolingStrategy};
 pub use error::{Error, Result};
 pub use fusion::FusionStrategy;
