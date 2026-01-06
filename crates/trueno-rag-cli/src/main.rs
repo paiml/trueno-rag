@@ -137,6 +137,12 @@ struct PersistedIndex {
     chunks: Vec<PersistedChunk>,
     embeddings: Vec<Vec<f32>>,
     dimension: usize,
+    /// Embedder type used (for query compatibility)
+    #[serde(default)]
+    embedder_type: String,
+    /// Model name (for semantic embeddings)
+    #[serde(default)]
+    model_name: Option<String>,
 }
 
 /// Persisted chunk data
@@ -332,13 +338,18 @@ fn run_index(
     println!("Found {} documents", documents.len());
 
     // Create embedder based on selection
-    let (embedder_box, actual_dimension): (Box<dyn Embedder>, usize) = match embedder_type {
+    let (embedder_box, actual_dimension, embedder_name, model_name): (
+        Box<dyn Embedder>,
+        usize,
+        String,
+        Option<String>,
+    ) = match embedder_type {
         EmbedderType::Tfidf => {
             let mut embedder = TfIdfEmbedder::new(dimension);
             let doc_texts: Vec<&str> = documents.iter().map(|d| d.content.as_str()).collect();
             embedder.fit(&doc_texts);
             println!("Using TF-IDF embedder (dimension: {})", dimension);
-            (Box::new(embedder), dimension)
+            (Box::new(embedder), dimension, "tfidf".to_string(), None)
         }
         EmbedderType::Semantic => {
             #[cfg(feature = "embeddings")]
@@ -356,7 +367,8 @@ fn run_index(
                 let embedder = FastEmbedder::new(model_type)
                     .context("Failed to initialize semantic embedder")?;
                 let dim = embedder.dimension();
-                (Box::new(embedder), dim)
+                let name = model_type.model_name().to_string();
+                (Box::new(embedder), dim, "semantic".to_string(), Some(name))
             }
             #[cfg(not(feature = "embeddings"))]
             {
@@ -397,6 +409,8 @@ fn run_index(
         chunks: all_chunks,
         embeddings: all_embeddings,
         dimension: actual_dimension,
+        embedder_type: embedder_name,
+        model_name,
     };
 
     // Save index
@@ -424,17 +438,43 @@ fn run_query(query: &str, index_path: &str, top_k: usize, format: &str) -> Resul
     let json = fs::read_to_string(&index_file)?;
     let persisted: PersistedIndex = serde_json::from_str(&json)?;
 
-    // Rebuild embedder from chunk content
-    let mut embedder = TfIdfEmbedder::new(persisted.dimension);
-    let refs: Vec<&str> = persisted
-        .chunks
-        .iter()
-        .map(|c| c.content.as_str())
-        .collect();
-    embedder.fit(&refs);
-
-    // Embed query
-    let query_embedding = embedder.embed(query)?;
+    // Create embedder based on index type
+    let query_embedding: Vec<f32> = if persisted.embedder_type == "semantic" {
+        #[cfg(feature = "embeddings")]
+        {
+            // Determine model from stored name or default
+            let model_type = match persisted.model_name.as_deref() {
+                Some(name) if name.contains("bge-base") => EmbeddingModelType::BgeBaseEnV15,
+                Some(name) if name.contains("bge-small") => EmbeddingModelType::BgeSmallEnV15,
+                _ => EmbeddingModelType::AllMiniLmL6V2, // Default
+            };
+            println!(
+                "Using semantic embedder: {} (dimension: {})",
+                model_type.model_name(),
+                model_type.dimension()
+            );
+            let embedder = FastEmbedder::new(model_type)
+                .context("Failed to initialize semantic embedder for query")?;
+            embedder.embed(query)?
+        }
+        #[cfg(not(feature = "embeddings"))]
+        {
+            anyhow::bail!(
+                "This index uses semantic embeddings.\n\
+                 Build with: cargo build --features embeddings"
+            );
+        }
+    } else {
+        // TF-IDF: rebuild from chunk content
+        let mut embedder = TfIdfEmbedder::new(persisted.dimension);
+        let refs: Vec<&str> = persisted
+            .chunks
+            .iter()
+            .map(|c| c.content.as_str())
+            .collect();
+        embedder.fit(&refs);
+        embedder.embed(query)?
+    };
 
     // Compute similarities
     let mut scores: Vec<(usize, f32)> = persisted
