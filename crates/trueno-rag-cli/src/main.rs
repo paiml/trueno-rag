@@ -1,9 +1,23 @@
 //! Trueno-RAG CLI
 //!
 //! Command-line interface for the Trueno-RAG pipeline.
+//!
+//! ## Features
+//!
+//! - `embeddings` - Enable production semantic embeddings via fastembed (ONNX Runtime)
+//!
+//! ## Usage
+//!
+//! ```bash
+//! # Build with semantic embeddings support
+//! cargo build --release --features embeddings
+//!
+//! # Index documents with semantic embeddings
+//! trueno-rag index --path docs/ --output index/ --embedder semantic
+//! ```
 
 use anyhow::{Context, Result};
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
@@ -15,6 +29,31 @@ use trueno_rag::{
     rerank::LexicalReranker,
     Chunk, Chunker, Document,
 };
+
+#[cfg(feature = "embeddings")]
+use trueno_rag::{EmbeddingModelType, FastEmbedder};
+
+/// Embedder type selection
+#[derive(Debug, Clone, Copy, Default, ValueEnum)]
+enum EmbedderType {
+    /// TF-IDF statistical embeddings (default, no downloads)
+    #[default]
+    Tfidf,
+    /// Semantic embeddings via fastembed (requires `embeddings` feature)
+    Semantic,
+}
+
+/// Model selection for semantic embeddings
+#[derive(Debug, Clone, Copy, Default, ValueEnum)]
+enum SemanticModel {
+    /// all-MiniLM-L6-v2: Fast, good quality (384 dims)
+    #[default]
+    MiniLm,
+    /// BGE-small-en-v1.5: Balanced performance (384 dims)
+    BgeSmall,
+    /// BGE-base-en-v1.5: Higher quality (768 dims)
+    BgeBase,
+}
 
 #[derive(Parser)]
 #[command(name = "trueno-rag")]
@@ -57,9 +96,17 @@ enum Commands {
         #[arg(long, default_value = "64")]
         chunk_overlap: usize,
 
-        /// Embedding dimension
+        /// Embedding dimension (only for tfidf embedder)
         #[arg(long, default_value = "256")]
         dimension: usize,
+
+        /// Embedder type (tfidf or semantic)
+        #[arg(short, long, value_enum, default_value = "tfidf")]
+        embedder: EmbedderType,
+
+        /// Model for semantic embeddings (mini-lm, bge-small, bge-base)
+        #[arg(short, long, value_enum, default_value = "mini-lm")]
+        model: SemanticModel,
     },
 
     /// Query the RAG pipeline
@@ -111,7 +158,17 @@ fn main() -> Result<()> {
             chunk_size,
             chunk_overlap,
             dimension,
-        } => run_index(&path, &output, chunk_size, chunk_overlap, dimension)?,
+            embedder,
+            model,
+        } => run_index(
+            &path,
+            &output,
+            chunk_size,
+            chunk_overlap,
+            dimension,
+            embedder,
+            model,
+        )?,
         Commands::Query {
             query,
             index,
@@ -131,9 +188,24 @@ fn run_info() {
     println!();
     println!("Components:");
     println!("  - Chunkers: Recursive, Fixed, Sentence, Paragraph, Semantic, Structural");
+    #[cfg(feature = "embeddings")]
+    println!("  - Embedders: TF-IDF, FastEmbed (semantic) ✓");
+    #[cfg(not(feature = "embeddings"))]
     println!("  - Embedders: TF-IDF (trainable), Mock (testing)");
     println!("  - Fusion: RRF, Linear, DBSF, Convex, Union, Intersection");
     println!("  - Rerankers: Lexical, CrossEncoder (mock), Composite");
+    println!();
+    #[cfg(feature = "embeddings")]
+    {
+        println!("Semantic Embedding Models:");
+        println!("  - mini-lm: sentence-transformers/all-MiniLM-L6-v2 (384 dims, fast)");
+        println!("  - bge-small: BAAI/bge-small-en-v1.5 (384 dims, balanced)");
+        println!("  - bge-base: BAAI/bge-base-en-v1.5 (768 dims, quality)");
+    }
+    #[cfg(not(feature = "embeddings"))]
+    {
+        println!("Note: Build with --features embeddings for semantic search");
+    }
 }
 
 fn run_demo(query: &str, top_k: usize) -> Result<()> {
@@ -208,6 +280,8 @@ fn run_index(
     chunk_size: usize,
     chunk_overlap: usize,
     dimension: usize,
+    embedder_type: EmbedderType,
+    #[allow(unused_variables)] model: SemanticModel,
 ) -> Result<()> {
     let path = Path::new(path);
 
@@ -257,10 +331,42 @@ fn run_index(
 
     println!("Found {} documents", documents.len());
 
-    // Train TF-IDF embedder on all document content
-    let mut embedder = TfIdfEmbedder::new(dimension);
-    let doc_texts: Vec<&str> = documents.iter().map(|d| d.content.as_str()).collect();
-    embedder.fit(&doc_texts);
+    // Create embedder based on selection
+    let (embedder_box, actual_dimension): (Box<dyn Embedder>, usize) = match embedder_type {
+        EmbedderType::Tfidf => {
+            let mut embedder = TfIdfEmbedder::new(dimension);
+            let doc_texts: Vec<&str> = documents.iter().map(|d| d.content.as_str()).collect();
+            embedder.fit(&doc_texts);
+            println!("Using TF-IDF embedder (dimension: {})", dimension);
+            (Box::new(embedder), dimension)
+        }
+        EmbedderType::Semantic => {
+            #[cfg(feature = "embeddings")]
+            {
+                let model_type = match model {
+                    SemanticModel::MiniLm => EmbeddingModelType::AllMiniLmL6V2,
+                    SemanticModel::BgeSmall => EmbeddingModelType::BgeSmallEnV15,
+                    SemanticModel::BgeBase => EmbeddingModelType::BgeBaseEnV15,
+                };
+                println!(
+                    "Loading semantic model: {} (dimension: {})",
+                    model_type.model_name(),
+                    model_type.dimension()
+                );
+                let embedder = FastEmbedder::new(model_type)
+                    .context("Failed to initialize semantic embedder")?;
+                let dim = embedder.dimension();
+                (Box::new(embedder), dim)
+            }
+            #[cfg(not(feature = "embeddings"))]
+            {
+                anyhow::bail!(
+                    "Semantic embeddings require the 'embeddings' feature.\n\
+                     Build with: cargo build --features embeddings"
+                );
+            }
+        }
+    };
 
     // Chunk documents
     let chunker = RecursiveChunker::new(chunk_size, chunk_overlap);
@@ -270,7 +376,7 @@ fn run_index(
     for doc in &documents {
         let chunks: Vec<Chunk> = chunker.chunk(doc)?;
         for chunk in chunks {
-            let embedding = embedder.embed(&chunk.content)?;
+            let embedding = embedder_box.embed(&chunk.content)?;
             all_chunks.push(PersistedChunk {
                 content: chunk.content.clone(),
                 title: chunk.metadata.title.clone(),
@@ -290,7 +396,7 @@ fn run_index(
     let persisted = PersistedIndex {
         chunks: all_chunks,
         embeddings: all_embeddings,
-        dimension,
+        dimension: actual_dimension,
     };
 
     // Save index
