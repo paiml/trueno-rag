@@ -102,6 +102,8 @@ pub use chunk::{
 #[cfg(feature = "compression")]
 pub use compressed::Compression;
 pub use embed::{Embedder, EmbeddingConfig, PoolingStrategy};
+#[cfg(feature = "embeddings")]
+pub use embed::{EmbeddingModelType, FastEmbedder};
 pub use error::{Error, Result};
 pub use fusion::FusionStrategy;
 pub use index::{BM25Index, SparseIndex, VectorStore};

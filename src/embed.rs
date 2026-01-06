@@ -341,6 +341,183 @@ pub fn euclidean_distance(a: &[f32], b: &[f32]) -> f32 {
         .sqrt()
 }
 
+// ============================================================================
+// FastEmbed-based Embedder (GH-1: Production-ready semantic embeddings)
+// ============================================================================
+
+/// Available embedding models when `embeddings` feature is enabled
+#[cfg(feature = "embeddings")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EmbeddingModelType {
+    /// all-MiniLM-L6-v2: Fast, good quality (384 dims)
+    AllMiniLmL6V2,
+    /// all-MiniLM-L12-v2: Better quality, slightly slower (384 dims)
+    AllMiniLmL12V2,
+    /// BGE-small-en-v1.5: Balanced performance (384 dims)
+    BgeSmallEnV15,
+    /// BGE-base-en-v1.5: Higher quality (768 dims)
+    BgeBaseEnV15,
+    /// NomicEmbed-text-v1: Good for retrieval (768 dims)
+    NomicEmbedTextV1,
+}
+
+#[cfg(feature = "embeddings")]
+impl Default for EmbeddingModelType {
+    fn default() -> Self {
+        Self::AllMiniLmL6V2
+    }
+}
+
+#[cfg(feature = "embeddings")]
+impl EmbeddingModelType {
+    /// Get the fastembed model enum variant
+    fn to_fastembed_model(self) -> fastembed::EmbeddingModel {
+        match self {
+            Self::AllMiniLmL6V2 => fastembed::EmbeddingModel::AllMiniLML6V2,
+            Self::AllMiniLmL12V2 => fastembed::EmbeddingModel::AllMiniLML12V2,
+            Self::BgeSmallEnV15 => fastembed::EmbeddingModel::BGESmallENV15,
+            Self::BgeBaseEnV15 => fastembed::EmbeddingModel::BGEBaseENV15,
+            Self::NomicEmbedTextV1 => fastembed::EmbeddingModel::NomicEmbedTextV1,
+        }
+    }
+
+    /// Get the embedding dimension for this model
+    #[must_use]
+    pub const fn dimension(self) -> usize {
+        match self {
+            Self::AllMiniLmL6V2 | Self::AllMiniLmL12V2 | Self::BgeSmallEnV15 => 384,
+            Self::BgeBaseEnV15 | Self::NomicEmbedTextV1 => 768,
+        }
+    }
+
+    /// Get human-readable model name
+    #[must_use]
+    pub const fn model_name(self) -> &'static str {
+        match self {
+            Self::AllMiniLmL6V2 => "sentence-transformers/all-MiniLM-L6-v2",
+            Self::AllMiniLmL12V2 => "sentence-transformers/all-MiniLM-L12-v2",
+            Self::BgeSmallEnV15 => "BAAI/bge-small-en-v1.5",
+            Self::BgeBaseEnV15 => "BAAI/bge-base-en-v1.5",
+            Self::NomicEmbedTextV1 => "nomic-ai/nomic-embed-text-v1",
+        }
+    }
+}
+
+/// Production-ready semantic embedder using fastembed (ONNX Runtime)
+///
+/// Requires the `embeddings` feature to be enabled.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use trueno_rag::embed::{FastEmbedder, EmbeddingModelType, Embedder};
+///
+/// let embedder = FastEmbedder::new(EmbeddingModelType::AllMiniLmL6V2)?;
+/// let embedding = embedder.embed("Hello, world!")?;
+/// assert_eq!(embedding.len(), 384);
+/// ```
+#[cfg(feature = "embeddings")]
+pub struct FastEmbedder {
+    model: fastembed::TextEmbedding,
+    model_type: EmbeddingModelType,
+}
+
+#[cfg(feature = "embeddings")]
+impl std::fmt::Debug for FastEmbedder {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FastEmbedder")
+            .field("model_type", &self.model_type)
+            .field("dimension", &self.model_type.dimension())
+            .finish_non_exhaustive() // model field intentionally omitted (not Debug)
+    }
+}
+
+#[cfg(feature = "embeddings")]
+impl FastEmbedder {
+    /// Create a new FastEmbedder with the specified model
+    ///
+    /// Downloads the model on first use if not cached.
+    ///
+    /// # Errors
+    /// Returns an error if model initialization fails.
+    pub fn new(model_type: EmbeddingModelType) -> Result<Self> {
+        let options = fastembed::InitOptions::new(model_type.to_fastembed_model())
+            .with_show_download_progress(true);
+
+        let model = fastembed::TextEmbedding::try_new(options).map_err(|e| {
+            Error::InvalidConfig(format!("Failed to initialize embedding model: {e}"))
+        })?;
+
+        Ok(Self { model, model_type })
+    }
+
+    /// Create with default model (all-MiniLM-L6-v2)
+    ///
+    /// # Errors
+    /// Returns an error if model initialization fails.
+    pub fn default_model() -> Result<Self> {
+        Self::new(EmbeddingModelType::default())
+    }
+
+    /// Get the model type
+    #[must_use]
+    pub fn model_type(&self) -> EmbeddingModelType {
+        self.model_type
+    }
+}
+
+#[cfg(feature = "embeddings")]
+impl Embedder for FastEmbedder {
+    fn embed(&self, text: &str) -> Result<Vec<f32>> {
+        if text.is_empty() {
+            return Err(Error::EmptyDocument("empty text for embedding".to_string()));
+        }
+
+        let embeddings = self
+            .model
+            .embed(vec![text], None)
+            .map_err(|e| Error::Embedding(format!("embedding failed: {e}")))?;
+
+        embeddings
+            .into_iter()
+            .next()
+            .ok_or_else(|| Error::Embedding("no embedding returned".to_string()))
+    }
+
+    fn embed_batch(&self, texts: &[&str]) -> Result<Vec<Vec<f32>>> {
+        if texts.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        // Filter out empty texts
+        let non_empty: Vec<&str> = texts.iter().copied().filter(|t| !t.is_empty()).collect();
+        if non_empty.is_empty() {
+            return Err(Error::EmptyDocument("all texts are empty".to_string()));
+        }
+
+        self.model
+            .embed(non_empty, None)
+            .map_err(|e| Error::Embedding(format!("batch embedding failed: {e}")))
+    }
+
+    fn dimension(&self) -> usize {
+        self.model_type.dimension()
+    }
+
+    fn model_id(&self) -> &str {
+        self.model_type.model_name()
+    }
+
+    fn embed_query(&self, query: &str) -> Result<Vec<f32>> {
+        // Some models use query prefixes, but fastembed handles this internally
+        self.embed(query)
+    }
+
+    fn embed_document(&self, document: &str) -> Result<Vec<f32>> {
+        self.embed(document)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

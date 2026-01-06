@@ -57,6 +57,10 @@ pub enum Error {
     /// Query processing error
     #[error("query error: {0}")]
     Query(String),
+
+    /// Embedding error (GH-1: production embeddings)
+    #[error("embedding error: {0}")]
+    Embedding(String),
 }
 
 #[cfg(test)]
