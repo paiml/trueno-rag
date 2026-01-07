@@ -417,8 +417,9 @@ impl EmbeddingModelType {
 /// assert_eq!(embedding.len(), 384);
 /// ```
 #[cfg(feature = "embeddings")]
+#[derive(Clone)]
 pub struct FastEmbedder {
-    model: fastembed::TextEmbedding,
+    model: std::sync::Arc<fastembed::TextEmbedding>,
     model_type: EmbeddingModelType,
 }
 
@@ -448,7 +449,10 @@ impl FastEmbedder {
             Error::InvalidConfig(format!("Failed to initialize embedding model: {e}"))
         })?;
 
-        Ok(Self { model, model_type })
+        Ok(Self {
+            model: std::sync::Arc::new(model),
+            model_type,
+        })
     }
 
     /// Create with default model (all-MiniLM-L6-v2)
