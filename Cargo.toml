@@ -53,7 +53,7 @@ needless_raw_string_hashes = "allow"
 
 [package]
 name = "trueno-rag"
-version = "0.1.6"
+version = "0.1.7"
 edition = "2021"
 authors = ["Pragmatic AI Labs"]
 description = "Pure-Rust Retrieval-Augmented Generation pipeline built on Trueno"

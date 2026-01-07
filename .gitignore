@@ -25,3 +25,4 @@ book/book/
 
 # Coverage reports
 coverage/
+.fastembed_cache/
