@@ -24,6 +24,7 @@
 - [Performance Tuning](./advanced/performance.md)
 - [Semantic Embeddings (GH-1)](./advanced/semantic-embeddings.md)
 - [Index Compression (GH-2)](./advanced/compression.md)
+- [Nemotron Embeddings (GH-3)](./advanced/nemotron-embeddings.md)
 
 # API Reference
 

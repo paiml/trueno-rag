@@ -181,7 +181,7 @@ Semantic embeddings require the `embeddings` feature:
 
 ```toml
 [dependencies]
-trueno-rag = { version = "0.1.6", features = ["embeddings"] }
+trueno-rag = { version = "0.1.8", features = ["embeddings"] }
 ```
 
 This adds the FastEmbed dependency (~90MB model download on first run).
