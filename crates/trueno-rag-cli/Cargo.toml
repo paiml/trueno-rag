@@ -6,7 +6,7 @@ authors = ["Pragmatic AI Labs"]
 description = "CLI for Trueno-RAG pipeline"
 license = "MIT"
 repository = "https://github.com/paiml/trueno-rag"
-readme = "README.md"
+readme = "../../README.md"
 
 [[bin]]
 name = "trueno-rag"
