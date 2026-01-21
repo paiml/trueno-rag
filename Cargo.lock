@@ -3277,9 +3277,9 @@ dependencies = [
 
 [[package]]
 name = "realizar"
-version = "0.5.1"
+version = "0.6.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e0f13fb74a60d84dec045de79bfdaffd5d3a0745c065bfb51e36303aa76c3274"
+checksum = "89e6d6866d26aa376b0019e7a73138834109557bfde0fac8e43bc562445cc7f2"
 dependencies = [
  "anyhow",
  "chrono",
@@ -3295,7 +3295,7 @@ dependencies = [
  "serde_json",
  "smallvec 1.15.1",
  "thiserror 1.0.69",
- "trueno 0.11.0",
+ "trueno",
  "uuid",
 ]
 
@@ -4288,33 +4288,22 @@ dependencies = [
 
 [[package]]
 name = "trueno"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4a0756605a19a0b79f5dca9b61fba7e428c497abe9ebeac2ef91b39d90b6da91"
-dependencies = [
- "anyhow",
- "bytemuck",
- "futures-intrusive",
- "num_cpus",
- "pollster",
- "thiserror 2.0.17",
- "wgpu",
-]
-
-[[package]]
-name = "trueno"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5ba5457f1f184520c46e6b315d540baa4cf2a2ae3d047e13001a4a23a12c6ab8"
 dependencies = [
  "anyhow",
+ "bytemuck",
  "chrono",
+ "futures-intrusive",
  "hostname",
  "num_cpus",
+ "pollster",
  "serde",
  "serde_json",
  "thiserror 2.0.17",
  "toml",
+ "wgpu",
 ]
 
 [[package]]
@@ -4340,7 +4329,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
- "trueno 0.13.0",
+ "trueno",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
@@ -4348,7 +4337,7 @@ dependencies = [
 
 [[package]]
 name = "trueno-rag"
-version = "0.1.9"
+version = "0.1.10"
 dependencies = [
  "async-trait",
  "bincode",
@@ -4362,7 +4351,7 @@ dependencies = [
  "thiserror 2.0.17",
  "tokio",
  "tokio-test",
- "trueno 0.13.0",
+ "trueno",
  "trueno-db",
  "uuid",
  "zstd",
