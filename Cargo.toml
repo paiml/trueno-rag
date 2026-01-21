@@ -53,7 +53,7 @@ needless_raw_string_hashes = "allow"
 
 [package]
 name = "trueno-rag"
-version = "0.1.9"
+version = "0.1.10"
 edition = "2021"
 authors = ["Pragmatic AI Labs"]
 description = "Pure-Rust Retrieval-Augmented Generation pipeline built on Trueno"
@@ -92,7 +92,7 @@ fastembed = { version = "5", optional = true }
 
 # NVIDIA Embed Nemotron 8B via realizar GGUF infrastructure (GH-3)
 # Large model (~4-32GB depending on quantization), requires GGUF file
-realizar = { version = "0.5.1", optional = true, default-features = false }
+realizar = { version = "0.6", optional = true, default-features = false }
 
 [dev-dependencies]
 tokio-test = "0.4"
