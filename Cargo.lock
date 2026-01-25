@@ -3295,7 +3295,7 @@ dependencies = [
  "serde_json",
  "smallvec 1.15.1",
  "thiserror 1.0.69",
- "trueno",
+ "trueno 0.13.0",
  "uuid",
 ]
 
@@ -4307,10 +4307,26 @@ dependencies = [
 ]
 
 [[package]]
-name = "trueno-db"
-version = "0.3.11"
+name = "trueno"
+version = "0.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eac277fdd3ea8f1069100c8520cd00a67e45f96206091e406163cc84ba1daf11"
+checksum = "af04023ed05b97ab754e8b8ad1f8a74a5d75f82c4bb7dffef6d24f2f58b346d6"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "hostname",
+ "num_cpus",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.17",
+ "toml",
+]
+
+[[package]]
+name = "trueno-db"
+version = "0.3.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4f4f91a8d736bd6d30da04d85b45af965daec72703dc4646cb0c778dc697ff84"
 dependencies = [
  "anyhow",
  "arrow",
@@ -4329,7 +4345,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
- "trueno",
+ "trueno 0.14.1",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
@@ -4337,7 +4353,7 @@ dependencies = [
 
 [[package]]
 name = "trueno-rag"
-version = "0.1.10"
+version = "0.1.11"
 dependencies = [
  "async-trait",
  "bincode",
@@ -4351,7 +4367,7 @@ dependencies = [
  "thiserror 2.0.17",
  "tokio",
  "tokio-test",
- "trueno",
+ "trueno 0.14.1",
  "trueno-db",
  "uuid",
  "zstd",
