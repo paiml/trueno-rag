@@ -91,6 +91,8 @@ pub mod error;
 pub mod fusion;
 pub mod index;
 pub mod metrics;
+#[cfg(feature = "multivector")]
+pub mod multivector;
 pub mod pipeline;
 pub mod rerank;
 pub mod retrieve;
@@ -111,6 +113,14 @@ pub use metrics::{AggregatedMetrics, RetrievalMetrics};
 pub use pipeline::{ContextAssembler, RagPipeline};
 pub use rerank::Reranker;
 pub use retrieve::{HybridRetriever, RetrievalResult};
+
+#[cfg(feature = "multivector")]
+pub use multivector::{
+    exact_maxsim, MockMultiVectorEmbedder, MultiVectorEmbedder, MultiVectorEmbedding,
+    ResidualCodec, WarpIndex, WarpIndexConfig, WarpSearchConfig,
+};
+#[cfg(feature = "multivector")]
+pub use retrieve::MultiVectorRetriever;
 
 /// Document identifier
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]

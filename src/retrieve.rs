@@ -17,6 +17,9 @@ pub struct RetrievalResult {
     pub dense_score: Option<f32>,
     /// Sparse retrieval score (if applicable)
     pub sparse_score: Option<f32>,
+    /// Multi-vector retrieval score (if applicable, ColBERT-style MaxSim)
+    #[cfg(feature = "multivector")]
+    pub multivector_score: Option<f32>,
     /// Fused score (if hybrid retrieval)
     pub fused_score: Option<f32>,
     /// Reranking score (if reranking applied)
@@ -31,6 +34,8 @@ impl RetrievalResult {
             chunk,
             dense_score: None,
             sparse_score: None,
+            #[cfg(feature = "multivector")]
+            multivector_score: None,
             fused_score: None,
             rerank_score: None,
         }
@@ -64,11 +69,31 @@ impl RetrievalResult {
         self
     }
 
-    /// Get the best available score (rerank > fused > dense/sparse)
+    /// Set the multi-vector (ColBERT-style) score
+    #[cfg(feature = "multivector")]
+    #[must_use]
+    pub fn with_multivector_score(mut self, score: f32) -> Self {
+        self.multivector_score = Some(score);
+        self
+    }
+
+    /// Get the best available score (rerank > fused > multivector > dense > sparse)
     #[must_use]
     pub fn best_score(&self) -> f32 {
         self.rerank_score
             .or(self.fused_score)
+            .or(self.dense_score)
+            .or(self.sparse_score)
+            .unwrap_or(0.0)
+    }
+
+    /// Get the best available score including multi-vector score
+    #[cfg(feature = "multivector")]
+    #[must_use]
+    pub fn best_score_with_multivector(&self) -> f32 {
+        self.rerank_score
+            .or(self.fused_score)
+            .or(self.multivector_score)
             .or(self.dense_score)
             .or(self.sparse_score)
             .unwrap_or(0.0)
@@ -337,6 +362,169 @@ impl SparseRetriever {
 impl Default for SparseRetriever {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+// ============ Multi-Vector Retriever (WARP) ============
+
+/// Multi-vector retriever using WARP index for ColBERT-style late interaction.
+///
+/// This retriever uses token-level embeddings and MaxSim scoring for fine-grained
+/// semantic matching. Unlike single-vector dense retrieval, multi-vector approaches
+/// represent documents and queries as multiple token embeddings.
+///
+/// # Example
+///
+/// ```ignore
+/// use trueno_rag::multivector::{
+///     WarpIndexConfig, WarpSearchConfig,
+///     MockMultiVectorEmbedder, MultiVectorRetriever,
+/// };
+///
+/// let config = WarpIndexConfig::new(2, 256, 128);
+/// let embedder = MockMultiVectorEmbedder::new(128, 512);
+/// let mut retriever = MultiVectorRetriever::new(config, embedder);
+///
+/// // Train on sample documents
+/// retriever.train(&sample_chunks)?;
+///
+/// // Index documents
+/// for chunk in chunks {
+///     retriever.index(chunk)?;
+/// }
+/// retriever.build()?;
+///
+/// // Search
+/// let results = retriever.retrieve("What is machine learning?", 10)?;
+/// ```
+#[cfg(feature = "multivector")]
+pub struct MultiVectorRetriever<E: crate::multivector::MultiVectorEmbedder> {
+    /// WARP index for compressed multi-vector storage and search
+    index: crate::multivector::WarpIndex,
+    /// Multi-vector embedder for token-level embeddings
+    embedder: E,
+    /// Search configuration
+    search_config: crate::multivector::WarpSearchConfig,
+}
+
+#[cfg(feature = "multivector")]
+impl<E: crate::multivector::MultiVectorEmbedder> MultiVectorRetriever<E> {
+    /// Create a new multi-vector retriever with the given configuration and embedder.
+    ///
+    /// # Arguments
+    ///
+    /// * `config` - WARP index configuration (nbits, num_centroids, token_dim)
+    /// * `embedder` - Multi-vector embedder for generating token embeddings
+    #[must_use]
+    pub fn new(config: crate::multivector::WarpIndexConfig, embedder: E) -> Self {
+        Self {
+            index: crate::multivector::WarpIndex::new(config),
+            embedder,
+            search_config: crate::multivector::WarpSearchConfig::default(),
+        }
+    }
+
+    /// Set the search configuration.
+    #[must_use]
+    pub fn with_search_config(mut self, config: crate::multivector::WarpSearchConfig) -> Self {
+        self.search_config = config;
+        self
+    }
+
+    /// Train the WARP index on sample chunks.
+    ///
+    /// This builds the residual quantization codec by learning centroids from
+    /// the provided sample embeddings. Should be called before indexing.
+    ///
+    /// # Arguments
+    ///
+    /// * `sample_chunks` - Representative chunks for training the codec
+    pub fn train(&mut self, sample_chunks: &[Chunk]) -> Result<()> {
+        let texts: Vec<&str> = sample_chunks.iter().map(|c| c.content.as_str()).collect();
+        let embeddings = self.embedder.embed_tokens_batch(&texts)?;
+        self.index.train(&embeddings)?;
+        Ok(())
+    }
+
+    /// Index a single chunk.
+    ///
+    /// The chunk is embedded and compressed using the trained codec.
+    /// Call `train()` before indexing.
+    pub fn index(&mut self, chunk: Chunk) -> Result<()> {
+        let embedding = self.embedder.embed_tokens(&chunk.content)?;
+        self.index.insert(chunk, embedding)?;
+        Ok(())
+    }
+
+    /// Index multiple chunks.
+    pub fn index_batch(&mut self, chunks: Vec<Chunk>) -> Result<()> {
+        for chunk in chunks {
+            self.index(chunk)?;
+        }
+        Ok(())
+    }
+
+    /// Build the index for efficient search.
+    ///
+    /// This compacts the index by organizing embeddings by centroid (IVF structure).
+    /// Call after all chunks have been indexed.
+    pub fn build(&mut self) -> Result<()> {
+        self.index.build()
+    }
+
+    /// Retrieve relevant chunks for a query using multi-vector MaxSim scoring.
+    ///
+    /// # Arguments
+    ///
+    /// * `query` - Query text
+    /// * `k` - Number of results to return
+    pub fn retrieve(&self, query: &str, k: usize) -> Result<Vec<RetrievalResult>> {
+        let query_embedding = self.embedder.embed_tokens(query)?;
+        let search_config = crate::multivector::WarpSearchConfig::with_k(k)
+            .nprobe(self.search_config.nprobe)
+            .bound(self.search_config.bound)
+            .centroid_score_threshold(self.search_config.centroid_score_threshold);
+        let results = self.index.search(&query_embedding, &search_config)?;
+
+        let mut retrieval_results = Vec::with_capacity(results.len());
+        for (chunk_id, score) in results {
+            if let Some(chunk) = self.index.get_chunk(&chunk_id) {
+                retrieval_results
+                    .push(RetrievalResult::new(chunk.clone()).with_multivector_score(score));
+            }
+        }
+
+        Ok(retrieval_results)
+    }
+
+    /// Get the number of indexed chunks.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.index.num_chunks()
+    }
+
+    /// Check if the retriever is empty.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    /// Get the underlying WARP index.
+    #[must_use]
+    pub fn warp_index(&self) -> &crate::multivector::WarpIndex {
+        &self.index
+    }
+
+    /// Get the embedder.
+    #[must_use]
+    pub fn embedder(&self) -> &E {
+        &self.embedder
+    }
+
+    /// Get memory usage statistics.
+    #[must_use]
+    pub fn memory_usage(&self) -> usize {
+        self.index.memory_usage()
     }
 }
 

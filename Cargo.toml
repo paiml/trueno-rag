@@ -117,6 +117,9 @@ embeddings = ["dep:fastembed"]
 # NVIDIA Embed Nemotron 8B via realizar GGUF infrastructure (GH-3)
 # Llama 3.1 8B-based embedding model with 4096-dim output
 nemotron = ["dep:realizar"]
+# ColBERT-style multi-vector retrieval with WARP algorithm (PMAT-003)
+# Enables token-level late interaction scoring with residual quantization
+multivector = []
 
 [lints]
 workspace = true

@@ -28,6 +28,16 @@ pub enum FusionStrategy {
     Union,
     /// Intersection: only return results in both
     Intersection,
+    /// Three-way weighted combination of dense, sparse, and multi-vector results
+    #[cfg(feature = "multivector")]
+    ThreeWay {
+        /// Weight for dense results
+        dense_weight: f32,
+        /// Weight for sparse results
+        sparse_weight: f32,
+        /// Weight for multi-vector results
+        multivector_weight: f32,
+    },
 }
 
 impl Default for FusionStrategy {
@@ -58,6 +68,11 @@ impl FusionStrategy {
             FusionStrategy::Union => Self::union_fusion(dense_results, sparse_results),
             FusionStrategy::Intersection => {
                 Self::intersection_fusion(dense_results, sparse_results)
+            }
+            // ThreeWay is for fuse_three(); fallback to RRF for two-way fusion
+            #[cfg(feature = "multivector")]
+            FusionStrategy::ThreeWay { .. } => {
+                Self::reciprocal_rank_fusion(dense_results, sparse_results, 60.0)
             }
         }
     }
@@ -228,6 +243,94 @@ impl FusionStrategy {
         let mut results: Vec<_> = scores.into_iter().collect();
         results.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
         results
+    }
+
+    /// Fuse three result sets: dense, sparse, and multi-vector.
+    ///
+    /// This method combines results from all three retrieval methods using
+    /// a weighted linear combination after min-max normalization.
+    ///
+    /// # Arguments
+    ///
+    /// * `dense` - Dense (single-vector) retrieval results
+    /// * `sparse` - Sparse (BM25) retrieval results
+    /// * `multivector` - Multi-vector (ColBERT-style) retrieval results
+    ///
+    /// # Returns
+    ///
+    /// Fused results sorted by combined score descending.
+    #[cfg(feature = "multivector")]
+    #[must_use]
+    pub fn fuse_three(
+        &self,
+        dense: &[(ChunkId, f32)],
+        sparse: &[(ChunkId, f32)],
+        multivector: &[(ChunkId, f32)],
+    ) -> Vec<(ChunkId, f32)> {
+        if let FusionStrategy::ThreeWay {
+            dense_weight,
+            sparse_weight,
+            multivector_weight,
+        } = self
+        {
+            Self::three_way_linear(
+                dense,
+                sparse,
+                multivector,
+                *dense_weight,
+                *sparse_weight,
+                *multivector_weight,
+            )
+        } else {
+            // For other strategies, do pairwise fusion
+            // First fuse dense and sparse
+            let dense_sparse = self.fuse(dense, sparse);
+            // Then fuse with multivector (treating combined as "dense")
+            self.fuse(&dense_sparse, multivector)
+        }
+    }
+
+    /// Three-way linear fusion with explicit weights.
+    #[cfg(feature = "multivector")]
+    fn three_way_linear(
+        dense: &[(ChunkId, f32)],
+        sparse: &[(ChunkId, f32)],
+        multivector: &[(ChunkId, f32)],
+        w_dense: f32,
+        w_sparse: f32,
+        w_multi: f32,
+    ) -> Vec<(ChunkId, f32)> {
+        let mut scores: HashMap<ChunkId, f32> = HashMap::new();
+
+        // Normalize and weight each source
+        let dense_norm = Self::min_max_normalize(dense);
+        let sparse_norm = Self::min_max_normalize(sparse);
+        let multi_norm = Self::min_max_normalize(multivector);
+
+        for (id, score) in dense_norm {
+            *scores.entry(id).or_insert(0.0) += w_dense * score;
+        }
+        for (id, score) in sparse_norm {
+            *scores.entry(id).or_insert(0.0) += w_sparse * score;
+        }
+        for (id, score) in multi_norm {
+            *scores.entry(id).or_insert(0.0) += w_multi * score;
+        }
+
+        Self::sort_by_score(scores)
+    }
+
+    /// Create a three-way fusion strategy with the given weights.
+    ///
+    /// Weights should ideally sum to 1.0 but this is not enforced.
+    #[cfg(feature = "multivector")]
+    #[must_use]
+    pub fn three_way(dense_weight: f32, sparse_weight: f32, multivector_weight: f32) -> Self {
+        Self::ThreeWay {
+            dense_weight,
+            sparse_weight,
+            multivector_weight,
+        }
     }
 }
 
