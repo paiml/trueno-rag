@@ -50,3 +50,23 @@ roadmap:
   estimated_effort: null
   labels: []
   notes: null
+- id: PMAT-003
+  github_issue: null
+  item_type: task
+  title: Implement WARP multi-vector retrieval (ColBERT-style)
+  status: inprogress
+  priority: high
+  assigned_to: null
+  created: 2026-01-26T17:11:27Z
+  updated: 2026-01-26T17:11:31.739025694+00:00
+  spec: null
+  acceptance_criteria:
+  - Add ColBERT-style multi-vector retrieval using WARP algorithm with residual quantization, behind 'multivector' cargo feature flag. See docs/specifications/warp-spec.md for full specification.
+  phases: []
+  subtasks: []
+  estimated_effort: null
+  labels:
+  - feature
+  - multivector
+  - warp
+  notes: null

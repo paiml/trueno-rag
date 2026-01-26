@@ -61,6 +61,10 @@ pub enum Error {
     /// Embedding error (GH-1: production embeddings)
     #[error("embedding error: {0}")]
     Embedding(String),
+
+    /// Invalid input error (PMAT-003: multi-vector)
+    #[error("invalid input: {0}")]
+    InvalidInput(String),
 }
 
 #[cfg(test)]
