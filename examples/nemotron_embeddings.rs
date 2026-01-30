@@ -14,10 +14,10 @@
 //! cargo run --example nemotron_embeddings --features nemotron
 //! ```
 
-#![cfg(feature = "nemotron")]
-
+#[cfg(feature = "nemotron")]
 use trueno_rag::embed::{cosine_similarity, Embedder, NemotronConfig, NemotronEmbedder};
 
+#[cfg(feature = "nemotron")]
 fn main() -> trueno_rag::Result<()> {
     // Configure the embedder
     // Replace with your actual model path
