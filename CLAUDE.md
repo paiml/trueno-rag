@@ -6,6 +6,37 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Trueno-RAG is a pure-Rust implementation of Retrieval-Augmented Generation (RAG) pipelines built on Trueno compute primitives with zero Python/C++ dependencies. The full specification is in `docs/specifications/rag-pipeline-spec.md`.
 
+## Code Search (pmat query)
+
+**NEVER use grep or rg for code discovery.** Use `pmat query` instead -- it returns quality-annotated, ranked results with TDG scores and fault annotations.
+
+```bash
+# Find functions by intent
+pmat query "document chunking" --limit 10
+
+# Find high-quality code
+pmat query "bm25 scoring" --min-grade A --exclude-tests
+
+# Find with fault annotations (unwrap, panic, unsafe, etc.)
+pmat query "embedding search" --faults
+
+# Filter by complexity
+pmat query "retrieval pipeline" --max-complexity 10
+
+# Cross-project search
+pmat query "vector store" --include-project ../trueno
+
+# Git history search (find code by commit intent via RRF fusion)
+pmat query "fix rrf fusion" -G
+pmat query "fix rrf fusion" --git-history
+
+# Enrichment flags (combine freely)
+pmat query "indexer" --churn              # git volatility (commit count, churn score)
+pmat query "scorer" --duplicates          # code clone detection (MinHash+LSH)
+pmat query "retriever" --entropy             # pattern diversity (repetitive vs unique)
+pmat query "rag pipeline" --churn --duplicates --entropy --faults -G  # full audit
+```
+
 ## Build Commands
 
 ```bash
