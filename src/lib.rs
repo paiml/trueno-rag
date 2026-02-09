@@ -96,6 +96,13 @@ pub mod multivector;
 pub mod pipeline;
 pub mod rerank;
 pub mod retrieve;
+#[cfg(feature = "sqlite")]
+#[allow(
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_truncation
+)]
+pub mod sqlite;
 
 pub use chunk::{
     Chunk, ChunkId, ChunkMetadata, Chunker, ChunkingStrategy, FixedSizeChunker, ParagraphChunker,
@@ -113,6 +120,9 @@ pub use metrics::{AggregatedMetrics, RetrievalMetrics};
 pub use pipeline::{ContextAssembler, RagPipeline};
 pub use rerank::Reranker;
 pub use retrieve::{HybridRetriever, RetrievalResult};
+
+#[cfg(feature = "sqlite")]
+pub use sqlite::{SqliteIndex, SqliteStore};
 
 #[cfg(feature = "multivector")]
 pub use multivector::{
