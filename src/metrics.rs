@@ -141,7 +141,7 @@ impl RetrievalMetrics {
             }
         }
 
-        sum_precision / relevant.len() as f32
+        sum_precision / relevant.len().max(1) as f32
     }
 
     /// Compute F1 score at k

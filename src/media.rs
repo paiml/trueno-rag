@@ -287,23 +287,23 @@ fn parse_time(s: &str, ms_sep: char) -> Result<f64> {
         2 => {
             let mins: f64 = parts[0]
                 .parse()
-                .map_err(|_| Error::InvalidInput(format!("Bad timestamp minutes: {s}")))?;
+                .map_err(|e| Error::InvalidInput(format!("Bad timestamp minutes '{s}': {e}")))?;
             let secs: f64 = parts[1]
                 .parse()
-                .map_err(|_| Error::InvalidInput(format!("Bad timestamp seconds: {s}")))?;
+                .map_err(|e| Error::InvalidInput(format!("Bad timestamp seconds '{s}': {e}")))?;
             Ok(mins * 60.0 + secs)
         }
         // HH:MM:SS.mmm
         3 => {
             let hrs: f64 = parts[0]
                 .parse()
-                .map_err(|_| Error::InvalidInput(format!("Bad timestamp hours: {s}")))?;
+                .map_err(|e| Error::InvalidInput(format!("Bad timestamp hours '{s}': {e}")))?;
             let mins: f64 = parts[1]
                 .parse()
-                .map_err(|_| Error::InvalidInput(format!("Bad timestamp minutes: {s}")))?;
+                .map_err(|e| Error::InvalidInput(format!("Bad timestamp minutes '{s}': {e}")))?;
             let secs: f64 = parts[2]
                 .parse()
-                .map_err(|_| Error::InvalidInput(format!("Bad timestamp seconds: {s}")))?;
+                .map_err(|e| Error::InvalidInput(format!("Bad timestamp seconds '{s}': {e}")))?;
             Ok(hrs * 3600.0 + mins * 60.0 + secs)
         }
         _ => Err(Error::InvalidInput(format!("Invalid timestamp: {s}"))),

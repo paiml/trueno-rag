@@ -62,6 +62,17 @@ repository = "https://github.com/paiml/trueno-rag"
 keywords = ["rag", "retrieval", "embeddings", "nlp", "vector-search"]
 categories = ["text-processing", "science"]
 readme = "README.md"
+rust-version = "1.75"
+exclude = [
+    "book/",
+    "docs/",
+    "examples/",
+    "tests/",
+    ".pmat/",
+    ".pmat-work/",
+    ".pmat-tickets/",
+    ".github/",
+]
 
 [dependencies]
 # Core compute
