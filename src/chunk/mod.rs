@@ -487,9 +487,10 @@ impl<E: crate::embed::Embedder> Chunker for SemanticChunker<E> {
         let embeddings: Vec<Vec<f32>> = sentences
             .iter()
             .map(|s| {
-                self.embedder
-                    .embed(s)
-                    .unwrap_or_else(|_| vec![0.0; self.embedder.dimension()])
+                self.embedder.embed(s).unwrap_or_else(|e| {
+                    eprintln!("Embedding failed for sentence: {e}");
+                    vec![0.0; self.embedder.dimension()]
+                })
             })
             .collect();
 
@@ -637,6 +638,11 @@ impl Chunker for StructuralChunker {
         }
 
         let mut chunks = Vec::new();
+        // Hoist clones and constructors outside loop (CB-518, CB-520)
+        let doc_title = document.title.clone();
+        let doc_source = document.source.clone();
+        let doc_metadata = document.metadata.clone();
+        let sub_chunker = RecursiveChunker::new(self.max_section_size, 50);
 
         for (header, content) in sections {
             if content.is_empty() {
@@ -645,13 +651,12 @@ impl Chunker for StructuralChunker {
 
             // Split large sections if needed
             if content.len() > self.max_section_size {
-                let sub_chunker = RecursiveChunker::new(self.max_section_size, 50);
                 let sub_doc = Document {
                     id: document.id,
                     content,
-                    title: document.title.clone(),
-                    source: document.source.clone(),
-                    metadata: document.metadata.clone(),
+                    title: doc_title.clone(),
+                    source: doc_source.clone(),
+                    metadata: doc_metadata.clone(),
                 };
                 if let Ok(sub_chunks) = sub_chunker.chunk(&sub_doc) {
                     for mut chunk in sub_chunks {
@@ -665,7 +670,7 @@ impl Chunker for StructuralChunker {
                 let start_offset = document.content.find(&content).unwrap_or(0);
                 let end_offset = start_offset + content.len();
                 let mut chunk = Chunk::new(document.id, content, start_offset, end_offset);
-                chunk.metadata.title = document.title.clone();
+                chunk.metadata.title = doc_title.clone();
                 if let Some(h) = header {
                     chunk.metadata.headers.push(h);
                 }

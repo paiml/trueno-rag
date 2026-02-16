@@ -14,29 +14,8 @@ use trueno_rag::{
 };
 
 #[cfg(feature = "embeddings")]
-fn main() -> trueno_rag::Result<()> {
-    println!("=== Semantic Embeddings Example ===\n");
-
-    // 1. Create FastEmbedder with MiniLM model (384 dimensions, fast)
-    println!("Loading embedding model (first run downloads ~90MB)...");
-    let embedder = FastEmbedder::new(EmbeddingModelType::AllMiniLmL6V2)?;
-    println!(
-        "Model: {} (dimension: {})\n",
-        embedder.model_id(),
-        embedder.dimension()
-    );
-
-    // 2. Build the pipeline with semantic embeddings
-    let mut pipeline = RagPipelineBuilder::new()
-        .chunker(RecursiveChunker::new(256, 32))
-        .embedder(embedder)
-        .reranker(LexicalReranker::new())
-        .fusion(FusionStrategy::RRF { k: 60.0 })
-        .max_context_tokens(2048)
-        .build()?;
-
-    // 3. Prepare documents about different topics
-    let documents = vec![
+fn sample_documents() -> Vec<Document> {
+    vec![
         Document::new(
             "Retrieval-Augmented Generation (RAG) combines the power of large \
              language models with external knowledge retrieval. Instead of relying \
@@ -70,34 +49,15 @@ fn main() -> trueno_rag::Result<()> {
              providing optimized execution on CPU, GPU, and specialized hardware.",
         )
         .with_title("ONNX Runtime"),
-    ];
+    ]
+}
 
-    // 4. Index documents with semantic embeddings
-    println!("Indexing {} documents...", documents.len());
-    let chunk_count = pipeline.index_documents(&documents)?;
-    println!("Created {} chunks with semantic embeddings\n", chunk_count);
-
-    // 5. Demonstrate semantic understanding with queries
-    let queries = vec![
-        // Semantic match: "knowledge retrieval" should find RAG doc
-        "How do AI systems access external knowledge?",
-        // Semantic match: "similarity search" should find vector DB doc
-        "What technology enables finding similar items quickly?",
-        // Semantic match: "embedding sentences" should find sentence transformers
-        "How can I convert text into numerical representations?",
-        // Should NOT match well - different domain
-        "What is the capital of France?",
-    ];
-
-    for query in queries {
-        run_query(&mut pipeline, query)?;
-    }
-
-    // 6. Show embedding comparison
+#[cfg(feature = "embeddings")]
+fn demo_similarity() -> trueno_rag::Result<()> {
     println!("=== Embedding Similarity Demo ===\n");
     let embedder = FastEmbedder::new(EmbeddingModelType::AllMiniLmL6V2)?;
 
-    let texts = vec![
+    let texts = [
         "The cat sat on the mat.",
         "A feline rested on the rug.",
         "The stock market crashed today.",
@@ -121,10 +81,47 @@ fn main() -> trueno_rag::Result<()> {
         texts[2],
         cosine_similarity(&embeddings[0], &embeddings[2])
     );
-
     println!("\nNote: Semantically similar sentences have higher scores!");
-
     Ok(())
+}
+
+#[cfg(feature = "embeddings")]
+fn main() -> trueno_rag::Result<()> {
+    println!("=== Semantic Embeddings Example ===\n");
+
+    println!("Loading embedding model (first run downloads ~90MB)...");
+    let embedder = FastEmbedder::new(EmbeddingModelType::AllMiniLmL6V2)?;
+    println!(
+        "Model: {} (dimension: {})\n",
+        embedder.model_id(),
+        embedder.dimension()
+    );
+
+    let mut pipeline = RagPipelineBuilder::new()
+        .chunker(RecursiveChunker::new(256, 32))
+        .embedder(embedder)
+        .reranker(LexicalReranker::new())
+        .fusion(FusionStrategy::RRF { k: 60.0 })
+        .max_context_tokens(2048)
+        .build()?;
+
+    let documents = sample_documents();
+    println!("Indexing {} documents...", documents.len());
+    let chunk_count = pipeline.index_documents(&documents)?;
+    println!("Created {} chunks with semantic embeddings\n", chunk_count);
+
+    let queries = [
+        "How do AI systems access external knowledge?",
+        "What technology enables finding similar items quickly?",
+        "How can I convert text into numerical representations?",
+        "What is the capital of France?",
+    ];
+
+    for query in queries {
+        run_query(&mut pipeline, query)?;
+    }
+
+    demo_similarity()
 }
 
 #[cfg(feature = "embeddings")]
