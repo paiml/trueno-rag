@@ -74,11 +74,11 @@ roadmap:
   github_issue: null
   item_type: task
   title: Add --jobs parallel loading to index command
-  status: inprogress
+  status: completed
   priority: medium
   assigned_to: null
   created: 2026-02-16T19:01:50Z
-  updated: 2026-02-16T21:38:18.256828274+00:00
+  updated: 2026-02-16T21:39:12Z
   spec: null
   acceptance_criteria:
   - 'Phase 2.3: Add --jobs flag to index subcommand for parallel document loading via rayon or tokio tasks'
@@ -93,11 +93,11 @@ roadmap:
   github_issue: null
   item_type: task
   title: Add JSON manifest output to index command
-  status: inprogress
+  status: completed
   priority: medium
   assigned_to: null
   created: 2026-02-16T19:01:51Z
-  updated: 2026-02-16T19:03:38.063381287+00:00
+  updated: 2026-02-16T21:39:12Z
   spec: null
   acceptance_criteria:
   - 'Phase 2.5: Add --manifest flag to index command that writes a manifest.json with file list, loader assignments, and chunk counts'
@@ -112,11 +112,11 @@ roadmap:
   github_issue: null
   item_type: task
   title: Add --backend flag to transcribe CLI
-  status: inprogress
+  status: completed
   priority: low
   assigned_to: null
   created: 2026-02-16T19:01:53Z
-  updated: 2026-02-16T19:03:38.034683888+00:00
+  updated: 2026-02-16T21:39:12Z
   spec: null
   acceptance_criteria:
   - 'Phase 3.5: Expose TranscriptionBackend (cpu/gpu/cuda) via --backend flag on transcribe subcommand'
@@ -131,11 +131,11 @@ roadmap:
   github_issue: null
   item_type: task
   title: Add manifest-based resume to transcribe
-  status: inprogress
+  status: completed
   priority: medium
   assigned_to: null
   created: 2026-02-16T19:01:55Z
-  updated: 2026-02-16T19:03:38.078036435+00:00
+  updated: 2026-02-16T21:39:12Z
   spec: null
   acceptance_criteria:
   - 'Phase 4.2: Write manifest.json during transcribe batch listing completed files. On restart, read manifest and skip already-completed files.'
@@ -150,11 +150,11 @@ roadmap:
   github_issue: null
   item_type: task
   title: Add progress persistence and throughput reporting to transcribe
-  status: inprogress
+  status: completed
   priority: medium
   assigned_to: null
   created: 2026-02-16T19:01:57Z
-  updated: 2026-02-16T19:03:38.092361573+00:00
+  updated: 2026-02-16T21:39:12Z
   spec: null
   acceptance_criteria:
   - 'Phase 4.3-4.4: Persist progress across restarts via manifest updates. Report throughput (files/sec, realtime factor) during and after batch transcription.'
@@ -169,11 +169,11 @@ roadmap:
   github_issue: null
   item_type: task
   title: Add full pipeline integration tests for media support
-  status: inprogress
+  status: completed
   priority: high
   assigned_to: null
   created: 2026-02-16T19:01:59Z
-  updated: 2026-02-16T19:02:06.842178187+00:00
+  updated: 2026-02-16T21:39:12Z
   spec: null
   acceptance_criteria:
   - 'Spec 11.3: (1) Load .srt -> chunk -> embed -> retrieve by query, verify results. (2) Verify timestamp metadata survives full pipeline. (3) Sidecar resolution: .mp4 + .srt in temp dir, verify subtitle loader selected.'
