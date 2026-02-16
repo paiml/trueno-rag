@@ -374,7 +374,7 @@ fn vtt_tag_filter(ch: char, in_tag: &mut bool) -> bool {
             *in_tag = false;
             false
         }
-        _ => !*in_tag,
+        _other => !*in_tag,
     }
 }
 
