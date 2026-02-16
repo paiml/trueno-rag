@@ -546,6 +546,5 @@ pub fn pipeline_builder() -> RagPipelineBuilder<MockEmbedder, NoOpReranker> {
     RagPipelineBuilder::new()
 }
 
-
 #[cfg(test)]
 mod tests;

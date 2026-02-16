@@ -97,8 +97,8 @@ fn error_to_falsified(name: &str, e: crate::Error) -> ConjectureResult {
 
 /// Execute the complete falsification plan
 pub fn execute_falsification_plan() -> FalsificationReport {
-    let experimentum = test_experimentum_crucis()
-        .unwrap_or_else(|e| error_to_falsified("Experimentum Crucis", e));
+    let experimentum =
+        test_experimentum_crucis().unwrap_or_else(|e| error_to_falsified("Experimentum Crucis", e));
     let compression = test_conjecture_1_compression()
         .unwrap_or_else(|e| error_to_falsified("Conjecture 1: Compression", e));
     let pruning = test_conjecture_2_pruning()
