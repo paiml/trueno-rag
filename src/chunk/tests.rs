@@ -335,8 +335,7 @@ fn test_sentence_chunker_single_sentence() {
 #[test]
 fn test_sentence_chunker_multiple_sentences() {
     let chunker = SentenceChunker::new(2, 0);
-    let doc =
-        Document::new("First sentence. Second sentence. Third sentence. Fourth sentence.");
+    let doc = Document::new("First sentence. Second sentence. Third sentence. Fourth sentence.");
 
     let chunks = chunker.chunk(&doc).unwrap();
     assert_eq!(chunks.len(), 2);
@@ -427,7 +426,9 @@ fn test_semantic_chunker_preserves_document_id() {
 fn test_semantic_chunker_respects_max_size() {
     let embedder = crate::embed::MockEmbedder::new(64);
     let chunker = SemanticChunker::new(embedder, 0.0, 50); // Low threshold, small max size
-    let doc = Document::new("First sentence here. Second sentence follows. Third sentence comes. Fourth sentence ends.");
+    let doc = Document::new(
+        "First sentence here. Second sentence follows. Third sentence comes. Fourth sentence ends.",
+    );
 
     let chunks = chunker.chunk(&doc).unwrap();
     for chunk in &chunks {
@@ -486,8 +487,7 @@ fn test_structural_chunker_markdown_headers() {
 #[test]
 fn test_structural_chunker_nested_headers() {
     let chunker = StructuralChunker::new(true, 1000);
-    let doc =
-        Document::new("# Main\n\nIntro.\n\n## Sub 1\n\nContent 1.\n\n## Sub 2\n\nContent 2.");
+    let doc = Document::new("# Main\n\nIntro.\n\n## Sub 1\n\nContent 1.\n\n## Sub 2\n\nContent 2.");
 
     let chunks = chunker.chunk(&doc).unwrap();
     assert!(chunks.len() >= 2);

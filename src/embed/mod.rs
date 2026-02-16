@@ -536,6 +536,5 @@ impl Embedder for FastEmbedder {
     }
 }
 
-
 #[cfg(test)]
 mod tests;
