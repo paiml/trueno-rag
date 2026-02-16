@@ -95,6 +95,19 @@ fn error_to_falsified(name: &str, e: crate::Error) -> ConjectureResult {
     }
 }
 
+/// Determine overall verdict from a slice of conjecture results.
+/// Returns `Falsified` if any conjecture was falsified.
+fn overall_verdict(results: &[&ConjectureResult]) -> Verdict {
+    let any_falsified = results
+        .iter()
+        .any(|r| r.verdict == Verdict::Falsified);
+    if any_falsified {
+        Verdict::Falsified
+    } else {
+        Verdict::Corroborated
+    }
+}
+
 /// Execute the complete falsification plan
 pub fn execute_falsification_plan() -> FalsificationReport {
     let experimentum =
@@ -106,15 +119,7 @@ pub fn execute_falsification_plan() -> FalsificationReport {
     let scaling = test_conjecture_3_scaling()
         .unwrap_or_else(|e| error_to_falsified("Conjecture 3: Scaling", e));
 
-    let overall = if experimentum.verdict == Verdict::Falsified
-        || compression.verdict == Verdict::Falsified
-        || pruning.verdict == Verdict::Falsified
-        || scaling.verdict == Verdict::Falsified
-    {
-        Verdict::Falsified
-    } else {
-        Verdict::Corroborated
-    };
+    let overall = overall_verdict(&[&experimentum, &compression, &pruning, &scaling]);
 
     FalsificationReport {
         experimentum_crucis: experimentum,
@@ -693,57 +698,106 @@ fn test_conjecture_3_scaling() -> crate::Result<ConjectureResult> {
 // Helper Functions
 // =============================================================================
 
+/// Sum all token vectors element-wise into an accumulator.
+fn sum_token_vectors(mv: &MultiVectorEmbedding) -> Vec<f32> {
+    let mut acc = vec![0.0f32; mv.dim()];
+    for token in mv.tokens() {
+        for (i, &v) in token.iter().enumerate() {
+            acc[i] += v;
+        }
+    }
+    acc
+}
+
+/// Divide each element of a vector by a scalar in place.
+fn scale_vector(vec: &mut [f32], divisor: f32) {
+    for v in vec.iter_mut() {
+        *v /= divisor;
+    }
+}
+
+/// L2-normalize a vector in place. Zero-norm vectors are left unchanged.
+fn normalize_vector(vec: &mut [f32]) {
+    let norm: f32 = vec.iter().map(|x| x * x).sum::<f32>().sqrt();
+    scale_vector_if_nonzero(vec, norm);
+}
+
+/// Divide each element by `divisor` only when divisor is positive.
+fn scale_vector_if_nonzero(vec: &mut [f32], divisor: f32) {
+    if divisor > 0.0 {
+        scale_vector(vec, divisor);
+    }
+}
+
 /// Compute average embedding from multi-vector (for single-vector comparison)
 fn average_embedding(mv: &MultiVectorEmbedding) -> Vec<f32> {
     if mv.num_tokens() == 0 {
         return vec![0.0; mv.dim()];
     }
 
-    let mut avg = vec![0.0f32; mv.dim()];
-    for token in mv.tokens() {
-        for (i, &v) in token.iter().enumerate() {
-            avg[i] += v;
-        }
-    }
-
-    let n = mv.num_tokens() as f32;
-    for v in &mut avg {
-        *v /= n;
-    }
-
-    // Normalize
-    let norm: f32 = avg.iter().map(|x| x * x).sum::<f32>().sqrt();
-    if norm > 0.0 {
-        for v in &mut avg {
-            *v /= norm;
-        }
-    }
-
+    let mut avg = sum_token_vectors(mv);
+    scale_vector(&mut avg, mv.num_tokens() as f32);
+    normalize_vector(&mut avg);
     avg
+}
+
+/// Dot product of two f32 slices in f64 precision.
+fn dot_product_f64(a: &[f32], b: &[f32]) -> f64 {
+    a.iter()
+        .zip(b.iter())
+        .map(|(x, y)| (*x as f64) * (*y as f64))
+        .sum()
+}
+
+/// L2 norm of an f32 slice computed in f64 precision.
+fn l2_norm_f64(v: &[f32]) -> f64 {
+    v.iter()
+        .map(|x| (*x as f64) * (*x as f64))
+        .sum::<f64>()
+        .sqrt()
+}
+
+/// Safe division: returns 0.0 when divisor is zero.
+fn safe_div(numerator: f64, denominator: f64) -> f64 {
+    if denominator > 0.0 {
+        numerator / denominator
+    } else {
+        0.0
+    }
 }
 
 /// Cosine similarity between two vectors
 fn cosine_similarity(a: &[f32], b: &[f32]) -> f64 {
-    let dot: f64 = a
-        .iter()
-        .zip(b.iter())
-        .map(|(x, y)| (*x as f64) * (*y as f64))
-        .sum();
-    let norm_a: f64 = a
-        .iter()
-        .map(|x| (*x as f64) * (*x as f64))
-        .sum::<f64>()
-        .sqrt();
-    let norm_b: f64 = b
-        .iter()
-        .map(|x| (*x as f64) * (*x as f64))
-        .sum::<f64>()
-        .sqrt();
+    let dot = dot_product_f64(a, b);
+    let denom = l2_norm_f64(a) * l2_norm_f64(b);
+    safe_div(dot, denom)
+}
 
-    if norm_a > 0.0 && norm_b > 0.0 {
-        dot / (norm_a * norm_b)
+/// Compute the quantized score between a single query token and a single doc token.
+fn quantized_token_score(codec: &ResidualCodec, query_token: &[f32], doc_token: &[f32]) -> f32 {
+    let (centroid_id, residual) = codec.compress(doc_token);
+    let centroid_score = codec.centroid_score(query_token, centroid_id);
+    codec.decompress_score(query_token, centroid_id, centroid_score, &residual)
+}
+
+/// Find the maximum quantized score of a query token against all doc tokens.
+fn max_quantized_score_for_query_token(
+    codec: &ResidualCodec,
+    query_token: &[f32],
+    doc: &MultiVectorEmbedding,
+) -> f32 {
+    doc.tokens()
+        .map(|doc_token| quantized_token_score(codec, query_token, doc_token))
+        .fold(f32::NEG_INFINITY, f32::max)
+}
+
+/// Accumulate a single token's max score into the running total,
+/// skipping tokens that had no valid match.
+fn accumulate_finite(total: f64, score: f32) -> f64 {
+    if score > f32::NEG_INFINITY {
+        total + score as f64
     } else {
-        0.0
+        total
     }
 }
 
@@ -753,66 +807,53 @@ fn compute_quantized_maxsim(
     query: &MultiVectorEmbedding,
     doc: &MultiVectorEmbedding,
 ) -> f64 {
-    let mut total_score = 0.0;
+    query
+        .tokens()
+        .map(|qt| max_quantized_score_for_query_token(codec, qt, doc))
+        .fold(0.0, accumulate_finite)
+}
 
-    for query_token in query.tokens() {
-        let mut max_score = f32::NEG_INFINITY;
+/// Classify a pair as concordant (+1), discordant (-1), or tied (0).
+fn classify_pair(x_diff: f64, y_diff: f64) -> i64 {
+    let product = x_diff * y_diff;
+    // f64::signum returns 1.0, -1.0, or 0.0
+    product.signum() as i64
+}
 
-        for doc_token in doc.tokens() {
-            // Compress document token
-            let (centroid_id, residual) = codec.compress(doc_token);
+/// Count concordant and discordant pairs across all (i, j) combinations.
+fn count_concordant_discordant(x: &[f64], y: &[f64]) -> (i64, i64) {
+    let mut concordant = 0i64;
+    let mut discordant = 0i64;
 
-            // Compute centroid score
-            let centroid_score = codec.centroid_score(query_token, centroid_id);
-
-            // Decompress and score
-            let score = codec.decompress_score(query_token, centroid_id, centroid_score, &residual);
-
-            if score > max_score {
-                max_score = score;
-            }
-        }
-
-        if max_score > f32::NEG_INFINITY {
-            total_score += max_score as f64;
+    for i in 0..x.len() {
+        for j in (i + 1)..x.len() {
+            let sign = classify_pair(x[i] - x[j], y[i] - y[j]);
+            concordant += i64::from(sign > 0);
+            discordant += i64::from(sign < 0);
         }
     }
 
-    total_score
+    (concordant, discordant)
 }
 
 /// Compute Kendall's tau rank correlation coefficient
 fn kendalls_tau(x: &[f64], y: &[f64]) -> f64 {
-    let n = x.len();
-    if n < 2 {
+    if x.len() < 2 {
         return 1.0;
     }
 
-    let mut concordant = 0i64;
-    let mut discordant = 0i64;
-
-    for i in 0..n {
-        for j in (i + 1)..n {
-            let x_diff = x[i] - x[j];
-            let y_diff = y[i] - y[j];
-
-            let product = x_diff * y_diff;
-
-            if product > 0.0 {
-                concordant += 1;
-            } else if product < 0.0 {
-                discordant += 1;
-            }
-            // Ties are ignored
-        }
-    }
-
+    let (concordant, discordant) = count_concordant_discordant(x, y);
     let total = concordant + discordant;
-    if total == 0 {
-        return 1.0;
-    }
+    safe_div_i64(concordant - discordant, total)
+}
 
-    (concordant - discordant) as f64 / total as f64
+/// Safe integer division returning f64, returns 1.0 when denominator is zero.
+fn safe_div_i64(numerator: i64, denominator: i64) -> f64 {
+    if denominator == 0 {
+        1.0
+    } else {
+        numerator as f64 / denominator as f64
+    }
 }
 
 #[cfg(test)]
@@ -871,7 +912,7 @@ mod tests {
     /// Specific test for Experimentum Crucis
     #[test]
     fn test_experimentum_crucis_standalone() {
-        let result = test_experimentum_crucis();
+        let result = test_experimentum_crucis().unwrap();
         println!("\nExperimentum Crucis Result:");
         println!("  Observed: {}", result.observed_value);
         println!("  Verdict: {}", result.verdict);
@@ -880,7 +921,7 @@ mod tests {
     /// Specific test for Compression Conjecture
     #[test]
     fn test_compression_conjecture_standalone() {
-        let result = test_conjecture_1_compression();
+        let result = test_conjecture_1_compression().unwrap();
         println!("\nCompression Conjecture Result:");
         println!("  Observed: {}", result.observed_value);
         println!("  Verdict: {}", result.verdict);
@@ -889,7 +930,7 @@ mod tests {
     /// Specific test for Pruning Conjecture
     #[test]
     fn test_pruning_conjecture_standalone() {
-        let result = test_conjecture_2_pruning();
+        let result = test_conjecture_2_pruning().unwrap();
         println!("\nPruning Conjecture Result:");
         println!("  Observed: {}", result.observed_value);
         println!("  Verdict: {}", result.verdict);
@@ -898,7 +939,7 @@ mod tests {
     /// Specific test for Scaling Conjecture
     #[test]
     fn test_scaling_conjecture_standalone() {
-        let result = test_conjecture_3_scaling();
+        let result = test_conjecture_3_scaling().unwrap();
         println!("\nScaling Conjecture Result:");
         println!("  Observed: {}", result.observed_value);
         println!("  Verdict: {}", result.verdict);

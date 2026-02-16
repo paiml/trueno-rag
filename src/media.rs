@@ -152,61 +152,91 @@ fn strip_bom(s: &str) -> &str {
     s.strip_prefix('\u{FEFF}').unwrap_or(s)
 }
 
-/// Parse SRT format.
-fn parse_srt(input: &str) -> Result<SubtitleTrack> {
-    let mut cues = Vec::new();
+// ── SRT helpers ─────────────────────────────────────────────────
 
-    // Normalize line endings and split on blank lines
+/// Normalize line endings to `\n` and split into non-empty blocks.
+fn normalize_and_split(input: &str) -> Vec<String> {
     let normalized = input.replace("\r\n", "\n").replace('\r', "\n");
-    let blocks: Vec<&str> = normalized
+    normalized
         .split("\n\n")
         .filter(|b| !b.trim().is_empty())
-        .collect();
+        .map(String::from)
+        .collect()
+}
 
-    for block in blocks {
-        let lines: Vec<&str> = block.lines().collect();
-        if lines.len() < 2 {
-            continue;
+/// Find the index of the timestamp line (containing "-->") in a set of lines.
+fn find_timestamp_index(lines: &[&str]) -> Option<usize> {
+    lines.iter().position(|l| l.contains("-->"))
+}
+
+/// Find the timestamp index in an SRT block, requiring at least 2 lines.
+fn find_srt_timestamp_index(lines: &[&str]) -> Option<usize> {
+    find_timestamp_index(lines).filter(|_| lines.len() >= 2)
+}
+
+/// Parse the SRT sequence index from lines preceding the timestamp.
+fn parse_srt_index(lines: &[&str], ts_idx: usize, fallback: usize) -> usize {
+    if ts_idx > 0 {
+        lines[0].trim().parse::<usize>().unwrap_or(fallback)
+    } else {
+        fallback
+    }
+}
+
+/// Extract cue text from lines after the timestamp.
+fn extract_cue_text(lines: &[&str], ts_idx: usize) -> String {
+    lines[ts_idx + 1..].join("\n").trim().to_string()
+}
+
+/// Build a `SubtitleCue` from parsed SRT components, returning `None` if text is empty.
+fn build_srt_cue(index: usize, start: f64, end: f64, text: String) -> Option<SubtitleCue> {
+    if text.is_empty() {
+        return None;
+    }
+    Some(SubtitleCue {
+        index: index.saturating_sub(1),
+        start_secs: start,
+        end_secs: end,
+        text,
+    })
+}
+
+/// Parse a single SRT block into a cue, returning `None` for invalid/empty blocks.
+fn parse_srt_block(block: &str, fallback_index: usize) -> Result<Option<SubtitleCue>> {
+    let lines: Vec<&str> = block.lines().collect();
+    let Some(ts_idx) = find_srt_timestamp_index(&lines) else {
+        return Ok(None);
+    };
+
+    let index = parse_srt_index(&lines, ts_idx, fallback_index);
+    let (start, end) = parse_timestamp_line(lines[ts_idx], ',')?;
+    let text = extract_cue_text(&lines, ts_idx);
+    Ok(build_srt_cue(index, start, end, text))
+}
+
+/// Re-index cues sequentially starting from 0.
+fn reindex_cues(cues: &mut [SubtitleCue]) {
+    for (i, cue) in cues.iter_mut().enumerate() {
+        cue.index = i;
+    }
+}
+
+/// Parse SRT format.
+fn parse_srt(input: &str) -> Result<SubtitleTrack> {
+    let blocks = normalize_and_split(input);
+    let mut cues = Vec::new();
+
+    for block in &blocks {
+        if let Some(cue) = parse_srt_block(block, cues.len())? {
+            cues.push(cue);
         }
-
-        // Find the timestamp line (contains "-->")
-        let ts_line_idx = lines.iter().position(|l| l.contains("-->"));
-        let Some(ts_idx) = ts_line_idx else {
-            continue;
-        };
-
-        // Parse index from line before timestamp (if present)
-        let index = if ts_idx > 0 {
-            lines[0].trim().parse::<usize>().unwrap_or(cues.len())
-        } else {
-            cues.len()
-        };
-
-        let (start, end) = parse_timestamp_line(lines[ts_idx], ',')?;
-
-        // Text is everything after the timestamp line
-        let text_lines = &lines[ts_idx + 1..];
-        let text = text_lines.join("\n").trim().to_string();
-        if text.is_empty() {
-            continue;
-        }
-
-        cues.push(SubtitleCue {
-            index: index.saturating_sub(1), // Convert 1-based to 0-based
-            start_secs: start,
-            end_secs: end,
-            text,
-        });
     }
 
     if cues.is_empty() {
         return Err(Error::InvalidInput("No valid SRT cues found".into()));
     }
 
-    // Re-index sequentially
-    for (i, cue) in cues.iter_mut().enumerate() {
-        cue.index = i;
-    }
+    reindex_cues(&mut cues);
 
     Ok(SubtitleTrack {
         format: SubtitleFormat::Srt,
@@ -214,41 +244,55 @@ fn parse_srt(input: &str) -> Result<SubtitleTrack> {
     })
 }
 
+// ── VTT helpers ─────────────────────────────────────────────────
+
+/// Extract the VTT body after the WEBVTT header block.
+fn vtt_body(normalized: &str) -> &str {
+    normalized.split_once("\n\n").map(|x| x.1).unwrap_or("")
+}
+
+/// Extract and clean VTT cue text from lines after the timestamp.
+fn extract_vtt_cue_text(lines: &[&str], ts_idx: usize) -> String {
+    strip_vtt_tags(&lines[ts_idx + 1..].join("\n"))
+        .trim()
+        .to_string()
+}
+
+/// Build a `SubtitleCue` from parsed VTT components, returning `None` if text is empty.
+fn build_vtt_cue(index: usize, start: f64, end: f64, text: String) -> Option<SubtitleCue> {
+    if text.is_empty() {
+        return None;
+    }
+    Some(SubtitleCue {
+        index,
+        start_secs: start,
+        end_secs: end,
+        text,
+    })
+}
+
+/// Parse a single VTT block into a cue, returning `None` for invalid/empty blocks.
+fn parse_vtt_block(block: &str, index: usize) -> Result<Option<SubtitleCue>> {
+    let lines: Vec<&str> = block.lines().collect();
+    let Some(ts_idx) = find_timestamp_index(&lines) else {
+        return Ok(None);
+    };
+
+    let (start, end) = parse_timestamp_line(lines[ts_idx], '.')?;
+    let text = extract_vtt_cue_text(&lines, ts_idx);
+    Ok(build_vtt_cue(index, start, end, text))
+}
+
 /// Parse VTT format.
 fn parse_vtt(input: &str) -> Result<SubtitleTrack> {
+    let normalized = input.replace("\r\n", "\n").replace('\r', "\n");
+    let body = vtt_body(&normalized);
     let mut cues = Vec::new();
 
-    // Normalize line endings
-    let normalized = input.replace("\r\n", "\n").replace('\r', "\n");
-
-    // Skip the WEBVTT header block
-    let body = normalized.split_once("\n\n").map(|x| x.1).unwrap_or("");
-
     for block in body.split("\n\n").filter(|b| !b.trim().is_empty()) {
-        let lines: Vec<&str> = block.lines().collect();
-
-        // Find the timestamp line (contains "-->")
-        let ts_line_idx = lines.iter().position(|l| l.contains("-->"));
-        let Some(ts_idx) = ts_line_idx else {
-            continue;
-        };
-
-        let (start, end) = parse_timestamp_line(lines[ts_idx], '.')?;
-
-        // Text is everything after the timestamp line, strip VTT tags
-        let text_lines = &lines[ts_idx + 1..];
-        let text = strip_vtt_tags(&text_lines.join("\n")).trim().to_string();
-
-        if text.is_empty() {
-            continue;
+        if let Some(cue) = parse_vtt_block(block, cues.len())? {
+            cues.push(cue);
         }
-
-        cues.push(SubtitleCue {
-            index: cues.len(),
-            start_secs: start,
-            end_secs: end,
-            text,
-        });
     }
 
     if cues.is_empty() {
@@ -261,69 +305,85 @@ fn parse_vtt(input: &str) -> Result<SubtitleTrack> {
     })
 }
 
+// ── Timestamp parsing helpers ───────────────────────────────────
+
+/// Split a timestamp line on the `-->` arrow, returning `(start_str, end_half)`.
+fn split_arrow(line: &str) -> Result<(&str, &str)> {
+    line.split_once("-->")
+        .ok_or_else(|| Error::InvalidInput(format!("Invalid timestamp line: {line}")))
+}
+
+/// Extract just the timestamp portion from the end half (strips VTT position settings).
+fn extract_end_timestamp(end_half: &str) -> &str {
+    end_half.split_whitespace().next().unwrap_or("")
+}
+
 /// Parse a timestamp line like "00:01:30,500 --> 00:02:00,000" or with dots.
 fn parse_timestamp_line(line: &str, ms_sep: char) -> Result<(f64, f64)> {
-    let parts: Vec<&str> = line.split("-->").collect();
-    if parts.len() != 2 {
-        return Err(Error::InvalidInput(format!(
-            "Invalid timestamp line: {line}"
-        )));
-    }
-    let start = parse_time(parts[0].trim(), ms_sep)?;
-    // End time may have VTT position settings after it, take only the timestamp
-    let end_str = parts[1].split_whitespace().next().unwrap_or("");
-    let end = parse_time(end_str, ms_sep)?;
+    let (start_half, end_half) = split_arrow(line)?;
+    let start = parse_time(start_half.trim(), ms_sep)?;
+    let end = parse_time(extract_end_timestamp(end_half), ms_sep)?;
     Ok((start, end))
+}
+
+/// Parse one numeric field from a timestamp string, producing a contextual error.
+fn parse_ts_field(field: &str, label: &str, raw: &str) -> Result<f64> {
+    field
+        .parse()
+        .map_err(|e| Error::InvalidInput(format!("Bad timestamp {label} '{raw}': {e}")))
+}
+
+/// Compute seconds from `MM:SS.mmm` parts.
+fn secs_from_mm_ss(parts: &[&str], raw: &str) -> Result<f64> {
+    let mins = parse_ts_field(parts[0], "minutes", raw)?;
+    let secs = parse_ts_field(parts[1], "seconds", raw)?;
+    Ok(mins * 60.0 + secs)
+}
+
+/// Compute seconds from `HH:MM:SS.mmm` parts.
+fn secs_from_hh_mm_ss(parts: &[&str], raw: &str) -> Result<f64> {
+    let hrs = parse_ts_field(parts[0], "hours", raw)?;
+    let mins = parse_ts_field(parts[1], "minutes", raw)?;
+    let secs = parse_ts_field(parts[2], "seconds", raw)?;
+    Ok(hrs * 3600.0 + mins * 60.0 + secs)
 }
 
 /// Parse a single timestamp to seconds.
 /// Accepts `HH:MM:SS,mmm` or `HH:MM:SS.mmm` or `MM:SS.mmm`.
 fn parse_time(s: &str, ms_sep: char) -> Result<f64> {
-    // Normalize separator to dot
     let normalized = s.replace(ms_sep, ".");
     let parts: Vec<&str> = normalized.split(':').collect();
     match parts.len() {
-        // MM:SS.mmm
-        2 => {
-            let mins: f64 = parts[0]
-                .parse()
-                .map_err(|e| Error::InvalidInput(format!("Bad timestamp minutes '{s}': {e}")))?;
-            let secs: f64 = parts[1]
-                .parse()
-                .map_err(|e| Error::InvalidInput(format!("Bad timestamp seconds '{s}': {e}")))?;
-            Ok(mins * 60.0 + secs)
-        }
-        // HH:MM:SS.mmm
-        3 => {
-            let hrs: f64 = parts[0]
-                .parse()
-                .map_err(|e| Error::InvalidInput(format!("Bad timestamp hours '{s}': {e}")))?;
-            let mins: f64 = parts[1]
-                .parse()
-                .map_err(|e| Error::InvalidInput(format!("Bad timestamp minutes '{s}': {e}")))?;
-            let secs: f64 = parts[2]
-                .parse()
-                .map_err(|e| Error::InvalidInput(format!("Bad timestamp seconds '{s}': {e}")))?;
-            Ok(hrs * 3600.0 + mins * 60.0 + secs)
-        }
+        2 => secs_from_mm_ss(&parts, s),
+        3 => secs_from_hh_mm_ss(&parts, s),
         _ => Err(Error::InvalidInput(format!("Invalid timestamp: {s}"))),
+    }
+}
+
+// ── VTT tag stripping helpers ───────────────────────────────────
+
+/// Advance tag-tracking state for a single character.
+/// Returns `true` if the character should be emitted to output.
+fn vtt_tag_filter(ch: char, in_tag: &mut bool) -> bool {
+    match ch {
+        '<' => {
+            *in_tag = true;
+            false
+        }
+        '>' => {
+            *in_tag = false;
+            false
+        }
+        _ => !*in_tag,
     }
 }
 
 /// Strip VTT formatting tags like `<b>`, `<i>`, `<c.classname>`, etc.
 fn strip_vtt_tags(s: &str) -> String {
-    let mut result = String::with_capacity(s.len());
     let mut in_tag = false;
-    for ch in s.chars() {
-        if ch == '<' {
-            in_tag = true;
-        } else if ch == '>' {
-            in_tag = false;
-        } else if !in_tag {
-            result.push(ch);
-        }
-    }
-    result
+    s.chars()
+        .filter(|&ch| vtt_tag_filter(ch, &mut in_tag))
+        .collect()
 }
 
 #[cfg(test)]
@@ -573,14 +633,14 @@ Positioned text.
                 },
             ],
         };
-        // Range 4.0–11.0 overlaps A (ends at 5.0 > 4.0), B, and C (starts at 10.0 < 11.0)
+        // Range 4.0-11.0 overlaps A (ends at 5.0 > 4.0), B, and C (starts at 10.0 < 11.0)
         let range = track.cues_in_range(4.0, 11.0);
         assert_eq!(range.len(), 3);
         assert_eq!(range[0].text, "A");
         assert_eq!(range[1].text, "B");
         assert_eq!(range[2].text, "C");
 
-        // Range 6.0–9.0 overlaps only B
+        // Range 6.0-9.0 overlaps only B
         let range2 = track.cues_in_range(6.0, 9.0);
         assert_eq!(range2.len(), 1);
         assert_eq!(range2[0].text, "B");
