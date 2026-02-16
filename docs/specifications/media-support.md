@@ -20,13 +20,13 @@ The gap is architectural: trueno-rag has no abstraction for "how to turn a file 
 
 1. **Format abstraction** — A trait that decouples file loading from the pipeline
 2. **Subtitle parsing** — SRT/VTT are the lingua franca of timed text; parsing them requires zero heavy dependencies
-3. **Transcription** — For media without subtitles, aprender provides GPU-accelerated Whisper inference via GGUF/safetensors/APR models
+3. **Transcription** — For media without subtitles, whisper-apr provides GPU-accelerated Whisper inference via `.apr` models
 4. **Temporal chunking** — Chunks from media should carry timestamp metadata for citation and navigation
 
 ### 1.2 Design Principles
 
 - **Zero mandatory heavy deps** — Subtitle parsing works with no new dependencies
-- **Feature-gated transcription** — aprender adds ML inference deps; opt-in only
+- **Feature-gated transcription** — whisper-apr adds ML inference deps; opt-in only
 - **Trait-based extensibility** — Third parties can implement `DocumentLoader` for any format
 - **Timestamp preservation** — Temporal metadata flows through chunking, indexing, and retrieval
 - **Batch-friendly** — Designed for corpora of thousands of files on multi-core hardware
@@ -39,7 +39,7 @@ This specification builds on existing trueno-rag components:
 - **`Chunk` / `ChunkMetadata`** — `custom` field carries temporal offsets
 - **`Chunker` trait** — New `TimestampChunker` implementation
 - **CLI `index` command** — Extended with `--recursive` and media format support
-- **aprender** — Optional dependency for GPU-accelerated transcription (feature-gated)
+- **whisper-apr** — Optional dependency for GPU-accelerated transcription (feature-gated)
 
 ## 2. Architecture
 
@@ -443,21 +443,21 @@ impl DocumentLoader for SubtitleLoader {
 }
 ```
 
-## 5. Aprender Transcription Integration (Feature-Gated)
+## 5. Whisper-APR Transcription Integration (Feature-Gated)
 
-The sovereign stack approach: aprender provides GPU-accelerated ML inference supporting GGUF, safetensors, and APR model formats. trueno-rag uses aprender for Whisper-based speech-to-text, keeping the entire pipeline in pure Rust with zero Python/C++ dependencies.
+The sovereign stack approach: whisper-apr provides GPU-accelerated Whisper ASR inference using `.apr` model files. trueno-rag uses whisper-apr for speech-to-text, keeping the entire pipeline in pure Rust with zero Python/C++ dependencies.
 
 ### 5.1 Feature Flag
 
 ```toml
 # In Cargo.toml
 [dependencies]
-aprender = { version = "0.25", optional = true, default-features = false, features = ["audio"] }
+whisper-apr = { version = "0.2", optional = true, default-features = false, features = ["std"] }
 
 [features]
-# GPU-accelerated speech-to-text via aprender (Whisper GGUF/safetensors/APR)
+# GPU-accelerated speech-to-text via whisper-apr (Whisper .apr models)
 # Adds ML inference dependency — opt-in only
-transcription = ["dep:aprender"]
+transcription = ["dep:whisper-apr"]
 ```
 
 ### 5.2 TranscriptionConfig
@@ -474,7 +474,7 @@ pub struct TranscriptionConfig {
     pub word_timestamps: bool,
     /// Write .srt sidecar files after transcription for caching.
     pub write_sidecar: bool,
-    /// Backend selection for aprender inference.
+    /// Backend selection for whisper-apr inference.
     pub backend: TranscriptionBackend,
 }
 
@@ -511,47 +511,39 @@ impl DocumentLoader for TranscriptionLoader {
             return SubtitleLoader.load(&sidecar);
         }
 
-        // 2. Decode audio to PCM samples
-        let audio = self.decode_audio(path)?;
+        // 2. Parse WAV and resample to 16kHz mono
+        let wav = whisper_apr::audio::wav::parse_wav_file(path)?;
+        let samples = whisper_apr::audio::wav::resample(
+            &wav.data, wav.original_channels, wav.sample_rate, 16000
+        );
 
-        // 3. Resample to 16kHz mono (Whisper requirement)
-        let mono = audio.to_mono();
-        let samples_16k = aprender::audio::resample::resample(
-            &mono.samples, mono.sample_rate, 16000
-        )?;
+        // 3. Run Whisper inference via WhisperApr
+        let mut options = TranscribeOptions::default();
+        options.language = self.config.language.clone();
+        let result = self.whisper.as_ref()
+            .ok_or_else(|| anyhow!("No model loaded"))?
+            .transcribe(&samples, options)?;
 
-        // 4. Compute mel spectrogram (Whisper-compatible: 80 mels)
-        let mel_config = aprender::audio::mel::MelConfig::whisper();
-        let filterbank = aprender::audio::mel::MelFilterbank::new(&mel_config);
-        let mel = filterbank.compute(&samples_16k)?;
+        // 4. Convert whisper-apr Segments → SubtitleTrack
+        let track = segments_to_track(&result.segments);
 
-        // 5. Run ASR inference → Transcription
-        let asr_config = aprender::speech::asr::AsrConfig::default()
-            .with_language(self.config.language.as_deref().unwrap_or("en"))
-            .with_beam_size(self.config.beam_size);
-        // Model-dependent: session.transcribe(&mel, &mel_shape)
-        let transcription = self.run_inference(&mel, &asr_config)?;
-
-        // 6. Convert aprender Segments → SubtitleTrack
-        let track = segments_to_track(&transcription.segments);
-
-        // 7. Write sidecar if configured
+        // 5. Write sidecar if configured
         if self.config.write_sidecar {
             let _ = write_sidecar(path, &track);
         }
 
-        // 8. Build Document with timestamp metadata
+        // 6. Build Document with timestamp metadata
         build_transcription_document(path, &track)
     }
 }
 
-/// Convert aprender ASR segments to a SubtitleTrack.
-fn segments_to_track(segments: &[aprender::speech::asr::Segment]) -> SubtitleTrack {
+/// Convert whisper-apr Segments to a SubtitleTrack.
+fn segments_to_track(segments: &[whisper_apr::Segment]) -> SubtitleTrack {
     let cues: Vec<SubtitleCue> = segments.iter().enumerate().map(|(i, seg)| {
         SubtitleCue {
             index: i,
-            start_secs: seg.start_ms as f64 / 1000.0,
-            end_secs: seg.end_ms as f64 / 1000.0,
+            start_secs: seg.start as f64,
+            end_secs: seg.end as f64,
             text: seg.text.trim().to_string(),
         }
     }).collect();
@@ -561,25 +553,22 @@ fn segments_to_track(segments: &[aprender::speech::asr::Segment]) -> SubtitleTra
 
 ### 5.4 Audio Pipeline
 
-The transcription pipeline leverages aprender's audio primitives:
+The transcription pipeline leverages whisper-apr's audio primitives:
 
 ```
-Input File (.wav/.mp3/.mp4)
+Input File (.wav)
     │
     ▼
-Audio Decode → DecodedAudio { samples: Vec<f32>, sample_rate, channels }
+whisper_apr::audio::wav::parse_wav_file(path) → WavData
     │
     ▼
-aprender::audio::resample::resample(samples, orig_rate, 16000)
+whisper_apr::audio::wav::resample(data, channels, orig_rate, 16000)
     │
     ▼
-MelFilterbank::new(&MelConfig::whisper()).compute(&samples_16k)
-    │   80 mel bins, 400-pt FFT, 160 hop (10ms frames)
-    ▼
-AsrSession::transcribe(&mel, &[80, n_frames])
+WhisperApr::transcribe(&samples, options)
     │
     ▼
-Transcription { segments: Vec<Segment { text, start_ms, end_ms }> }
+TranscriptionResult { text, segments: Vec<Segment { start: f32, end: f32, text }> }
     │
     ▼
 segments_to_track() → SubtitleTrack → Document
@@ -587,18 +576,18 @@ segments_to_track() → SubtitleTrack → Document
 
 ### 5.5 Backend Selection
 
-aprender supports multiple compute backends via `LoadConfig`:
+whisper-apr supports multiple compute backends via `TranscriptionBackend`:
 
 ```rust
-let load_config = match config.backend {
-    TranscriptionBackend::Cpu  => aprender::loading::LoadConfig::server(),
-    TranscriptionBackend::Gpu  => aprender::loading::LoadConfig::gpu(),
-    TranscriptionBackend::Cuda => aprender::loading::LoadConfig::cuda(),
-};
+/// Compute backend for transcription inference.
+pub enum TranscriptionBackend {
+    Cpu,   // CPU with SIMD acceleration via trueno
+    Gpu,   // GPU via wgpu (cross-platform)
+    Cuda,  // NVIDIA CUDA (Linux/Windows)
+}
 ```
 
-Model loading supports GGUF, safetensors, and APR formats — use the best available Whisper model variant (e.g., `whisper-large-v3.gguf` for maximum accuracy on GPU hardware).
-```
+Model loading uses the `.apr` format — use the best available Whisper model variant (e.g., `base.apr`, `large-v3-turbo.apr` for maximum accuracy on GPU hardware).
 
 ### 5.3 Sidecar Strategy
 
@@ -618,7 +607,7 @@ Resolution order in `LoaderRegistry`:
 3. If no sidecar and `transcription` feature is enabled, use `TranscriptionLoader`
 4. If no sidecar and feature disabled, skip file with warning
 
-This allows incremental transcription: run aprender transcription on a batch, save `.srt` sidecars, then index everything cheaply.
+This allows incremental transcription: run whisper-apr transcription on a batch, save `.srt` sidecars, then index everything cheaply.
 
 ## 6. Timestamp-Aware Chunking
 
@@ -832,7 +821,7 @@ Processing [████████░░░░░░░░░░░░] 2,038/
 
 ### 8.1 Pipeline Architecture
 
-For large corpora, the bottleneck is transcription (Whisper inference). The batch pipeline separates discovery, transcription, and indexing into stages. With aprender's GPU support, transcription throughput scales with GPU capability rather than CPU core count.
+For large corpora, the bottleneck is transcription (Whisper inference). The batch pipeline separates discovery, transcription, and indexing into stages. With whisper-apr's GPU support, transcription throughput scales with GPU capability rather than CPU core count.
 
 ```
 Stage 1: Discovery (single-threaded, fast)
@@ -841,7 +830,7 @@ Stage 1: Discovery (single-threaded, fast)
 
 Stage 2: Transcription (GPU-accelerated, parallelizable)
     For each media file without sidecar:
-        aprender inference (GGUF/safetensors model) → write .srt sidecar
+        whisper-apr inference (.apr model) → write .srt sidecar
     GPU: single model, sequential files (GPU memory bound)
     CPU: --jobs N for parallel SIMD inference
 
@@ -960,8 +949,8 @@ pub use chunk::TimestampChunker;
 default = ["sqlite"]
 # ... existing features ...
 
-# GPU-accelerated speech-to-text via aprender (Whisper GGUF/safetensors/APR)
-transcription = ["dep:aprender"]
+# GPU-accelerated speech-to-text via whisper-apr (Whisper .apr models)
+transcription = ["dep:whisper-apr"]
 ```
 
 ## 10. Error Handling
@@ -978,7 +967,7 @@ pub enum Error {
     /// No suitable loader found for file format
     UnsupportedFormat(String),
 
-    /// Transcription failed (aprender inference error)
+    /// Transcription failed (whisper-apr inference error)
     #[cfg(feature = "transcription")]
     Transcription(String),
 }
@@ -1049,9 +1038,9 @@ proptest! {
 
 ### Phase 3: Transcription (feature-gated)
 
-1. `aprender` dependency (optional, `audio` feature)
+1. `whisper-apr` dependency (optional, `std` feature)
 2. `TranscriptionConfig` and `TranscriptionLoader`
-3. Audio→mel→ASR pipeline using aprender primitives
+3. Audio→transcribe pipeline using whisper-apr primitives
 4. Sidecar write/read logic
 5. CLI `--model` and `--backend` flags
 
