@@ -84,12 +84,27 @@ impl FalsificationReport {
     }
 }
 
+fn error_to_falsified(name: &str, e: crate::Error) -> ConjectureResult {
+    ConjectureResult {
+        name: name.to_string(),
+        hypothesis: String::new(),
+        threshold: String::new(),
+        observed_value: format!("Error: {e}"),
+        verdict: Verdict::Falsified,
+        details: format!("Unexpected error during falsification: {e}"),
+    }
+}
+
 /// Execute the complete falsification plan
 pub fn execute_falsification_plan() -> FalsificationReport {
-    let experimentum = test_experimentum_crucis();
-    let compression = test_conjecture_1_compression();
-    let pruning = test_conjecture_2_pruning();
-    let scaling = test_conjecture_3_scaling();
+    let experimentum = test_experimentum_crucis()
+        .unwrap_or_else(|e| error_to_falsified("Experimentum Crucis", e));
+    let compression = test_conjecture_1_compression()
+        .unwrap_or_else(|e| error_to_falsified("Conjecture 1: Compression", e));
+    let pruning = test_conjecture_2_pruning()
+        .unwrap_or_else(|e| error_to_falsified("Conjecture 2: Pruning", e));
+    let scaling = test_conjecture_3_scaling()
+        .unwrap_or_else(|e| error_to_falsified("Conjecture 3: Scaling", e));
 
     let overall = if experimentum.verdict == Verdict::Falsified
         || compression.verdict == Verdict::Falsified
@@ -115,7 +130,7 @@ pub fn execute_falsification_plan() -> FalsificationReport {
 // =============================================================================
 
 /// Test: WARP must outperform single-vector by 15% MRR@10 on hard negatives
-fn test_experimentum_crucis() -> ConjectureResult {
+fn test_experimentum_crucis() -> crate::Result<ConjectureResult> {
     let name = "Experimentum Crucis (Hard Negatives)".to_string();
     let hypothesis =
         "Token-level interaction captures nuances that single-vector misses".to_string();
@@ -184,27 +199,27 @@ fn test_experimentum_crucis() -> ConjectureResult {
 
     let training_embeddings: Vec<MultiVectorEmbedding> = all_texts
         .iter()
-        .map(|t| embedder.embed_tokens(t).unwrap())
-        .collect();
+        .map(|t| embedder.embed_tokens(t))
+        .collect::<crate::Result<Vec<_>>>()?;
 
     if let Err(e) = index.train(&training_embeddings) {
-        return ConjectureResult {
+        return Ok(ConjectureResult {
             name,
             hypothesis,
             threshold,
             observed_value: format!("Training failed: {e}"),
             verdict: Verdict::Falsified,
             details: "Could not train index".to_string(),
-        };
+        });
     }
 
     // Index all documents
     for text in all_texts.iter() {
         let chunk = Chunk::new(DocumentId::new(), text.clone(), 0, text.len());
-        let embedding = embedder.embed_tokens(text).unwrap();
-        index.insert(chunk, embedding).unwrap();
+        let embedding = embedder.embed_tokens(text)?;
+        index.insert(chunk, embedding)?;
     }
-    index.build().unwrap();
+    index.build()?;
 
     // Compute MRR@10 for WARP
     let mut warp_mrr_sum = 0.0;
@@ -212,11 +227,11 @@ fn test_experimentum_crucis() -> ConjectureResult {
     let num_queries = hard_negative_pairs.len();
 
     for (query_idx, (positive, _negative)) in hard_negative_pairs.iter().enumerate() {
-        let query_embedding = embedder.embed_tokens(positive).unwrap();
+        let query_embedding = embedder.embed_tokens(positive)?;
 
         // WARP search
         let search_config = WarpSearchConfig::with_k(10);
-        let warp_results = index.search(&query_embedding, &search_config).unwrap();
+        let warp_results = index.search(&query_embedding, &search_config)?;
 
         // Find rank of the positive document
         let positive_doc_idx = query_idx * 2; // Index of positive in all_texts
@@ -241,12 +256,12 @@ fn test_experimentum_crucis() -> ConjectureResult {
             .iter()
             .enumerate()
             .map(|(i, text)| {
-                let doc_emb = embedder.embed_tokens(text).unwrap();
+                let doc_emb = embedder.embed_tokens(text)?;
                 let doc_avg = average_embedding(&doc_emb);
                 let score = cosine_similarity(&query_avg, &doc_avg);
-                (i, score)
+                Ok((i, score))
             })
-            .collect();
+            .collect::<crate::Result<Vec<_>>>()?;
 
         single_vec_scores.sort_by(|a, b| b.1.total_cmp(&a.1));
 
@@ -289,14 +304,14 @@ fn test_experimentum_crucis() -> ConjectureResult {
         }
     );
 
-    ConjectureResult {
+    Ok(ConjectureResult {
         name,
         hypothesis,
         threshold,
         observed_value: observed,
         verdict,
         details,
-    }
+    })
 }
 
 // =============================================================================
@@ -304,7 +319,7 @@ fn test_experimentum_crucis() -> ConjectureResult {
 // =============================================================================
 
 /// Test: Kendall's tau between full-precision and quantized scores >= 0.90
-fn test_conjecture_1_compression() -> ConjectureResult {
+fn test_conjecture_1_compression() -> crate::Result<ConjectureResult> {
     let name = "Conjecture 1: Compression Preserves Score Ordering".to_string();
     let hypothesis =
         "Residual quantization preserves relative ordering of MaxSim scores".to_string();
@@ -332,8 +347,8 @@ fn test_conjecture_1_compression() -> ConjectureResult {
     // Train codec
     let doc_embeddings: Vec<MultiVectorEmbedding> = documents
         .iter()
-        .map(|d| embedder.embed_tokens(d).unwrap())
-        .collect();
+        .map(|d| embedder.embed_tokens(d))
+        .collect::<crate::Result<Vec<_>>>()?;
 
     let all_tokens: Vec<f32> = doc_embeddings
         .iter()
@@ -345,14 +360,14 @@ fn test_conjecture_1_compression() -> ConjectureResult {
     let codec = match ResidualCodec::train(&all_tokens, 32, 8, 4, 20) {
         Ok(c) => c,
         Err(e) => {
-            return ConjectureResult {
+            return Ok(ConjectureResult {
                 name,
                 hypothesis,
                 threshold,
                 observed_value: format!("Codec training failed: {e}"),
                 verdict: Verdict::Falsified,
                 details: "Could not train codec".to_string(),
-            }
+            })
         }
     };
 
@@ -365,8 +380,8 @@ fn test_conjecture_1_compression() -> ConjectureResult {
 
     let query_embeddings: Vec<MultiVectorEmbedding> = queries
         .iter()
-        .map(|q| embedder.embed_tokens(q).unwrap())
-        .collect();
+        .map(|q| embedder.embed_tokens(q))
+        .collect::<crate::Result<Vec<_>>>()?;
 
     // Compute exact and approximate scores
     let mut exact_scores: Vec<f64> = Vec::new();
@@ -405,14 +420,14 @@ fn test_conjecture_1_compression() -> ConjectureResult {
         }
     );
 
-    ConjectureResult {
+    Ok(ConjectureResult {
         name,
         hypothesis,
         threshold,
         observed_value: observed,
         verdict,
         details,
-    }
+    })
 }
 
 // =============================================================================
@@ -420,7 +435,7 @@ fn test_conjecture_1_compression() -> ConjectureResult {
 // =============================================================================
 
 /// Test: recall@10 of pruned search (nprobe=4) vs exhaustive >= 0.95
-fn test_conjecture_2_pruning() -> ConjectureResult {
+fn test_conjecture_2_pruning() -> crate::Result<ConjectureResult> {
     let name = "Conjecture 2: Centroid Pruning Recall".to_string();
     let hypothesis =
         "Top-nprobe centroids contain relevant tokens for accurate retrieval".to_string();
@@ -447,25 +462,25 @@ fn test_conjecture_2_pruning() -> ConjectureResult {
 
     let embeddings: Vec<MultiVectorEmbedding> = documents
         .iter()
-        .map(|d| embedder.embed_tokens(d).unwrap())
-        .collect();
+        .map(|d| embedder.embed_tokens(d))
+        .collect::<crate::Result<Vec<_>>>()?;
 
     if let Err(e) = index.train(&embeddings) {
-        return ConjectureResult {
+        return Ok(ConjectureResult {
             name,
             hypothesis,
             threshold,
             observed_value: format!("Training failed: {e}"),
             verdict: Verdict::Falsified,
             details: "Could not train index".to_string(),
-        };
+        });
     }
 
     for (i, doc) in documents.iter().enumerate() {
         let chunk = Chunk::new(DocumentId::new(), doc.clone(), 0, doc.len());
-        index.insert(chunk, embeddings[i].clone()).unwrap();
+        index.insert(chunk, embeddings[i].clone())?;
     }
-    index.build().unwrap();
+    index.build()?;
 
     // Test queries
     let queries = vec![
@@ -478,11 +493,11 @@ fn test_conjecture_2_pruning() -> ConjectureResult {
     let num_queries = queries.len();
 
     for query in &queries {
-        let query_emb = embedder.embed_tokens(query).unwrap();
+        let query_emb = embedder.embed_tokens(query)?;
 
         // Exhaustive search (high nprobe)
         let exhaustive_config = WarpSearchConfig::with_k(10).nprobe(8).bound(1000);
-        let exhaustive_results = index.search(&query_emb, &exhaustive_config).unwrap();
+        let exhaustive_results = index.search(&query_emb, &exhaustive_config)?;
         let exhaustive_ids: std::collections::HashSet<_> = exhaustive_results
             .iter()
             .map(|(id, _)| id.clone())
@@ -490,7 +505,7 @@ fn test_conjecture_2_pruning() -> ConjectureResult {
 
         // Pruned search (nprobe=4)
         let pruned_config = WarpSearchConfig::with_k(10).nprobe(4).bound(128);
-        let pruned_results = index.search(&query_emb, &pruned_config).unwrap();
+        let pruned_results = index.search(&query_emb, &pruned_config)?;
         let pruned_ids: std::collections::HashSet<_> =
             pruned_results.iter().map(|(id, _)| id.clone()).collect();
 
@@ -523,14 +538,14 @@ fn test_conjecture_2_pruning() -> ConjectureResult {
         }
     );
 
-    ConjectureResult {
+    Ok(ConjectureResult {
         name,
         hypothesis,
         threshold,
         observed_value: observed,
         verdict,
         details,
-    }
+    })
 }
 
 // =============================================================================
@@ -538,7 +553,7 @@ fn test_conjecture_2_pruning() -> ConjectureResult {
 // =============================================================================
 
 /// Test: Memory and latency scaling properties
-fn test_conjecture_3_scaling() -> ConjectureResult {
+fn test_conjecture_3_scaling() -> crate::Result<ConjectureResult> {
     let name = "Conjecture 3: Scaling Laws".to_string();
     let hypothesis = "Memory scales with N*T*bits, latency scales with nprobe not N".to_string();
     let threshold = "Memory < theoretical*1.2, latency O(nprobe) not O(N)".to_string();
@@ -570,8 +585,8 @@ fn test_conjecture_3_scaling() -> ConjectureResult {
 
         let embeddings: Vec<MultiVectorEmbedding> = documents
             .iter()
-            .map(|d| embedder.embed_tokens(d).unwrap())
-            .collect();
+            .map(|d| embedder.embed_tokens(d))
+            .collect::<crate::Result<Vec<_>>>()?;
 
         if index.train(&embeddings).is_err() {
             continue;
@@ -588,7 +603,7 @@ fn test_conjecture_3_scaling() -> ConjectureResult {
         memory_results.push((n, memory));
 
         // Measure latency (average over multiple queries)
-        let query_emb = embedder.embed_tokens("topic document field").unwrap();
+        let query_emb = embedder.embed_tokens("topic document field")?;
         let search_config = WarpSearchConfig::with_k(10).nprobe(4);
 
         let start = Instant::now();
@@ -664,14 +679,14 @@ fn test_conjecture_3_scaling() -> ConjectureResult {
         }
     );
 
-    ConjectureResult {
+    Ok(ConjectureResult {
         name,
         hypothesis,
         threshold,
         observed_value: observed,
         verdict,
         details,
-    }
+    })
 }
 
 // =============================================================================

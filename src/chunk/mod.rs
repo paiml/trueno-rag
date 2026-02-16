@@ -648,7 +648,7 @@ impl Chunker for StructuralChunker {
                 let sub_chunker = RecursiveChunker::new(self.max_section_size, 50);
                 let sub_doc = Document {
                     id: document.id,
-                    content: content.clone(),
+                    content,
                     title: document.title.clone(),
                     source: document.source.clone(),
                     metadata: document.metadata.clone(),
