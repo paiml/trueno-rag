@@ -463,6 +463,34 @@ fn test_index_with_manifest() {
     assert!(manifest["files"].is_array());
 }
 
+#[test]
+fn test_index_parallel_jobs() {
+    let tmp = TempDir::new().unwrap();
+    let docs_dir = tmp.path().join("docs");
+    fs::create_dir(&docs_dir).unwrap();
+
+    fs::write(docs_dir.join("doc1.txt"), "First document about AI.").unwrap();
+    fs::write(docs_dir.join("doc2.txt"), "Second document about ML.").unwrap();
+    fs::write(docs_dir.join("doc3.txt"), "Third document about NLP.").unwrap();
+
+    let index_path = tmp.path().join("index");
+
+    cli()
+        .args([
+            "index",
+            "--path",
+            docs_dir.to_str().unwrap(),
+            "--output",
+            index_path.to_str().unwrap(),
+            "--jobs",
+            "2",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Loading with 2 parallel jobs"))
+        .stdout(predicate::str::contains("3 documents"));
+}
+
 // ============================================================================
 // HELP AND VERSION TESTS
 // ============================================================================

@@ -24,10 +24,12 @@
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand, ValueEnum};
+use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 use trueno_rag::{
     chunk::{RecursiveChunker, TimestampChunker},
     embed::{Embedder, TfIdfEmbedder},
@@ -148,6 +150,10 @@ enum Commands {
         #[arg(long, value_enum, default_value = "auto")]
         chunk_strategy: ChunkStrategy,
 
+        /// Number of parallel loading jobs
+        #[arg(short, long, default_value = "1")]
+        jobs: usize,
+
         /// Write a JSON manifest of indexed files and chunks
         #[arg(long, default_value = "false")]
         manifest: bool,
@@ -249,6 +255,7 @@ fn main() -> Result<()> {
             model,
             recursive,
             chunk_strategy,
+            jobs,
             manifest,
         } => run_index(
             &path,
@@ -260,6 +267,7 @@ fn main() -> Result<()> {
             model,
             recursive,
             chunk_strategy,
+            jobs,
             manifest,
         )?,
         Commands::Query {
@@ -402,9 +410,9 @@ fn run_transcribe(
     path: &str,
     recursive: bool,
     skip_existing: bool,
-    _jobs: usize,
-    _model: Option<&str>,
-    _backend: BackendType,
+    jobs: usize,
+    model: Option<&str>,
+    backend: BackendType,
     dry_run: bool,
 ) -> Result<()> {
     let root = Path::new(path);
@@ -486,10 +494,11 @@ fn run_transcribe(
     // Stage 3: Transcription (feature-gated)
     #[cfg(feature = "transcription")]
     {
-        run_transcription_batch(&to_process, _jobs, _model, _backend, root)?;
+        run_transcription_batch(&to_process, jobs, model, backend, root)?;
     }
     #[cfg(not(feature = "transcription"))]
     {
+        let _ = (jobs, model, backend); // suppress unused warnings
         println!(
             "\nTranscription requires the 'transcription' feature.\n\
              Build with: cargo build --release --features transcription\n\n\
@@ -513,14 +522,14 @@ fn run_transcribe(
 #[cfg(feature = "transcription")]
 fn run_transcription_batch(
     files: &[PathBuf],
-    _jobs: usize,
+    jobs: usize,
     model: Option<&str>,
-    _backend: BackendType,
+    backend_type: BackendType,
     root: &Path,
 ) -> Result<()> {
     use trueno_rag::{TranscriptionBackend, TranscriptionConfig, TranscriptionLoader};
 
-    let backend = match _backend {
+    let backend = match backend_type {
         BackendType::Cpu => TranscriptionBackend::Cpu,
         BackendType::Gpu => TranscriptionBackend::Gpu,
         BackendType::Cuda => TranscriptionBackend::Cuda,
@@ -543,36 +552,46 @@ fn run_transcription_batch(
     }
 
     let batch_start = std::time::Instant::now();
-    let mut manifest = TranscribeManifest::load(root);
-    let mut success = 0usize;
-    let mut errors = 0usize;
+    let manifest = Mutex::new(TranscribeManifest::load(root));
+    let success = Mutex::new(0usize);
+    let errors = Mutex::new(0usize);
 
-    for (i, file) in files.iter().enumerate() {
+    let process_file = |file: &PathBuf| {
         let filename = file.file_name().and_then(|n| n.to_str()).unwrap_or("?");
-        print!("  [{}/{}] {} ... ", i + 1, files.len(), filename);
 
         match loader.load(file) {
             Ok(_doc) => {
-                success += 1;
-                manifest.completed.push(file.to_string_lossy().to_string());
-                println!("ok");
+                *success.lock().unwrap() += 1;
+                manifest.lock().unwrap().completed.push(file.to_string_lossy().to_string());
+                println!("  {} ... ok", filename);
             }
             Err(e) => {
-                errors += 1;
-                manifest.failed.push(file.to_string_lossy().to_string());
-                println!("FAILED: {e}");
+                *errors.lock().unwrap() += 1;
+                manifest.lock().unwrap().failed.push(file.to_string_lossy().to_string());
+                println!("  {} ... FAILED: {e}", filename);
             }
         }
+    };
 
-        // Persist manifest every 10 files for resume support
-        if (i + 1) % 10 == 0 {
-            let _ = manifest.save(root);
-        }
+    if jobs > 1 {
+        println!("Using {} parallel transcription jobs", jobs);
+        let pool = rayon::ThreadPoolBuilder::new()
+            .num_threads(jobs)
+            .build()
+            .context("Failed to create thread pool")?;
+        pool.install(|| {
+            files.par_iter().for_each(process_file);
+        });
+    } else {
+        files.iter().for_each(process_file);
     }
 
     // Final manifest save
+    let manifest = manifest.into_inner().unwrap();
     manifest.save(root)?;
 
+    let success = success.into_inner().unwrap();
+    let errors = errors.into_inner().unwrap();
     let elapsed = batch_start.elapsed();
     println!(
         "\nComplete: {} succeeded, {} failed out of {} total ({:.1}s, {:.1} files/sec)",
@@ -715,7 +734,20 @@ fn classify_files(files: &[PathBuf]) -> HashMap<String, usize> {
 }
 
 /// Load documents from discovered files, reporting progress and errors.
+/// Uses rayon parallel loading when `jobs` > 1.
 fn load_documents(
+    files: &[PathBuf],
+    registry: &LoaderRegistry,
+    jobs: usize,
+) -> Result<Vec<Document>> {
+    if jobs > 1 {
+        load_documents_parallel(files, registry, jobs)
+    } else {
+        load_documents_sequential(files, registry)
+    }
+}
+
+fn load_documents_sequential(
     files: &[PathBuf],
     registry: &LoaderRegistry,
 ) -> Result<Vec<Document>> {
@@ -735,6 +767,40 @@ fn load_documents(
         }
     }
 
+    finish_load_report(documents, load_errors)
+}
+
+fn load_documents_parallel(
+    files: &[PathBuf],
+    registry: &LoaderRegistry,
+    jobs: usize,
+) -> Result<Vec<Document>> {
+    let pool = rayon::ThreadPoolBuilder::new()
+        .num_threads(jobs)
+        .build()
+        .context("Failed to create thread pool")?;
+
+    let documents = Mutex::new(Vec::new());
+    let load_errors = Mutex::new(0usize);
+
+    pool.install(|| {
+        files.par_iter().for_each(|file| {
+            match registry.load(file) {
+                Ok(doc) => documents.lock().unwrap().push(doc),
+                Err(e) => {
+                    eprintln!("  Warning: failed to load {}: {}", file.display(), e);
+                    *load_errors.lock().unwrap() += 1;
+                }
+            }
+        });
+    });
+
+    let documents = documents.into_inner().unwrap();
+    let load_errors = load_errors.into_inner().unwrap();
+    finish_load_report(documents, load_errors)
+}
+
+fn finish_load_report(documents: Vec<Document>, load_errors: usize) -> Result<Vec<Document>> {
     if documents.is_empty() {
         anyhow::bail!("All files failed to load ({} errors)", load_errors);
     }
@@ -801,6 +867,7 @@ fn run_index(
     #[allow(unused_variables)] model: SemanticModel,
     recursive: bool,
     chunk_strategy: ChunkStrategy,
+    jobs: usize,
     manifest: bool,
 ) -> Result<()> {
     let path = Path::new(path);
@@ -835,7 +902,10 @@ fn run_index(
         println!("  {} .{} files", count, ext);
     }
 
-    let documents = load_documents(&files, &registry)?;
+    if jobs > 1 {
+        println!("Loading with {} parallel jobs", jobs);
+    }
+    let documents = load_documents(&files, &registry, jobs)?;
 
     // Determine which documents have timestamp metadata
     let media_count = documents
