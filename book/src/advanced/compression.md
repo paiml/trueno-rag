@@ -1,6 +1,8 @@
 # Index Compression (GH-2)
 
-Trueno-RAG provides LZ4/ZSTD compression for BM25 index serialization, reducing storage footprint by 5-10x for typical RAG indices.
+Trueno-RAG provides LZ4/ZSTD compression for BM25 index
+serialization, reducing storage footprint by 5-10x for typical
+RAG indices.
 
 ## Quick Start
 

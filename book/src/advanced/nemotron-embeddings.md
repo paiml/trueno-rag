@@ -1,6 +1,8 @@
 # Nemotron Embeddings (GH-3)
 
-NVIDIA Embed Nemotron 8B provides high-quality 4096-dimensional embeddings via GGUF model inference. Built on Llama 3.1 8B architecture with specialized training for retrieval tasks.
+NVIDIA Embed Nemotron 8B provides high-quality 4096-dimensional
+embeddings via GGUF model inference. Built on Llama 3.1 8B
+architecture with specialized training for retrieval tasks.
 
 ## Quick Start
 

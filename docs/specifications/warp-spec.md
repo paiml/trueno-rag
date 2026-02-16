@@ -8,15 +8,32 @@
 
 ## Abstract
 
-This specification defines the WARP (Weighted Approximate Residual Product) algorithm for multi-vector retrieval in trueno-rag. WARP enables ColBERT-style late interaction search where documents and queries are represented as multiple token embeddings rather than single vectors. The algorithm uses residual quantization to compress token embeddings to 2-4 bits while preserving MaxSim scoring accuracy, and inverted file (IVF) indexing for efficient candidate selection.
+This specification defines the WARP (Weighted Approximate Residual Product)
+algorithm for multi-vector retrieval in trueno-rag. WARP enables
+ColBERT-style late interaction search where documents and queries are
+represented as multiple token embeddings rather than single vectors.
+The algorithm uses residual quantization to compress token embeddings
+to 2-4 bits while preserving MaxSim scoring accuracy, and inverted
+file (IVF) indexing for efficient candidate selection.
 
-> **CRITICAL NOTICE (2026-01-26):** This theory has been **FALSIFIED**. The current residual quantization implementation fails to preserve rank ordering with sufficient fidelity (Kendall's $\tau \approx 0.83 < 0.90$). See Section 12 for the Falsification Report and Reformulation Plan.
+> **CRITICAL NOTICE (2026-01-26):** This theory has been **FALSIFIED**.
+> The current residual quantization implementation fails to preserve
+> rank ordering with sufficient fidelity
+> (Kendall's $\tau \approx 0.83 < 0.90$). See Section 12 for the
+> Falsification Report and Reformulation Plan.
 
 ## 1. Introduction
 
 ### 1.1 Motivation: The Problem Situation ($P_1$)
 
-Scientific progress starts with a problem ($P_1$). In neural retrieval, single-vector dense retrieval compresses all semantic information into one embedding, losing fine-grained token-level interactions [1]. This "bottleneck" theory has been falsified by the superior performance of multi-vector models like ColBERT, which preserve token-level representations [2]. However, the naive implementation of multi-vector retrieval introduces a new problem: prohibitive memory requirements ($P_2$).
+Scientific progress starts with a problem ($P_1$). In neural retrieval,
+single-vector dense retrieval compresses all semantic information into
+one embedding, losing fine-grained token-level interactions [1]. This
+"bottleneck" theory has been falsified by the superior performance of
+multi-vector models like ColBERT, which preserve token-level
+representations [2]. However, the naive implementation of multi-vector
+retrieval introduces a new problem: prohibitive memory
+requirements ($P_2$).
 
 WARP is a tentative theory ($TT$) proposed to solve $P_2$ through:
 1. **Residual quantization** - Compress token embeddings from 32-bit floats to 2-4 bits
@@ -24,7 +41,11 @@ WARP is a tentative theory ($TT$) proposed to solve $P_2$ through:
 3. **Deferred decompression** - Score directly from compressed representations
 
 > **Toyota Way Review: Eliminate Waste (Muda)**
-> Single-vector embeddings represent *over-processing waste*—compressing rich token interactions into one vector, then working harder downstream to recover lost signal. Multi-vector preserves information at the source, eliminating the *waste of correction* (reranking to fix retrieval errors).
+> Single-vector embeddings represent *over-processing
+> waste*—compressing rich token interactions into one vector,
+> then working harder downstream to recover lost signal.
+> Multi-vector preserves information at the source, eliminating
+> the *waste of correction* (reranking to fix retrieval errors).
 
 ### 1.2 Design Principles
 
@@ -41,10 +62,16 @@ ColBERT's MaxSim scoring computes, for query Q with tokens {q₁...qₘ} and doc
 MaxSim(Q, D) = Σᵢ maxⱼ(qᵢ · dⱼ)
 ```
 
-For each query token, find the maximum similarity with any document token, then sum across query tokens [2]. This captures soft alignment without explicit matching.
+For each query token, find the maximum similarity with any document
+token, then sum across query tokens [2]. This captures soft alignment
+without explicit matching.
 
 > **Toyota Way Review: Built-in Quality (Jidoka)**
-> MaxSim scoring implements *built-in quality*—each query token independently finds its best match, and defects (poor matches) for one token don't pollute other tokens' scores. This is superior to single-vector's "averaging" which masks quality problems.
+> MaxSim scoring implements *built-in quality*—each query token
+> independently finds its best match, and defects (poor matches)
+> for one token don't pollute other tokens' scores. This is
+> superior to single-vector's "averaging" which masks quality
+> problems.
 
 ## 2. Algorithm Overview
 
@@ -78,7 +105,9 @@ v = c + r
 ```
 where c is the nearest centroid and r is the residual (v - c).
 
-The dot product q · v = q · c + q · r. Since centroids are shared across many vectors, we precompute q · c once and only decompress residuals for promising candidates [3].
+The dot product q · v = q · c + q · r. Since centroids are shared
+across many vectors, we precompute q · c once and only decompress
+residuals for promising candidates [3].
 
 ### 2.3 Quantization Trade-offs
 
@@ -87,7 +116,9 @@ The dot product q · v = q · c + q · r. Since centroids are shared across many
 | 2    | 4       | 16×         | ~3-5% MRR    |
 | 4    | 16      | 8×          | ~1-2% MRR    |
 
-The optimal choice depends on corpus size and quality requirements. For most applications, 2-bit quantization provides the best memory/quality trade-off [4].
+The optimal choice depends on corpus size and quality requirements.
+For most applications, 2-bit quantization provides the best
+memory/quality trade-off [4].
 
 ## 3. Data Structures
 
@@ -124,7 +155,10 @@ impl MultiVectorEmbedding {
 ```
 
 > **Toyota Way Review: Standard Work**
-> The `MultiVectorEmbedding` struct establishes *standardized work* for token handling. All components share this interface, enabling *Kaizen* (continuous improvement) on individual components without system-wide changes.
+> The `MultiVectorEmbedding` struct establishes *standardized work*
+> for token handling. All components share this interface, enabling
+> *Kaizen* (continuous improvement) on individual components without
+> system-wide changes.
 
 ### 3.2 Index Configuration
 
@@ -194,7 +228,9 @@ impl Default for WarpSearchConfig {
 ```
 
 > **Toyota Way Review: Heijunka (Leveling)**
-> The `bound` parameter implements *load leveling*—preventing worst-case queries from consuming unbounded resources. This avoids *Muri* (overburden) on the system during spike loads.
+> The `bound` parameter implements *load leveling*—preventing
+> worst-case queries from consuming unbounded resources. This avoids
+> *Muri* (overburden) on the system during spike loads.
 
 ## 4. Residual Quantization Codec
 
@@ -286,7 +322,8 @@ fn kmeans_clustering(
 
 ### 4.2 Quantization Boundary Learning
 
-Residuals follow approximately Gaussian distribution per dimension. We learn bucket boundaries to minimize reconstruction error:
+Residuals follow approximately Gaussian distribution per dimension.
+We learn bucket boundaries to minimize reconstruction error:
 
 ```rust
 fn learn_quantization_params(
@@ -328,7 +365,10 @@ fn learn_quantization_params(
 ```
 
 > **Toyota Way Review: Genchi Genbutsu (Go and See)**
-> Quantization boundaries are learned from *actual data*, not assumed distributions. This embodies *Genchi Genbutsu*—going to the source to understand the real situation rather than relying on theoretical assumptions.
+> Quantization boundaries are learned from *actual data*, not assumed
+> distributions. This embodies *Genchi Genbutsu*—going to the source
+> to understand the real situation rather than relying on theoretical
+> assumptions.
 
 ### 4.3 Compression
 
@@ -484,7 +524,10 @@ Centroid 0:          Centroid 1:          ...
 This layout ensures all data for a centroid is contiguous, maximizing cache efficiency during search [6].
 
 > **Toyota Way Review: 5S (Sort, Set in Order, Shine, Standardize, Sustain)**
-> The IVF memory layout implements *Seiri* (Sort) and *Seiton* (Set in Order)—organizing data by access pattern rather than insertion order. This eliminates the *waste of motion* (cache misses) during search.
+> The IVF memory layout implements *Seiri* (Sort) and *Seiton*
+> (Set in Order)—organizing data by access pattern rather than
+> insertion order. This eliminates the *waste of motion*
+> (cache misses) during search.
 
 ### 5.2 Index Building
 
@@ -798,7 +841,10 @@ impl WarpIndex {
 ```
 
 > **Toyota Way Review: Pull System (Kanban)**
-> The search algorithm implements a *pull system*—candidates are only decompressed when a centroid is selected (demand), not preemptively. This eliminates the *waste of overproduction* (decompressing unneeded residuals).
+> The search algorithm implements a *pull system*—candidates are
+> only decompressed when a centroid is selected (demand), not
+> preemptively. This eliminates the *waste of overproduction*
+> (decompressing unneeded residuals).
 
 ## 7. Multi-Vector Embedder Interface
 
@@ -1027,55 +1073,103 @@ pub enum FusionStrategy {
 
 ## 9. References
 
-[1] Reimers, N., & Gurevych, I. (2019). "Sentence-BERT: Sentence Embeddings using Siamese BERT-Networks." *Proceedings of EMNLP-IJCNLP*, 3982-3992. DOI: 10.18653/v1/D19-1410
+[1] Reimers, N., & Gurevych, I. (2019). "Sentence-BERT: Sentence
+Embeddings using Siamese BERT-Networks."
+*Proceedings of EMNLP-IJCNLP*, 3982-3992.
+DOI: 10.18653/v1/D19-1410
 
-[2] Khattab, O., & Zaharia, M. (2020). "ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT." *Proceedings of SIGIR*, 39-48. DOI: 10.1145/3397271.3401075
+[2] Khattab, O., & Zaharia, M. (2020). "ColBERT: Efficient and
+Effective Passage Search via Contextualized Late Interaction over
+BERT." *Proceedings of SIGIR*, 39-48.
+DOI: 10.1145/3397271.3401075
 
-[3] Santhanam, K., Khattab, O., Saad-Falcon, J., Potts, C., & Zaharia, M. (2022). "ColBERTv2: Effective and Efficient Retrieval via Lightweight Late Interaction." *Proceedings of NAACL*, 3715-3734. DOI: 10.18653/v1/2022.naacl-main.272
+[3] Santhanam, K., Khattab, O., Saad-Falcon, J., Potts, C., &
+Zaharia, M. (2022). "ColBERTv2: Effective and Efficient Retrieval
+via Lightweight Late Interaction."
+*Proceedings of NAACL*, 3715-3734.
+DOI: 10.18653/v1/2022.naacl-main.272
 
-[4] Santhanam, K., Khattab, O., Potts, C., & Zaharia, M. (2022). "PLAID: An Efficient Engine for Late Interaction Retrieval." *Proceedings of CIKM*, 1747-1756. DOI: 10.1145/3511808.3557325
+[4] Santhanam, K., Khattab, O., Potts, C., & Zaharia, M. (2022).
+"PLAID: An Efficient Engine for Late Interaction Retrieval."
+*Proceedings of CIKM*, 1747-1756.
+DOI: 10.1145/3511808.3557325
 
-[5] Jégou, H., Douze, M., & Schmid, C. (2011). "Product Quantization for Nearest Neighbor Search." *IEEE Transactions on Pattern Analysis and Machine Intelligence*, 33(1), 117-128. DOI: 10.1109/TPAMI.2010.57
+[5] Jégou, H., Douze, M., & Schmid, C. (2011). "Product Quantization
+for Nearest Neighbor Search." *IEEE Transactions on Pattern Analysis
+and Machine Intelligence*, 33(1), 117-128.
+DOI: 10.1109/TPAMI.2010.57
 
-[6] Johnson, J., Douze, M., & Jégou, H. (2021). "Billion-scale similarity search with GPUs." *IEEE Transactions on Big Data*, 7(3), 535-547. DOI: 10.1109/TBDATA.2019.2921572
+[6] Johnson, J., Douze, M., & Jégou, H. (2021). "Billion-scale
+similarity search with GPUs." *IEEE Transactions on Big Data*,
+7(3), 535-547. DOI: 10.1109/TBDATA.2019.2921572
 
-[7] Gray, R. M., & Neuhoff, D. L. (1998). "Quantization." *IEEE Transactions on Information Theory*, 44(6), 2325-2383. DOI: 10.1109/18.720541
+[7] Gray, R. M., & Neuhoff, D. L. (1998). "Quantization."
+*IEEE Transactions on Information Theory*, 44(6), 2325-2383.
+DOI: 10.1109/18.720541
 
 [8] Gersho, A., & Gray, R. M. (1992). *Vector Quantization and Signal Compression*. Springer. ISBN: 978-0-7923-9181-4
 
-[9] Formal, T., Piwowarski, B., & Clinchant, S. (2021). "SPLADE: Sparse Lexical and Expansion Model for First Stage Ranking." *Proceedings of SIGIR*, 2288-2292. DOI: 10.1145/3404835.3463098
+[9] Formal, T., Piwowarski, B., & Clinchant, S. (2021). "SPLADE:
+Sparse Lexical and Expansion Model for First Stage Ranking."
+*Proceedings of SIGIR*, 2288-2292.
+DOI: 10.1145/3404835.3463098
 
-[10] Lin, J., Ma, X., Lin, S. C., Yang, J. H., Pradeep, R., & Nogueira, R. (2021). "Pyserini: A Python Toolkit for Reproducible Information Retrieval Research with Sparse and Dense Representations." *Proceedings of SIGIR*, 2356-2362. DOI: 10.1145/3404835.3463238
+[10] Lin, J., Ma, X., Lin, S. C., Yang, J. H., Pradeep, R., &
+Nogueira, R. (2021). "Pyserini: A Python Toolkit for Reproducible
+Information Retrieval Research with Sparse and Dense
+Representations." *Proceedings of SIGIR*, 2356-2362.
+DOI: 10.1145/3404835.3463238
 
 ---
 
 ## 10. Popperian Falsification Plan
 
-> "The game of science is, in principle, without end. He who decides one day that scientific statements do not call for any further test, and that they can be regarded as finally verified, retires from the game." — *Karl Popper, The Logic of Scientific Discovery*
+> "The game of science is, in principle, without end. He who
+> decides one day that scientific statements do not call for any
+> further test, and that they can be regarded as finally verified,
+> retires from the game."
+> — *Karl Popper, The Logic of Scientific Discovery*
 
-In accordance with the principle of falsifiability, we do not seek to *verify* the WARP algorithm (which is logically impossible). Instead, we subject it to severe tests designed to expose its flaws. This specification is a **conjecture**. The implementation is an attempt to withstand refutation.
+In accordance with the principle of falsifiability, we do not seek to
+*verify* the WARP algorithm (which is logically impossible). Instead,
+we subject it to severe tests designed to expose its flaws. This
+specification is a **conjecture**. The implementation is an attempt
+to withstand refutation.
 
 ### 10.1 The Demarcation Criterion
 
-To distinguish this engineering effort from mere "hacking" (pseudoscience), we define specific observations that, if they occur, will compel us to reject the system as failed. These are our "Potential Falsifiers".
+To distinguish this engineering effort from mere "hacking"
+(pseudoscience), we define specific observations that, if they
+occur, will compel us to reject the system as failed. These are
+our "Potential Falsifiers".
 
 ### 10.2 Experimentum Crucis (Crucial Experiment)
 
 We propose a crucial experiment to decide between two competing theories:
-1.  **Theory A (Null Hypothesis):** Single-vector dense retrieval is sufficient; fine-grained token interaction adds cost without meaningful benefit.
-2.  **Theory B (WARP Conjecture):** Token-level interaction is necessary to capture "hard negative" distinctions that single vectors miss.
+1.  **Theory A (Null Hypothesis):** Single-vector dense retrieval is
+    sufficient; fine-grained token interaction adds cost without
+    meaningful benefit.
+2.  **Theory B (WARP Conjecture):** Token-level interaction is
+    necessary to capture "hard negative" distinctions that single
+    vectors miss.
 
 **The Test:**
-Evaluate on a "Hard Negatives" dataset where documents share high semantic overlap but differ in crucial details (e.g., negation: "The cat is on the mat" vs "The cat is NOT on the mat").
+Evaluate on a "Hard Negatives" dataset where documents share high
+semantic overlap but differ in crucial details (e.g., negation:
+"The cat is on the mat" vs "The cat is NOT on the mat").
 
 **Prediction:**
-WARP must outperform Single-Vector retrieval by at least **15% in MRR@10** on this specific subset. If it does not, we accept Theory A and abandon WARP as "Muda" (Waste).
+WARP must outperform Single-Vector retrieval by at least
+**15% in MRR@10** on this specific subset. If it does not,
+we accept Theory A and abandon WARP as "Muda" (Waste).
 
 ### 10.3 Potential Falsifiers (Conjectures & Refutations)
 
 #### Conjecture 1: Compression Preserves Information Structure
 **Theory:** Residual quantization preserves the relative ordering of MaxSim scores with high fidelity.
-**Falsifier:** If the rank correlation (Kendall's tau) between 32-bit MaxSim and 2-bit WARP scores drops below **0.90** on the MS MARCO dev set, the codec is falsified.
+**Falsifier:** If the rank correlation (Kendall's tau) between
+32-bit MaxSim and 2-bit WARP scores drops below **0.90** on the
+MS MARCO dev set, the codec is falsified.
 
 ```rust
 #[test]
@@ -1087,8 +1181,11 @@ fn falsify_score_ordering_preservation() {
 ```
 
 #### Conjecture 2: The Pruning Hypothesis
-**Theory:** Centroids effectively partition the semantic space such that relevant tokens are found in the top-`nprobe` clusters.
-**Falsifier:** If `recall@10` of pruned search (nprobe=4) vs exhaustive search drops below **0.95**, the clustering hypothesis is falsified.
+**Theory:** Centroids effectively partition the semantic space such
+that relevant tokens are found in the top-`nprobe` clusters.
+**Falsifier:** If `recall@10` of pruned search (nprobe=4) vs
+exhaustive search drops below **0.95**, the clustering hypothesis
+is falsified.
 
 ```rust
 #[test]
@@ -1173,7 +1270,9 @@ cargo bench --features multivector -- warp
 
 [11] Popper, K. R. (1959). *The Logic of Scientific Discovery*. Routledge. ISBN: 978-0-415-27844-7
 
-[12] Lakatos, I. (1978). *The Methodology of Scientific Research Programmes*. Cambridge University Press. ISBN: 978-0-521-28031-0
+[12] Lakatos, I. (1978). *The Methodology of Scientific Research
+Programmes*. Cambridge University Press.
+ISBN: 978-0-521-28031-0
 
 ## Appendix C: Version History
 
@@ -1195,8 +1294,12 @@ cargo bench --features multivector -- warp
 1.  **Conjecture 1 (Compression Fidelity):**
     *   **Prediction:** Kendall's $\tau \ge 0.90$ for 4-bit quantization.
     *   **Observation:** Kendall's $\tau = 0.8312$.
-    *   **Significance:** $\approx 17\%$ of pairwise orderings are inverted. This error rate is too high for reliable retrieval.
-    *   **Root Cause Analysis:** Scalar quantization of residuals assumes a distribution (likely Gaussian) that does not match the actual residual distribution, especially with random/mock data.
+    *   **Significance:** $\approx 17\%$ of pairwise orderings are
+        inverted. This error rate is too high for reliable retrieval.
+    *   **Root Cause Analysis:** Scalar quantization of residuals
+        assumes a distribution (likely Gaussian) that does not match
+        the actual residual distribution, especially with
+        random/mock data.
 
 2.  **Conjecture 2 (Pruning Recall):**
     *   **Prediction:** Recall@10 $\ge 95\%$ with $nprobe=4$.
@@ -1204,14 +1307,19 @@ cargo bench --features multivector -- warp
     *   **Significance:** Narrow miss, but confirms that scoring errors from C1 propagate to reranking failures.
 
 3.  **Experimentum Crucis:**
-    *   **Status:** INCONCLUSIVE. The use of a `MockMultiVectorEmbedder` (random vectors) prevented semantic evaluation. This test remains valid but requires a real ColBERT model integration.
+    *   **Status:** INCONCLUSIVE. The use of a
+        `MockMultiVectorEmbedder` (random vectors) prevented
+        semantic evaluation. This test remains valid but requires
+        a real ColBERT model integration.
 
 ### 12.2 Reformulation Plan
 
 We reject the current "Scalar Residual Quantization" theory. We propose the following reformulation:
 
 1.  **Theory 2.0: Product Quantization (PQ)**
-    *   Instead of scalar quantization of residuals, split the vector into $M$ sub-vectors and quantize each using a local codebook.
+    *   Instead of scalar quantization of residuals, split the
+        vector into $M$ sub-vectors and quantize each using a
+        local codebook.
     *   *Rationale:* PQ better captures the manifold of the residuals than independent scalar buckets.
 
 2.  **Theory 2.1: Asymmetric Distance Computation**
@@ -1219,7 +1327,10 @@ We reject the current "Scalar Residual Quantization" theory. We propose the foll
     *   *Rationale:* Reduces quantization noise by 50%.
 
 3.  **Revised Test Protocol:**
-    *   Replace `MockMultiVectorEmbedder` with `ClusteredMockEmbedder` for structural tests (C1, C2) to avoid "curse of dimensionality" artifacts from uniform random noise.
+    *   Replace `MockMultiVectorEmbedder` with
+        `ClusteredMockEmbedder` for structural tests (C1, C2)
+        to avoid "curse of dimensionality" artifacts from uniform
+        random noise.
     *   Mandate `fastembed-rs` integration for the *Experimentum Crucis*.
 
 > **Next Step:** Implement **WARP v2 (PQ + Asymmetric)** and subject it to the same falsification battery.

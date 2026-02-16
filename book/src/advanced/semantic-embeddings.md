@@ -1,6 +1,8 @@
 # Semantic Embeddings (GH-1)
 
-Trueno-RAG provides production-quality semantic embeddings via FastEmbed (ONNX Runtime), enabling real vector similarity search instead of mock embeddings.
+Trueno-RAG provides production-quality semantic embeddings via
+FastEmbed (ONNX Runtime), enabling real vector similarity search
+instead of mock embeddings.
 
 ## Quick Start
 
