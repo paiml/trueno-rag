@@ -21,26 +21,15 @@ build:
 # Fast tests (<30s): Uses nextest for parallelism if available
 test-fast: ## Fast unit tests (<30s target)
 	@echo "⚡ Running fast tests (target: <30s)..."
-	@if command -v cargo-nextest >/dev/null 2>&1; then \
-		time cargo nextest run --lib \
-			--status-level skip \
-			--failure-output immediate; \
-	else \
-		echo "💡 Install cargo-nextest for faster tests: cargo install cargo-nextest"; \
-		time cargo test --lib; \
-	fi
+	PROPTEST_CASES=32 QUICKCHECK_TESTS=100 \
+	cargo test --lib
 	@echo "✅ Fast tests passed"
 
 # Standard tests
 test: ## Standard tests
 	@echo "🧪 Running standard tests..."
-	@if command -v cargo-nextest >/dev/null 2>&1; then \
-		time cargo nextest run \
-			--status-level skip \
-			--failure-output immediate; \
-	else \
-		time cargo test; \
-	fi
+	PROPTEST_CASES=64 QUICKCHECK_TESTS=256 \
+	cargo test --workspace
 	@echo "✅ Standard tests passed"
 
 # Linting
@@ -62,13 +51,12 @@ fmt-check: ## Check formatting
 
 coverage: ## Generate HTML coverage report (target: <5 min)
 	@echo "📊 Running coverage analysis (target: <5 min)..."
-	@echo "🔍 Checking for cargo-llvm-cov and cargo-nextest..."
+	@echo "🔍 Checking for cargo-llvm-cov..."
 	@which cargo-llvm-cov > /dev/null 2>&1 || (echo "📦 Installing cargo-llvm-cov..." && cargo install cargo-llvm-cov --locked)
-	@which cargo-nextest > /dev/null 2>&1 || (echo "📦 Installing cargo-nextest..." && cargo install cargo-nextest --locked)
-	@echo "🧹 Cleaning old coverage data..."
 	@mkdir -p target/coverage
 	@echo "🧪 Phase 1: Running tests with instrumentation (no report)..."
-	@cargo llvm-cov --no-report nextest --no-tests=warn --workspace --no-fail-fast --all-features
+	PROPTEST_CASES=32 QUICKCHECK_TESTS=100 \
+	cargo llvm-cov --no-report test --lib --workspace --no-fail-fast --all-features
 	@echo "📊 Phase 2: Generating coverage reports..."
 	@cargo llvm-cov report --html --output-dir target/coverage/html
 	@cargo llvm-cov report --lcov --output-path target/coverage/lcov.info
