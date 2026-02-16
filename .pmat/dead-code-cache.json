@@ -1,7 +1,7 @@
 {
-  "tree_hash": "ef2ed28ce92b8d211454d4fbe0169866b3b07e9c",
+  "tree_hash": "195002b09030477dbc9babdef1f7f032b2556f9c",
   "pmat_version": "3.3.0",
-  "timestamp": "2026-02-16T21:36:29.123687421Z",
+  "timestamp": "2026-02-16T21:38:35.198448040Z",
   "report": {
     "files_with_dead_code": [
       {
