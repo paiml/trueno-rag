@@ -70,3 +70,117 @@ roadmap:
   - multivector
   - warp
   notes: null
+- id: PMAT-004
+  github_issue: null
+  item_type: task
+  title: Add --jobs parallel loading to index command
+  status: inprogress
+  priority: medium
+  assigned_to: null
+  created: 2026-02-16T19:01:50Z
+  updated: 2026-02-16T19:03:38.049290052+00:00
+  spec: null
+  acceptance_criteria:
+  - 'Phase 2.3: Add --jobs flag to index subcommand for parallel document loading via rayon or tokio tasks'
+  phases: []
+  subtasks: []
+  estimated_effort: null
+  labels:
+  - media-support
+  - phase2
+  notes: null
+- id: PMAT-005
+  github_issue: null
+  item_type: task
+  title: Add JSON manifest output to index command
+  status: inprogress
+  priority: medium
+  assigned_to: null
+  created: 2026-02-16T19:01:51Z
+  updated: 2026-02-16T19:03:38.063381287+00:00
+  spec: null
+  acceptance_criteria:
+  - 'Phase 2.5: Add --manifest flag to index command that writes a manifest.json with file list, loader assignments, and chunk counts'
+  phases: []
+  subtasks: []
+  estimated_effort: null
+  labels:
+  - media-support
+  - phase2
+  notes: null
+- id: PMAT-006
+  github_issue: null
+  item_type: task
+  title: Add --backend flag to transcribe CLI
+  status: inprogress
+  priority: low
+  assigned_to: null
+  created: 2026-02-16T19:01:53Z
+  updated: 2026-02-16T19:03:38.034683888+00:00
+  spec: null
+  acceptance_criteria:
+  - 'Phase 3.5: Expose TranscriptionBackend (cpu/gpu/cuda) via --backend flag on transcribe subcommand'
+  phases: []
+  subtasks: []
+  estimated_effort: null
+  labels:
+  - media-support
+  - phase3
+  notes: null
+- id: PMAT-007
+  github_issue: null
+  item_type: task
+  title: Add manifest-based resume to transcribe
+  status: inprogress
+  priority: medium
+  assigned_to: null
+  created: 2026-02-16T19:01:55Z
+  updated: 2026-02-16T19:03:38.078036435+00:00
+  spec: null
+  acceptance_criteria:
+  - 'Phase 4.2: Write manifest.json during transcribe batch listing completed files. On restart, read manifest and skip already-completed files.'
+  phases: []
+  subtasks: []
+  estimated_effort: null
+  labels:
+  - media-support
+  - phase4
+  notes: null
+- id: PMAT-008
+  github_issue: null
+  item_type: task
+  title: Add progress persistence and throughput reporting to transcribe
+  status: inprogress
+  priority: medium
+  assigned_to: null
+  created: 2026-02-16T19:01:57Z
+  updated: 2026-02-16T19:03:38.092361573+00:00
+  spec: null
+  acceptance_criteria:
+  - 'Phase 4.3-4.4: Persist progress across restarts via manifest updates. Report throughput (files/sec, realtime factor) during and after batch transcription.'
+  phases: []
+  subtasks: []
+  estimated_effort: null
+  labels:
+  - media-support
+  - phase4
+  notes: null
+- id: PMAT-009
+  github_issue: null
+  item_type: task
+  title: Add full pipeline integration tests for media support
+  status: inprogress
+  priority: high
+  assigned_to: null
+  created: 2026-02-16T19:01:59Z
+  updated: 2026-02-16T19:02:06.842178187+00:00
+  spec: null
+  acceptance_criteria:
+  - 'Spec 11.3: (1) Load .srt -> chunk -> embed -> retrieve by query, verify results. (2) Verify timestamp metadata survives full pipeline. (3) Sidecar resolution: .mp4 + .srt in temp dir, verify subtitle loader selected.'
+  phases: []
+  subtasks: []
+  estimated_effort: null
+  labels:
+  - media-support
+  - testing
+  notes: null

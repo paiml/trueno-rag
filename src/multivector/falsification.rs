@@ -483,8 +483,10 @@ fn test_conjecture_2_pruning() -> ConjectureResult {
         // Exhaustive search (high nprobe)
         let exhaustive_config = WarpSearchConfig::with_k(10).nprobe(8).bound(1000);
         let exhaustive_results = index.search(&query_emb, &exhaustive_config).unwrap();
-        let exhaustive_ids: std::collections::HashSet<_> =
-            exhaustive_results.iter().map(|(id, _)| id.clone()).collect();
+        let exhaustive_ids: std::collections::HashSet<_> = exhaustive_results
+            .iter()
+            .map(|(id, _)| id.clone())
+            .collect();
 
         // Pruned search (nprobe=4)
         let pruned_config = WarpSearchConfig::with_k(10).nprobe(4).bound(128);
@@ -551,7 +553,14 @@ fn test_conjecture_3_scaling() -> ConjectureResult {
     for &n in &corpus_sizes {
         // More tokens per document
         let documents: Vec<String> = (0..n)
-            .map(|i| format!("Document {} about topic {} in field {} with additional context and details", i, i % 50, i % 10))
+            .map(|i| {
+                format!(
+                    "Document {} about topic {} in field {} with additional context and details",
+                    i,
+                    i % 50,
+                    i % 10
+                )
+            })
             .collect();
 
         // Use appropriate number of centroids for corpus size
@@ -700,9 +709,21 @@ fn average_embedding(mv: &MultiVectorEmbedding) -> Vec<f32> {
 
 /// Cosine similarity between two vectors
 fn cosine_similarity(a: &[f32], b: &[f32]) -> f64 {
-    let dot: f64 = a.iter().zip(b.iter()).map(|(x, y)| (*x as f64) * (*y as f64)).sum();
-    let norm_a: f64 = a.iter().map(|x| (*x as f64) * (*x as f64)).sum::<f64>().sqrt();
-    let norm_b: f64 = b.iter().map(|x| (*x as f64) * (*x as f64)).sum::<f64>().sqrt();
+    let dot: f64 = a
+        .iter()
+        .zip(b.iter())
+        .map(|(x, y)| (*x as f64) * (*y as f64))
+        .sum();
+    let norm_a: f64 = a
+        .iter()
+        .map(|x| (*x as f64) * (*x as f64))
+        .sum::<f64>()
+        .sqrt();
+    let norm_b: f64 = b
+        .iter()
+        .map(|x| (*x as f64) * (*x as f64))
+        .sum::<f64>()
+        .sqrt();
 
     if norm_a > 0.0 && norm_b > 0.0 {
         dot / (norm_a * norm_b)
@@ -826,7 +847,10 @@ mod tests {
 
         // We don't assert on Corroborated because the goal is to try to falsify
         // But we track the results
-        println!("\nTest completed. Overall verdict: {}", report.overall_verdict);
+        println!(
+            "\nTest completed. Overall verdict: {}",
+            report.overall_verdict
+        );
     }
 
     /// Specific test for Experimentum Crucis

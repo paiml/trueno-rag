@@ -120,17 +120,17 @@ proptest! {
 
 /// Strategy to generate valid SRT cue text (no empty, no double newlines).
 fn srt_text_strategy() -> impl Strategy<Value = String> {
-    "[a-zA-Z ]{5,60}".prop_map(|s| s.trim().to_string()).prop_filter("non-empty", |s| !s.is_empty())
+    "[a-zA-Z ]{5,60}"
+        .prop_map(|s| s.trim().to_string())
+        .prop_filter("non-empty", |s| !s.is_empty())
 }
 
 /// Strategy to generate a vector of subtitle cues with monotonically increasing timestamps.
-fn subtitle_cues_strategy(count: std::ops::Range<usize>) -> impl Strategy<Value = Vec<SubtitleCue>> {
+fn subtitle_cues_strategy(
+    count: std::ops::Range<usize>,
+) -> impl Strategy<Value = Vec<SubtitleCue>> {
     count.prop_flat_map(|n| {
-        proptest::collection::vec(
-            (1.0f64..10.0, srt_text_strategy()),
-            n,
-        )
-        .prop_map(|pairs| {
+        proptest::collection::vec((1.0f64..10.0, srt_text_strategy()), n).prop_map(|pairs| {
             let mut time = 0.0;
             pairs
                 .into_iter()

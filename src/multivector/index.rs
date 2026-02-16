@@ -313,9 +313,10 @@ impl WarpIndex {
         query: &MultiVectorEmbedding,
         search_config: &WarpSearchConfig,
     ) -> Result<Vec<(ChunkId, f32)>> {
-        let codec = self.codec.as_ref().ok_or_else(|| {
-            crate::Error::InvalidInput("Codec not trained".to_string())
-        })?;
+        let codec = self
+            .codec
+            .as_ref()
+            .ok_or_else(|| crate::Error::InvalidInput("Codec not trained".to_string()))?;
 
         if !self.is_built {
             return Err(crate::Error::InvalidInput(
@@ -338,7 +339,8 @@ impl WarpIndex {
             .into_iter()
             .take(max_tokens)
             .map(|centroids| {
-                let take = (search_config.bound.saturating_sub(total_centroids)).min(centroids.len());
+                let take =
+                    (search_config.bound.saturating_sub(total_centroids)).min(centroids.len());
                 total_centroids += take;
                 centroids.into_iter().take(take).collect()
             })

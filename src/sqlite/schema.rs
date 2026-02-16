@@ -141,11 +141,8 @@ fn create_tables(conn: &Connection) -> Result<()> {
 /// Called after v1→v2 migration to populate the new external-content FTS5
 /// index from existing chunk data.
 fn rebuild_fts(conn: &Connection) -> Result<()> {
-    conn.execute(
-        "INSERT INTO chunks_fts(chunks_fts) VALUES('rebuild')",
-        [],
-    )
-    .map_err(|e| crate::Error::Query(format!("FTS5 rebuild failed: {e}")))?;
+    conn.execute("INSERT INTO chunks_fts(chunks_fts) VALUES('rebuild')", [])
+        .map_err(|e| crate::Error::Query(format!("FTS5 rebuild failed: {e}")))?;
     Ok(())
 }
 
@@ -236,7 +233,10 @@ mod tests {
                 |row| row.get(0),
             )
             .unwrap();
-        assert!(!has_content_table, "External content FTS5 should not create chunks_fts_content");
+        assert!(
+            !has_content_table,
+            "External content FTS5 should not create chunks_fts_content"
+        );
     }
 
     #[test]

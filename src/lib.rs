@@ -111,12 +111,6 @@ pub use chunk::{
     Chunk, ChunkId, ChunkMetadata, Chunker, ChunkingStrategy, FixedSizeChunker, ParagraphChunker,
     RecursiveChunker, SemanticChunker, SentenceChunker, StructuralChunker, TimestampChunker,
 };
-pub use loader::{DocumentLoader, LoaderRegistry, SubtitleLoader, TextLoader};
-#[cfg(feature = "transcription")]
-pub use loader::transcription::{
-    TranscriptionBackend, TranscriptionConfig, TranscriptionLoader,
-};
-pub use media::{parse_subtitles, SubtitleCue, SubtitleFormat, SubtitleTrack};
 #[cfg(feature = "compression")]
 pub use compressed::Compression;
 pub use embed::{Embedder, EmbeddingConfig, PoolingStrategy};
@@ -125,6 +119,10 @@ pub use embed::{EmbeddingModelType, FastEmbedder};
 pub use error::{Error, Result};
 pub use fusion::FusionStrategy;
 pub use index::{BM25Index, SparseIndex, VectorStore};
+#[cfg(feature = "transcription")]
+pub use loader::transcription::{TranscriptionBackend, TranscriptionConfig, TranscriptionLoader};
+pub use loader::{DocumentLoader, LoaderRegistry, SubtitleLoader, TextLoader};
+pub use media::{parse_subtitles, SubtitleCue, SubtitleFormat, SubtitleTrack};
 pub use metrics::{AggregatedMetrics, RetrievalMetrics};
 pub use pipeline::{ContextAssembler, RagPipeline};
 pub use rerank::Reranker;

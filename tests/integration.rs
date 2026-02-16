@@ -1,8 +1,10 @@
 //! Integration tests for trueno-rag
 
 use trueno_rag::{
-    chunk::{Chunker, ParagraphChunker, RecursiveChunker, SentenceChunker, StructuralChunker,
-            TimestampChunker},
+    chunk::{
+        Chunker, ParagraphChunker, RecursiveChunker, SentenceChunker, StructuralChunker,
+        TimestampChunker,
+    },
     embed::MockEmbedder,
     fusion::FusionStrategy,
     loader::{DocumentLoader, LoaderRegistry, SubtitleLoader},
@@ -275,24 +277,32 @@ Computer vision focuses on image and video analysis using convolutional networks
 fn test_timestamp_metadata_survives_pipeline() {
     // Build document with subtitle cues in metadata
     let cues = vec![
-        SubtitleCue { index: 0, start_secs: 0.0, end_secs: 30.0,
-            text: "Introduction to distributed systems.".into() },
-        SubtitleCue { index: 1, start_secs: 30.0, end_secs: 60.0,
-            text: "Consensus algorithms like Raft and Paxos.".into() },
-        SubtitleCue { index: 2, start_secs: 60.0, end_secs: 90.0,
-            text: "Fault tolerance and replication strategies.".into() },
+        SubtitleCue {
+            index: 0,
+            start_secs: 0.0,
+            end_secs: 30.0,
+            text: "Introduction to distributed systems.".into(),
+        },
+        SubtitleCue {
+            index: 1,
+            start_secs: 30.0,
+            end_secs: 60.0,
+            text: "Consensus algorithms like Raft and Paxos.".into(),
+        },
+        SubtitleCue {
+            index: 2,
+            start_secs: 60.0,
+            end_secs: 90.0,
+            text: "Fault tolerance and replication strategies.".into(),
+        },
     ];
 
     let mut doc = Document::new("Introduction to distributed systems. Consensus algorithms like Raft and Paxos. Fault tolerance and replication strategies.")
         .with_title("Distributed Systems Lecture");
-    doc.metadata.insert(
-        "subtitle_cues".into(),
-        serde_json::to_value(&cues).unwrap(),
-    );
-    doc.metadata.insert(
-        "duration_secs".into(),
-        serde_json::json!(90.0),
-    );
+    doc.metadata
+        .insert("subtitle_cues".into(), serde_json::to_value(&cues).unwrap());
+    doc.metadata
+        .insert("duration_secs".into(), serde_json::json!(90.0));
 
     // Chunk with TimestampChunker
     let chunker = TimestampChunker::new(45.0).with_min_duration(0.0);
@@ -334,7 +344,9 @@ fn test_timestamp_metadata_survives_pipeline() {
 
     pipeline.index_document(&doc).expect("Failed to index");
 
-    let results = pipeline.query("consensus Raft Paxos", 3).expect("Query failed");
+    let results = pipeline
+        .query("consensus Raft Paxos", 3)
+        .expect("Query failed");
     assert!(!results.is_empty());
 
     // Retrieved chunks should still have timestamp metadata

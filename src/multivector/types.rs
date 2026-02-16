@@ -79,11 +79,7 @@ impl MultiVectorEmbedding {
         let mut embeddings = Vec::with_capacity(num_tokens * dim);
 
         for token in tokens {
-            assert_eq!(
-                token.len(),
-                dim,
-                "All tokens must have the same dimension"
-            );
+            assert_eq!(token.len(), dim, "All tokens must have the same dimension");
             embeddings.extend_from_slice(token);
         }
 
@@ -228,8 +224,7 @@ impl WarpIndexConfig {
     /// Get the effective minimum training samples.
     #[must_use]
     pub fn effective_min_training_samples(&self) -> usize {
-        self.min_training_samples
-            .unwrap_or(10 * self.num_centroids)
+        self.min_training_samples.unwrap_or(10 * self.num_centroids)
     }
 
     /// Calculate packed residual size in bytes.
@@ -476,10 +471,16 @@ mod tests {
         let config = WarpIndexConfig::default();
         assert!(config.validate().is_ok());
 
-        let bad_nbits = WarpIndexConfig { nbits: 3, ..Default::default() };
+        let bad_nbits = WarpIndexConfig {
+            nbits: 3,
+            ..Default::default()
+        };
         assert!(bad_nbits.validate().is_err());
 
-        let bad_centroids = WarpIndexConfig { num_centroids: 0, ..Default::default() };
+        let bad_centroids = WarpIndexConfig {
+            num_centroids: 0,
+            ..Default::default()
+        };
         assert!(bad_centroids.validate().is_err());
     }
 
