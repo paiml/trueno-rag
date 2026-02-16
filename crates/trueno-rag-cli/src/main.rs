@@ -450,12 +450,20 @@ fn filter_files_for_transcription(
     let to_process: Vec<PathBuf> = if skip_existing {
         needs_transcription
             .into_iter()
-            .filter(|f| !manifest.completed.contains(&f.to_string_lossy().to_string()))
+            .filter(|f| {
+                !manifest
+                    .completed
+                    .contains(&f.to_string_lossy().to_string())
+            })
             .collect()
     } else {
         media_files
             .iter()
-            .filter(|f| !manifest.completed.contains(&f.to_string_lossy().to_string()))
+            .filter(|f| {
+                !manifest
+                    .completed
+                    .contains(&f.to_string_lossy().to_string())
+            })
             .cloned()
             .collect()
     };
