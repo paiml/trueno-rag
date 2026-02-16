@@ -4,11 +4,11 @@
 **Status:** Draft
 **Authors:** Pragmatic AI Labs
 **References:** TRUENO-RAG-003
-**Feature Flag:** `transcription` (for aprender-based speech-to-text)
+**Feature Flag:** `transcription` (for whisper-apr-based speech-to-text)
 
 ## Abstract
 
-This specification extends trueno-rag with media file support — enabling video and audio content to participate in RAG pipelines alongside text documents. The design introduces a `DocumentLoader` trait abstraction for pluggable file format support, built-in SRT/VTT subtitle parsing (zero additional dependencies), optional aprender integration for GPU-accelerated speech-to-text transcription via GGUF/safetensors/APR model formats (feature-gated), timestamp-aware chunking that preserves temporal context, and a batch processing strategy suitable for large media corpora on GPU-equipped hardware.
+This specification extends trueno-rag with media file support — enabling video and audio content to participate in RAG pipelines alongside text documents. The design introduces a `DocumentLoader` trait abstraction for pluggable file format support, built-in SRT/VTT subtitle parsing (zero additional dependencies), optional whisper-apr integration for GPU-accelerated speech-to-text transcription via .apr model format (feature-gated), timestamp-aware chunking that preserves temporal context, and a batch processing strategy suitable for large media corpora on GPU-equipped hardware.
 
 ## 1. Introduction
 

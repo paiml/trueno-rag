@@ -901,8 +901,8 @@ mod tests {
         assert!(!results.is_empty());
         // Reranker should have assigned scores
         for result in &results {
-            if result.rerank_score.is_some() {
-                assert!(result.rerank_score.unwrap() >= 0.0);
+            if let Some(score) = result.rerank_score {
+                assert!(score >= 0.0);
             }
         }
     }
