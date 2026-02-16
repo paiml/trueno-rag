@@ -1,0 +1,194 @@
+{
+  "id": "019c6862-6438-7bb0-82b1-6572b278e585",
+  "git_sha": "d11fd00a25c690a05dbc10b599c9b82157fc10b1",
+  "timestamp": "2026-02-16T21:36:44.600326040+00:00",
+  "trigger": "WorkComplete",
+  "work_item_id": "PMAT-004",
+  "verdicts": [
+    {
+      "hypothesis": "All baseline files still exist",
+      "method": "ManifestIntegrity",
+      "falsified": true,
+      "is_blocking": true,
+      "explanation": "2 files missing from baseline",
+      "evidence_summary": "FileList([\"src/chunk.rs\", \"src/embed.rs\"])"
+    },
+    {
+      "hypothesis": "The falsifier is active and detecting (Meta-Check)",
+      "method": "MetaFalsification",
+      "falsified": false,
+      "is_blocking": true,
+      "explanation": "Detected dummy gaming pattern correctly",
+      "evidence_summary": null
+    },
+    {
+      "hypothesis": "No coverage exclusion gaming",
+      "method": "CoverageGaming",
+      "falsified": false,
+      "is_blocking": true,
+      "explanation": "No gaming patterns found in 50 files",
+      "evidence_summary": null
+    },
+    {
+      "hypothesis": "All changed lines are covered",
+      "method": "DifferentialCoverage",
+      "falsified": false,
+      "is_blocking": true,
+      "explanation": "22 changed files (coverage check requires llvm-cov data)",
+      "evidence_summary": null
+    },
+    {
+      "hypothesis": "Total coverage >= 95%",
+      "method": "AbsoluteCoverage",
+      "falsified": false,
+      "is_blocking": true,
+      "explanation": "No coverage data (run 'make coverage' to establish baseline), threshold: 95.0%",
+      "evidence_summary": null
+    },
+    {
+      "hypothesis": "TDG score >= baseline",
+      "method": "TdgRegression",
+      "falsified": false,
+      "is_blocking": true,
+      "explanation": "No TDG data (baseline: 0.0)",
+      "evidence_summary": null
+    },
+    {
+      "hypothesis": "No function exceeds complexity 20",
+      "method": "ComplexityRegression",
+      "falsified": false,
+      "is_blocking": true,
+      "explanation": "Complexity check passed",
+      "evidence_summary": null
+    },
+    {
+      "hypothesis": "No vulnerable dependencies added",
+      "method": "SupplyChainIntegrity",
+      "falsified": true,
+      "is_blocking": true,
+      "explanation": "No deny cache. Run 'cargo deny check' first (O(1) requirement)",
+      "evidence_summary": "BooleanCheck(false)"
+    },
+    {
+      "hypothesis": "No file exceeds 500 lines",
+      "method": "FileSizeRegression",
+      "falsified": true,
+      "is_blocking": false,
+      "explanation": "19 file(s) exceed 500 lines: src/sqlite/mod.rs (741 lines), src/rerank.rs (534 lines), src/multivector/index.rs (736 lines), src/multivector/codec.rs (779 lines), src/multivector/types.rs (583 lines), src/multivector/falsification.rs (891 lines), src/multivector/search.rs (560 lines), src/fusion.rs (720 lines), src/retrieve.rs (990 lines), src/preprocess.rs (838 lines), src/media.rs (682 lines), src/index.rs (937 lines), src/embed/mod.rs (1280 lines), src/embed/nemotron.rs (515 lines), src/chunk/mod.rs (1595 lines), src/metrics.rs (571 lines), src/pipeline.rs (1290 lines), crates/trueno-rag-cli/src/main.rs (1327 lines), crates/trueno-rag-cli/tests/cli_tests.rs (523 lines)",
+      "evidence_summary": "FileList([\"src/sqlite/mod.rs\", \"src/rerank.rs\", \"src/multivector/index.rs\", \"src/multivector/codec.rs\", \"src/multivector/types.rs\", \"src/multivector/falsification.rs\", \"src/multivector/search.rs\", \"src/fusion.rs\", \"src/retrieve.rs\", \"src/preprocess.rs\", \"src/media.rs\", \"src/index.rs\", \"src/embed/mod.rs\", \"src/embed/nemotron.rs\", \"src/chunk/mod.rs\", \"src/metrics.rs\", \"src/pipeline.rs\", \"crates/trueno-rag-cli/src/main.rs\", \"crates/trueno-rag-cli/tests/cli_tests.rs\"])"
+    },
+    {
+      "hypothesis": "Spec & Roadmap Quality",
+      "method": "SpecQuality",
+      "falsified": false,
+      "is_blocking": true,
+      "explanation": "No spec file found (optional)",
+      "evidence_summary": null
+    },
+    {
+      "hypothesis": "All changes pushed",
+      "method": "GitHubSync",
+      "falsified": true,
+      "is_blocking": true,
+      "explanation": "9 uncommitted file(s)",
+      "evidence_summary": "GitState { unpushed_commits: 0, dirty_files: 9 }"
+    },
+    {
+      "hypothesis": "All examples compile and run",
+      "method": "ExamplesCompile",
+      "falsified": false,
+      "is_blocking": true,
+      "explanation": "No examples cache (run 'cargo build --examples' to populate)",
+      "evidence_summary": null
+    },
+    {
+      "hypothesis": "pmat-book validation passes",
+      "method": "BookValidation",
+      "falsified": false,
+      "is_blocking": true,
+      "explanation": "pmat-book not found (skipping validation)",
+      "evidence_summary": null
+    },
+    {
+      "hypothesis": "No new SATD markers (TODO/FIXME/HACK)",
+      "method": "SatdDetection",
+      "falsified": false,
+      "is_blocking": true,
+      "explanation": "No new SATD markers (0 existing)",
+      "evidence_summary": null
+    },
+    {
+      "hypothesis": "No new dead code introduced",
+      "method": "DeadCodeDetection",
+      "falsified": false,
+      "is_blocking": true,
+      "explanation": "No dead code detected",
+      "evidence_summary": null
+    },
+    {
+      "hypothesis": "All files have >= 95% coverage",
+      "method": "PerFileCoverage",
+      "falsified": false,
+      "is_blocking": true,
+      "explanation": "No per-file coverage data (run 'make coverage'), threshold: 95.0%",
+      "evidence_summary": null
+    },
+    {
+      "hypothesis": "make lint passes",
+      "method": "LintPass",
+      "falsified": true,
+      "is_blocking": true,
+      "explanation": "No lint cache. Run 'make lint' first (O(1) requirement)",
+      "evidence_summary": "BooleanCheck(false)"
+    },
+    {
+      "hypothesis": "All match arm variants have test coverage",
+      "method": "VariantCoverage",
+      "falsified": false,
+      "is_blocking": true,
+      "explanation": "22 changed file(s) — all match variants tested",
+      "evidence_summary": null
+    },
+    {
+      "hypothesis": "No fix-after-fix chains exceed limit",
+      "method": "FixChainLimit",
+      "falsified": false,
+      "is_blocking": true,
+      "explanation": "No fix chains > 3 consecutive commits",
+      "evidence_summary": null
+    },
+    {
+      "hypothesis": "Cross-crate integration tests pass",
+      "method": "CrossCrateParity",
+      "falsified": false,
+      "is_blocking": false,
+      "explanation": "No cross-crate config (create .pmat-work/cross-crate.json to enable)",
+      "evidence_summary": null
+    },
+    {
+      "hypothesis": "No performance regressions detected",
+      "method": "RegressionGate",
+      "falsified": false,
+      "is_blocking": false,
+      "explanation": "No benchmark cache (run benchmarks to populate .pmat-metrics/benchmark-status.json)",
+      "evidence_summary": null
+    }
+  ],
+  "overrides": [
+    {
+      "claim_id": "lint",
+      "ticket": "DEBT-SIZE-20260126171113",
+      "reason": "Override approved via --override-claims (ticket: DEBT-SIZE-20260126171113)"
+    }
+  ],
+  "summary": {
+    "total": 21,
+    "passed": 16,
+    "failed": 4,
+    "warnings": 1,
+    "overridden": 1,
+    "allows_completion": false,
+    "health_score": 0.7619047619047619
+  },
+  "content_hash": "577bff173cb07fb4b907030cef405ea6a8b57d47106bdd4898e1d4de4147f950"
+}
