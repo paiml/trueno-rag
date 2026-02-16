@@ -415,30 +415,14 @@ impl TranscribeManifest {
     }
 }
 
-#[allow(clippy::too_many_arguments)]
-fn run_transcribe(
-    path: &str,
-    recursive: bool,
-    skip_existing: bool,
-    jobs: usize,
-    model: Option<&str>,
-    backend: BackendType,
-    dry_run: bool,
-) -> Result<()> {
-    let root = Path::new(path);
-
-    if !root.exists() {
-        anyhow::bail!("Path not found: {}", root.display());
-    }
-
-    // Stage 1: Discovery
-    let start_time = std::time::Instant::now();
+/// Discover media files and print a summary of what was found.
+fn discover_and_report_media(root: &Path, recursive: bool) -> Result<Vec<PathBuf>> {
     println!("Discovering media files...");
     let media_files = discover_media_files(root, recursive)?;
 
     if media_files.is_empty() {
         println!("No media files found at: {}", root.display());
-        return Ok(());
+        return Ok(media_files);
     }
 
     let ext_counts = classify_files(&media_files);
@@ -450,30 +434,28 @@ fn run_transcribe(
     for (ext, count) in &ext_counts {
         println!("  {} .{} files", count, ext);
     }
+    Ok(media_files)
+}
 
-    // Stage 2: Sidecar check + manifest resume
-    let (has_sidecar, needs_transcription) = classify_media_sidecar_status(&media_files);
+/// Filter media files by sidecar status and manifest, returning files to process.
+fn filter_files_for_transcription(
+    media_files: &[PathBuf],
+    root: &Path,
+    skip_existing: bool,
+) -> Vec<PathBuf> {
+    let (has_sidecar, needs_transcription) = classify_media_sidecar_status(media_files);
     let manifest = TranscribeManifest::load(root);
     let previously_completed = manifest.completed.len();
 
-    // Filter out files already in the manifest (resume support)
     let to_process: Vec<PathBuf> = if skip_existing {
         needs_transcription
             .into_iter()
-            .filter(|f| {
-                !manifest
-                    .completed
-                    .contains(&f.to_string_lossy().to_string())
-            })
+            .filter(|f| !manifest.completed.contains(&f.to_string_lossy().to_string()))
             .collect()
     } else {
         media_files
             .iter()
-            .filter(|f| {
-                !manifest
-                    .completed
-                    .contains(&f.to_string_lossy().to_string())
-            })
+            .filter(|f| !manifest.completed.contains(&f.to_string_lossy().to_string()))
             .cloned()
             .collect()
     };
@@ -489,7 +471,57 @@ fn run_transcribe(
             previously_completed
         );
     }
+    to_process
+}
 
+/// Run the transcription feature gate (or print a message if not available).
+#[allow(clippy::unnecessary_wraps)]
+fn run_transcription_or_report(
+    to_process: &[PathBuf],
+    jobs: usize,
+    model: Option<&str>,
+    backend: BackendType,
+    root: &Path,
+) -> Result<()> {
+    #[cfg(feature = "transcription")]
+    {
+        run_transcription_batch(to_process, jobs, model, backend, root)?;
+    }
+    #[cfg(not(feature = "transcription"))]
+    {
+        let _ = (to_process, jobs, model, backend, root);
+        println!(
+            "\nTranscription requires the 'transcription' feature.\n\
+             Build with: cargo build --release --features transcription\n\n\
+             {} files need transcription. Run with --dry-run to list them.",
+            to_process.len()
+        );
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_transcribe(
+    path: &str,
+    recursive: bool,
+    skip_existing: bool,
+    jobs: usize,
+    model: Option<&str>,
+    backend: BackendType,
+    dry_run: bool,
+) -> Result<()> {
+    let root = Path::new(path);
+    if !root.exists() {
+        anyhow::bail!("Path not found: {}", root.display());
+    }
+
+    let start_time = std::time::Instant::now();
+    let media_files = discover_and_report_media(root, recursive)?;
+    if media_files.is_empty() {
+        return Ok(());
+    }
+
+    let to_process = filter_files_for_transcription(&media_files, root, skip_existing);
     if to_process.is_empty() {
         println!("All files already have sidecars. Nothing to do.");
         return Ok(());
@@ -504,30 +536,14 @@ fn run_transcribe(
         return Ok(());
     }
 
-    // Stage 3: Transcription (feature-gated)
-    #[cfg(feature = "transcription")]
-    {
-        run_transcription_batch(&to_process, jobs, model, backend, root)?;
-    }
-    #[cfg(not(feature = "transcription"))]
-    {
-        let _ = (jobs, model, backend); // suppress unused warnings
-        println!(
-            "\nTranscription requires the 'transcription' feature.\n\
-             Build with: cargo build --release --features transcription\n\n\
-             {} files need transcription. Run with --dry-run to list them.",
-            to_process.len()
-        );
-    }
+    run_transcription_or_report(&to_process, jobs, model, backend, root)?;
 
-    // Throughput reporting
     let elapsed = start_time.elapsed();
     println!(
         "\nTotal time: {:.1}s ({:.1} files/sec)",
         elapsed.as_secs_f64(),
         media_files.len() as f64 / elapsed.as_secs_f64().max(0.001)
     );
-
     Ok(())
 }
 
@@ -882,28 +898,12 @@ fn chunk_and_embed(
     Ok((all_chunks, all_embeddings))
 }
 
-#[allow(clippy::too_many_arguments)]
-fn run_index(
-    path: &str,
-    output: &str,
-    chunk_size: usize,
-    chunk_overlap: usize,
-    dimension: usize,
-    embedder_type: EmbedderType,
-    #[allow(unused_variables)] model: SemanticModel,
+/// Discover files and load documents, reporting progress.
+fn discover_and_load(
+    path: &Path,
     recursive: bool,
-    chunk_strategy: ChunkStrategy,
     jobs: usize,
-    manifest: bool,
-) -> Result<()> {
-    let path = Path::new(path);
-
-    // Validate path exists
-    if !path.exists() {
-        anyhow::bail!("Path not found: {}", path.display());
-    }
-
-    // Discover files via LoaderRegistry
+) -> Result<(Vec<PathBuf>, HashMap<String, usize>, Vec<Document>)> {
     let registry = LoaderRegistry::new();
     let files = discover_files(path, recursive, &registry)?;
 
@@ -916,7 +916,6 @@ fn run_index(
         );
     }
 
-    // Report discovery
     let classification = classify_files(&files);
     println!(
         "Scanning {}{}... found {} files",
@@ -932,33 +931,39 @@ fn run_index(
         println!("Loading with {} parallel jobs", jobs);
     }
     let documents = load_documents(&files, &registry, jobs)?;
+    report_media_text_split(&documents);
+    Ok((files, classification, documents))
+}
 
-    // Determine which documents have timestamp metadata
+/// Print how many documents have timestamp metadata vs plain text.
+fn report_media_text_split(documents: &[Document]) {
     let media_count = documents
         .iter()
         .filter(|d| d.metadata.contains_key("subtitle_cues"))
         .count();
-    let text_count = documents.len() - media_count;
     if media_count > 0 {
+        let text_count = documents.len() - media_count;
         println!(
             "  {} with timestamps, {} plain text",
             media_count, text_count
         );
     }
+}
 
-    // Create embedder based on selection
-    let (embedder_box, actual_dimension, embedder_name, model_name): (
-        Box<dyn Embedder>,
-        usize,
-        String,
-        Option<String>,
-    ) = match embedder_type {
+/// Create an embedder based on the selected type and return it with metadata.
+fn create_embedder(
+    embedder_type: EmbedderType,
+    dimension: usize,
+    #[allow(unused_variables)] model: SemanticModel,
+    documents: &[Document],
+) -> Result<(Box<dyn Embedder>, usize, String, Option<String>)> {
+    match embedder_type {
         EmbedderType::Tfidf => {
             let mut embedder = TfIdfEmbedder::new(dimension);
             let doc_texts: Vec<&str> = documents.iter().map(|d| d.content.as_str()).collect();
             embedder.fit(&doc_texts);
             println!("Using TF-IDF embedder (dimension: {})", dimension);
-            (Box::new(embedder), dimension, "tfidf".to_string(), None)
+            Ok((Box::new(embedder), dimension, "tfidf".to_string(), None))
         }
         EmbedderType::Semantic => {
             #[cfg(feature = "embeddings")]
@@ -977,7 +982,7 @@ fn run_index(
                     .context("Failed to initialize semantic embedder")?;
                 let dim = embedder.dimension();
                 let name = model_type.model_name().to_string();
-                (Box::new(embedder), dim, "semantic".to_string(), Some(name))
+                Ok((Box::new(embedder), dim, "semantic".to_string(), Some(name)))
             }
             #[cfg(not(feature = "embeddings"))]
             {
@@ -987,9 +992,58 @@ fn run_index(
                 );
             }
         }
-    };
+    }
+}
 
-    // Chunk and embed all documents
+/// Save a persisted index to disk, optionally writing a manifest.
+fn save_index(
+    persisted: &PersistedIndex,
+    output: &str,
+    manifest: bool,
+    files: &[PathBuf],
+    classification: &HashMap<String, usize>,
+) -> Result<()> {
+    let output_path = Path::new(output);
+    fs::create_dir_all(output_path)?;
+
+    let index_file = output_path.join("index.json");
+    let json = serde_json::to_string_pretty(persisted)?;
+    fs::write(&index_file, json)?;
+    println!("Index saved to: {}", index_file.display());
+
+    if manifest {
+        let manifest_data = build_index_manifest(files, classification, &persisted.chunks);
+        let manifest_file = output_path.join("manifest.json");
+        let manifest_json = serde_json::to_string_pretty(&manifest_data)?;
+        fs::write(&manifest_file, manifest_json)?;
+        println!("Manifest saved to: {}", manifest_file.display());
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_index(
+    path: &str,
+    output: &str,
+    chunk_size: usize,
+    chunk_overlap: usize,
+    dimension: usize,
+    embedder_type: EmbedderType,
+    #[allow(unused_variables)] model: SemanticModel,
+    recursive: bool,
+    chunk_strategy: ChunkStrategy,
+    jobs: usize,
+    manifest: bool,
+) -> Result<()> {
+    let path = Path::new(path);
+    if !path.exists() {
+        anyhow::bail!("Path not found: {}", path.display());
+    }
+
+    let (files, classification, documents) = discover_and_load(path, recursive, jobs)?;
+    let (embedder_box, actual_dimension, embedder_name, model_name) =
+        create_embedder(embedder_type, dimension, model, &documents)?;
+
     let recursive_chunker = RecursiveChunker::new(chunk_size, chunk_overlap);
     let timestamp_chunker = TimestampChunker::new(60.0);
     let (all_chunks, all_embeddings) = chunk_and_embed(
@@ -1006,7 +1060,6 @@ fn run_index(
         all_chunks.len()
     );
 
-    // Create persisted index
     let persisted = PersistedIndex {
         chunks: all_chunks,
         embeddings: all_embeddings,
@@ -1015,26 +1068,7 @@ fn run_index(
         model_name,
     };
 
-    // Save index
-    let output_path = Path::new(output);
-    fs::create_dir_all(output_path)?;
-
-    let index_file = output_path.join("index.json");
-    let json = serde_json::to_string_pretty(&persisted)?;
-    fs::write(&index_file, json)?;
-
-    println!("Index saved to: {}", index_file.display());
-
-    // Write manifest if requested
-    if manifest {
-        let manifest_data = build_index_manifest(&files, &classification, &persisted.chunks);
-        let manifest_file = output_path.join("manifest.json");
-        let manifest_json = serde_json::to_string_pretty(&manifest_data)?;
-        fs::write(&manifest_file, manifest_json)?;
-        println!("Manifest saved to: {}", manifest_file.display());
-    }
-
-    Ok(())
+    save_index(&persisted, output, manifest, &files, &classification)
 }
 
 /// Build a JSON manifest of indexed files and chunks.
