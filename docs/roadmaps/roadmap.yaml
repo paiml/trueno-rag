@@ -6,11 +6,11 @@ roadmap:
   github_issue: 1
   item_type: task
   title: 'feat: Implement production-ready CLI with real embeddings'
-  status: inprogress
+  status: completed
   priority: medium
   assigned_to: null
   created: 2025-11-30T18:27:50.974381087+00:00
-  updated: 2025-11-30T18:27:50.974381087+00:00
+  updated: 2026-02-16T21:43:57Z
   spec: null
   acceptance_criteria:
   - Integrate with local embedding models (e.g., sentence-transformers via candle or similar)
@@ -38,11 +38,11 @@ roadmap:
   github_issue: null
   item_type: task
   title: 'New task: GH-2'
-  status: inprogress
+  status: completed
   priority: medium
   assigned_to: null
   created: 2026-01-04T14:47:56.188811604+00:00
-  updated: 2026-01-04T14:47:56.188811604+00:00
+  updated: 2026-02-16T21:43:57Z
   spec: null
   acceptance_criteria: []
   phases: []
