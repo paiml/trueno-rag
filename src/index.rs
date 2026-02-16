@@ -4,6 +4,9 @@ use crate::{Chunk, ChunkId, Error, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
+/// Default embedding dimension (all-MiniLM-L6-v2 / BGE-small-en-v1.5)
+const DEFAULT_EMBEDDING_DIM: usize = 384;
+
 /// Sparse index trait for lexical retrieval
 pub trait SparseIndex: Send + Sync {
     /// Index a chunk
@@ -144,7 +147,7 @@ impl BM25Index {
         let doc_len = self.doc_lengths.get(&chunk_id).copied().unwrap_or(0) as f32;
 
         // IDF component: log((N - df + 0.5) / (df + 0.5) + 1)
-        let idf = ((n - df + 0.5) / (df + 0.5) + 1.0).ln();
+        let idf = ((n - df + 0.5) / (df + 0.5) + 1.0).max(f32::EPSILON).ln();
 
         // TF component with length normalization
         let tf_norm = (tf * (self.k1 + 1.0))
@@ -297,7 +300,7 @@ pub struct VectorStoreConfig {
 impl Default for VectorStoreConfig {
     fn default() -> Self {
         Self {
-            dimension: 384,
+            dimension: DEFAULT_EMBEDDING_DIM,
             metric: DistanceMetric::Cosine,
             hnsw_m: 16,
             hnsw_ef_construction: 100,

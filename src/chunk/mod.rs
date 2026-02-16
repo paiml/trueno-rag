@@ -216,7 +216,7 @@ impl RecursiveChunker {
 
         for part in parts {
             let potential = if current.is_empty() {
-                part.to_string()
+                (*part).to_string()
             } else {
                 format!("{current}{separator}{part}")
             };
@@ -228,7 +228,7 @@ impl RecursiveChunker {
                 chunks.extend(self.split_text(part, separator_idx + 1));
             } else {
                 chunks.push(current);
-                current = part.to_string();
+                current = (*part).to_string();
             }
         }
 

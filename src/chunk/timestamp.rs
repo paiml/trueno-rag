@@ -134,12 +134,15 @@ impl TimestampChunker {
     }
 }
 
+/// Default target chunk duration in seconds
+const DEFAULT_TARGET_DURATION: f64 = 60.0;
+
 impl Default for TimestampChunker {
     fn default() -> Self {
         Self {
-            target_duration_secs: 60.0,
+            target_duration_secs: DEFAULT_TARGET_DURATION,
             min_duration_secs: 10.0,
-            max_duration_secs: 120.0,
+            max_duration_secs: DEFAULT_TARGET_DURATION * 2.0,
             overlap_secs: 5.0,
         }
     }

@@ -12,6 +12,9 @@ use crate::{
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+/// Default embedding dimension (all-MiniLM-L6-v2 / BGE-small-en-v1.5)
+const DEFAULT_EMBEDDING_DIM: usize = 384;
+
 /// Citation for a retrieved chunk
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Citation {
@@ -305,7 +308,7 @@ impl Default for RagPipelineConfig {
         Self {
             chunk_size: 512,
             chunk_overlap: 50,
-            embedding_dimension: 384,
+            embedding_dimension: DEFAULT_EMBEDDING_DIM,
             retrieval: HybridRetrieverConfig::default(),
             context: ContextAssemblerConfig::default(),
         }

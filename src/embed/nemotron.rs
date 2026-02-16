@@ -311,7 +311,8 @@ impl NemotronEmbedder {
     /// Apply RMS normalization
     fn rms_normalize(vector: &mut [f32], weight: &[f32]) {
         let eps = 1e-6;
-        let ss: f32 = vector.iter().map(|x| x * x).sum::<f32>() / vector.len() as f32;
+        let ss: f32 =
+            vector.iter().map(|x| x * x).sum::<f32>() / vector.len().max(1) as f32;
         let scale = 1.0 / (ss + eps).sqrt();
 
         for (v, w) in vector.iter_mut().zip(weight.iter()) {
