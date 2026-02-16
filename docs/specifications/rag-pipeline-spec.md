@@ -7,13 +7,18 @@
 
 ## Abstract
 
-Trueno-RAG provides a sovereign, pure-Rust implementation of Retrieval-Augmented Generation (RAG) pipelines. This specification defines the architecture for document chunking, hybrid retrieval (dense + sparse), cross-encoder reranking, and context assembly—all built on the Trueno compute primitives with zero Python/C++ dependencies.
+Trueno-RAG provides a sovereign, pure-Rust implementation of Retrieval-Augmented
+Generation (RAG) pipelines. This specification defines the architecture for document
+chunking, hybrid retrieval (dense + sparse), cross-encoder reranking, and context
+assembly—all built on the Trueno compute primitives with zero Python/C++ dependencies.
 
 ## 1. Introduction
 
 ### 1.1 Motivation
 
-Retrieval-Augmented Generation (RAG) has emerged as the dominant paradigm for grounding large language models in factual, up-to-date information [1]. However, existing RAG frameworks (LangChain, LlamaIndex) suffer from:
+Retrieval-Augmented Generation (RAG) has emerged as the dominant paradigm for
+grounding large language models in factual, up-to-date information [1]. However,
+existing RAG frameworks (LangChain, LlamaIndex) suffer from:
 
 1. **Python dependency hell** - Complex dependency graphs, version conflicts
 2. **Performance overhead** - GIL limitations, serialization costs
@@ -23,7 +28,10 @@ Retrieval-Augmented Generation (RAG) has emerged as the dominant paradigm for gr
 Trueno-RAG addresses these by providing a complete RAG stack in pure Rust, integrated with the Sovereign AI ecosystem.
 
 > **Toyota Way Review: Elimination of Waste (Muda)**
-> By removing "dependency hell," we eliminate the *waste of waiting* and *waste of processing* associated with complex environments. However, we must ensure `aprender` and `realizar` do not introduce the *waste of overproduction* (reinventing wheels that already roll smoothly).
+> By removing "dependency hell," we eliminate the *waste of waiting* and
+> *waste of processing* associated with complex environments. However, we must
+> ensure `aprender` and `realizar` do not introduce the *waste of overproduction*
+> (reinventing wheels that already roll smoothly).
 
 ### 1.2 Design Principles
 
@@ -60,7 +68,9 @@ Trueno-RAG builds on and integrates with:
 ```
 
 > **Toyota Way Review: Visual Control**
-> This value stream map is clear. To fully embrace *Jidoka* (built-in quality), consider explicitly visualizing where "defects" (failed chunks, bad embeddings) are detected and ejected from the pipeline to prevent downstream pollution (Andon).
+> This value stream map is clear. To fully embrace *Jidoka* (built-in quality),
+> consider explicitly visualizing where "defects" (failed chunks, bad embeddings)
+> are detected and ejected from the pipeline to prevent downstream pollution (Andon).
 
 ### 2.2 Component Interaction
 
@@ -123,7 +133,10 @@ pub enum ChunkingStrategy {
 ```
 
 > **Toyota Way Review: Built-in Quality (Jidoka)**
-> *Fixed-size* chunking is prone to "defects" (cutting semantic context). *Semantic* chunking is preferred as it stops the line (the chunk) based on quality (meaning) rather than an arbitrary quota (size), reducing the *waste of correction* later.
+> *Fixed-size* chunking is prone to "defects" (cutting semantic context).
+> *Semantic* chunking is preferred as it stops the line (the chunk) based on
+> quality (meaning) rather than an arbitrary quota (size), reducing the
+> *waste of correction* later.
 
 ### 3.2 Chunk Data Model
 
@@ -230,7 +243,9 @@ pub enum EmbeddingProvider {
 ```
 
 > **Toyota Way Review: Genchi Genbutsu (Go and See)**
-> Local inference (`Local`) allows for *Genchi Genbutsu*—processing data where it resides—reducing the *waste of transport* (sending data to external APIs) and increasing sovereignty.
+> Local inference (`Local`) allows for *Genchi Genbutsu*—processing data where it
+> resides—reducing the *waste of transport* (sending data to external APIs) and
+> increasing sovereignty.
 
 ```rust
 /// Aprender's native embedding models
@@ -302,7 +317,10 @@ pub struct HnswConfig {
 ```
 
 > **Toyota Way Review: Standardized Work**
-> HNSW parameters (`m`, `ef_construction`) are critical standards. These should be tuned based on *Heijunka* (leveling) principles to balance indexing speed (load) with search accuracy (quality), avoiding overburdening (`Muri`) the system during ingestion.
+> HNSW parameters (`m`, `ef_construction`) are critical standards. These should be
+> tuned based on *Heijunka* (leveling) principles to balance indexing speed (load)
+> with search accuracy (quality), avoiding overburdening (`Muri`) the system
+> during ingestion.
 
 ```rust
 pub enum DistanceMetric {
@@ -392,7 +410,9 @@ impl BM25Index {
 ```
 
 > **Toyota Way Review: Efficiency**
-> While BM25 is robust, this iterative scoring calculation must be scrutinized for *Muda* (computational waste). Ensure the `trueno` SIMD primitives are leveraged here to minimize cycle time.
+> While BM25 is robust, this iterative scoring calculation must be scrutinized
+> for *Muda* (computational waste). Ensure the `trueno` SIMD primitives are
+> leveraged here to minimize cycle time.
 
 ```rust
     /// Search with BM25
@@ -510,7 +530,9 @@ impl FusionStrategy {
 ```
 
 > **Toyota Way Review: Nemawashi (Decision Making)**
-> *Reciprocal Rank Fusion* acts as a consensus mechanism, integrating diverse "perspectives" (dense and sparse) to make a better decision. This aligns with making decisions slowly by consensus, then implementing rapidly.
+> *Reciprocal Rank Fusion* acts as a consensus mechanism, integrating diverse
+> "perspectives" (dense and sparse) to make a better decision. This aligns with
+> making decisions slowly by consensus, then implementing rapidly.
 
 ### 7.2 Hybrid Retriever
 
@@ -691,7 +713,10 @@ impl ContextAssembler {
 ```
 
 > **Toyota Way Review: Stop and Fix (Jidoka)**
-> Truncating chunks to fit context is a "stopgap," not a root cause fix. It creates "hidden defects" (missing info). A *Kaizen* opportunity exists here: summarize or re-rank rather than blindly chopping, which respects the value of the information.
+> Truncating chunks to fit context is a "stopgap," not a root cause fix. It
+> creates "hidden defects" (missing info). A *Kaizen* opportunity exists here:
+> summarize or re-rank rather than blindly chopping, which respects the value
+> of the information.
 
 ### 9.2 Citation Tracking
 
@@ -820,7 +845,10 @@ impl MultiQueryRetriever {
 ```
 
 > **Toyota Way Review: Pull System**
-> Generating multiple queries allows the system to "pull" more relevant information based on customer (user) intent, rather than just "pushing" what matches the literal string. This improves value, though we must watch for the *waste of over-processing*.
+> Generating multiple queries allows the system to "pull" more relevant
+> information based on customer (user) intent, rather than just "pushing" what
+> matches the literal string. This improves value, though we must watch for
+> the *waste of over-processing*.
 
 ## 11. Evaluation
 
@@ -951,29 +979,47 @@ impl RagPipeline {
 ```
 
 > **Toyota Way Review: One-Piece Flow**
-> Streaming results implements *continuous flow*, reducing the batch size to one. This eliminates the *waste of waiting* for the user, delivering value the moment it is created.
+> Streaming results implements *continuous flow*, reducing the batch size to one.
+> This eliminates the *waste of waiting* for the user, delivering value the
+> moment it is created.
 
 ## 13. References
 
-[1] Lewis, P., et al. (2020). "Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks." *Advances in Neural Information Processing Systems (NeurIPS)*, 33, 9459-9474. arXiv:2005.11401
+[1] Lewis, P., et al. (2020). "Retrieval-Augmented Generation for
+Knowledge-Intensive NLP Tasks." *Advances in Neural Information Processing
+Systems (NeurIPS)*, 33, 9459-9474. arXiv:2005.11401
 
-[2] Gao, Y., et al. (2024). "Retrieval-Augmented Generation for Large Language Models: A Survey." *arXiv preprint* arXiv:2312.10997
+[2] Gao, Y., et al. (2024). "Retrieval-Augmented Generation for Large
+Language Models: A Survey." *arXiv preprint* arXiv:2312.10997
 
-[3] Karpukhin, V., et al. (2020). "Dense Passage Retrieval for Open-Domain Question Answering." *Proceedings of EMNLP*, 6769-6781. DOI: 10.18653/v1/2020.emnlp-main.550
+[3] Karpukhin, V., et al. (2020). "Dense Passage Retrieval for Open-Domain
+Question Answering." *Proceedings of EMNLP*, 6769-6781.
+DOI: 10.18653/v1/2020.emnlp-main.550
 
-[4] Malkov, Y. A., & Yashunin, D. A. (2020). "Efficient and Robust Approximate Nearest Neighbor Search Using Hierarchical Navigable Small World Graphs." *IEEE Transactions on Pattern Analysis and Machine Intelligence*, 42(4), 824-836. DOI: 10.1109/TPAMI.2018.2889473
+[4] Malkov, Y. A., & Yashunin, D. A. (2020). "Efficient and Robust
+Approximate Nearest Neighbor Search Using Hierarchical Navigable Small
+World Graphs." *IEEE Transactions on Pattern Analysis and Machine
+Intelligence*, 42(4), 824-836. DOI: 10.1109/TPAMI.2018.2889473
 
-[5] Robertson, S., & Zaragoza, H. (2009). "The Probabilistic Relevance Framework: BM25 and Beyond." *Foundations and Trends in Information Retrieval*, 3(4), 333-389. DOI: 10.1561/1500000019
+[5] Robertson, S., & Zaragoza, H. (2009). "The Probabilistic Relevance
+Framework: BM25 and Beyond." *Foundations and Trends in Information
+Retrieval*, 3(4), 333-389. DOI: 10.1561/1500000019
 
 [6] Ma, X., et al. (2024). "Fine-Tuning LLaMA for Multi-Stage Text Retrieval." *Proceedings of SIGIR*. arXiv:2310.08319
 
 [7] Nogueira, R., & Cho, K. (2019). "Passage Re-ranking with BERT." *arXiv preprint* arXiv:1901.04085
 
-[8] Liu, N. F., et al. (2024). "Lost in the Middle: How Language Models Use Long Contexts." *Transactions of the Association for Computational Linguistics*, 12, 157-173. DOI: 10.1162/tacl_a_00638
+[8] Liu, N. F., et al. (2024). "Lost in the Middle: How Language Models
+Use Long Contexts." *Transactions of the Association for Computational
+Linguistics*, 12, 157-173. DOI: 10.1162/tacl_a_00638
 
-[9] Gao, L., et al. (2023). "Precise Zero-Shot Dense Retrieval without Relevance Labels." *Proceedings of ACL*, 1762-1777. DOI: 10.18653/v1/2023.acl-long.99
+[9] Gao, L., et al. (2023). "Precise Zero-Shot Dense Retrieval without
+Relevance Labels." *Proceedings of ACL*, 1762-1777.
+DOI: 10.18653/v1/2023.acl-long.99
 
-[10] Thakur, N., et al. (2021). "BEIR: A Heterogeneous Benchmark for Zero-shot Evaluation of Information Retrieval Models." *Proceedings of NeurIPS Datasets and Benchmarks Track*. arXiv:2104.08663
+[10] Thakur, N., et al. (2021). "BEIR: A Heterogeneous Benchmark for
+Zero-shot Evaluation of Information Retrieval Models." *Proceedings of
+NeurIPS Datasets and Benchmarks Track*. arXiv:2104.08663
 
 ---
 
