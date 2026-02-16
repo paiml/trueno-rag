@@ -14,17 +14,25 @@
 //!
 //! # Index documents with semantic embeddings
 //! trueno-rag index --path docs/ --output index/ --embedder semantic
+//!
+//! # Index with recursive directory walking and subtitle support
+//! trueno-rag index --path /data/ --output index/ --recursive
+//!
+//! # Index with timestamp-aware chunking for media transcripts
+//! trueno-rag index --path /data/ --output index/ --recursive --chunk-strategy timestamp
 //! ```
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand, ValueEnum};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use trueno_rag::{
-    chunk::RecursiveChunker,
+    chunk::{RecursiveChunker, TimestampChunker},
     embed::{Embedder, TfIdfEmbedder},
     fusion::FusionStrategy,
+    loader::LoaderRegistry,
     pipeline::RagPipelineBuilder,
     rerank::LexicalReranker,
     Chunk, Chunker, Document,
@@ -53,6 +61,18 @@ enum SemanticModel {
     BgeSmall,
     /// BGE-base-en-v1.5: Higher quality (768 dims)
     BgeBase,
+}
+
+/// Chunking strategy selection
+#[derive(Debug, Clone, Copy, Default, ValueEnum)]
+enum ChunkStrategy {
+    /// Auto-select: TimestampChunker for media, RecursiveChunker for text
+    #[default]
+    Auto,
+    /// Recursive character splitting (works for all content)
+    Recursive,
+    /// Timestamp-aware chunking (best for subtitle/transcript content)
+    Timestamp,
 }
 
 #[derive(Parser)]
@@ -88,11 +108,11 @@ enum Commands {
         #[arg(short, long)]
         output: String,
 
-        /// Chunk size in characters
+        /// Chunk size in characters (for recursive chunker)
         #[arg(long, default_value = "512")]
         chunk_size: usize,
 
-        /// Chunk overlap in characters
+        /// Chunk overlap in characters (for recursive chunker)
         #[arg(long, default_value = "64")]
         chunk_overlap: usize,
 
@@ -107,6 +127,14 @@ enum Commands {
         /// Model for semantic embeddings (mini-lm, bge-small, bge-base)
         #[arg(short, long, value_enum, default_value = "mini-lm")]
         model: SemanticModel,
+
+        /// Recursively scan subdirectories
+        #[arg(short, long, default_value = "false")]
+        recursive: bool,
+
+        /// Chunking strategy (auto, recursive, timestamp)
+        #[arg(long, value_enum, default_value = "auto")]
+        chunk_strategy: ChunkStrategy,
     },
 
     /// Query the RAG pipeline
@@ -151,6 +179,12 @@ struct PersistedChunk {
     content: String,
     title: Option<String>,
     source: Option<String>,
+    /// Timestamp metadata for media-derived chunks
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    start_secs: Option<f64>,
+    /// Timestamp metadata for media-derived chunks
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    end_secs: Option<f64>,
 }
 
 fn main() -> Result<()> {
@@ -166,6 +200,8 @@ fn main() -> Result<()> {
             dimension,
             embedder,
             model,
+            recursive,
+            chunk_strategy,
         } => run_index(
             &path,
             &output,
@@ -174,6 +210,8 @@ fn main() -> Result<()> {
             dimension,
             embedder,
             model,
+            recursive,
+            chunk_strategy,
         )?,
         Commands::Query {
             query,
@@ -193,13 +231,18 @@ fn run_info() {
     println!("Version: {}", env!("CARGO_PKG_VERSION"));
     println!();
     println!("Components:");
-    println!("  - Chunkers: Recursive, Fixed, Sentence, Paragraph, Semantic, Structural");
+    println!("  - Chunkers: Recursive, Fixed, Sentence, Paragraph, Semantic, Structural, Timestamp");
     #[cfg(feature = "embeddings")]
     println!("  - Embedders: TF-IDF, FastEmbed (semantic) ✓");
     #[cfg(not(feature = "embeddings"))]
     println!("  - Embedders: TF-IDF (trainable), Mock (testing)");
     println!("  - Fusion: RRF, Linear, DBSF, Convex, Union, Intersection");
     println!("  - Rerankers: Lexical, CrossEncoder (mock), Composite");
+    println!();
+    println!("Supported formats:");
+    let registry = LoaderRegistry::new();
+    let exts: Vec<&str> = registry.supported_extensions();
+    println!("  {}", exts.join(", "));
     println!();
     #[cfg(feature = "embeddings")]
     {
@@ -280,6 +323,139 @@ fn run_demo(query: &str, top_k: usize) -> Result<()> {
     Ok(())
 }
 
+/// Discover files from a path using the loader registry.
+fn discover_files(
+    root: &Path,
+    recursive: bool,
+    registry: &LoaderRegistry,
+) -> Result<Vec<PathBuf>> {
+    let mut files = Vec::new();
+
+    if root.is_file() {
+        if registry.loader_for(root).is_some() {
+            files.push(root.to_path_buf());
+        } else {
+            anyhow::bail!(
+                "Unsupported file format: {}",
+                root.extension()
+                    .and_then(|e| e.to_str())
+                    .unwrap_or("(none)")
+            );
+        }
+        return Ok(files);
+    }
+
+    let mut dirs_to_visit = vec![root.to_path_buf()];
+    while let Some(dir) = dirs_to_visit.pop() {
+        let entries = fs::read_dir(&dir)
+            .with_context(|| format!("Failed to read directory: {}", dir.display()))?;
+
+        for entry in entries {
+            let path = entry?.path();
+            if path.is_dir() && recursive {
+                dirs_to_visit.push(path);
+            } else if path.is_file() && registry.loader_for(&path).is_some() {
+                files.push(path);
+            }
+        }
+    }
+
+    // Sort for deterministic ordering
+    files.sort();
+    Ok(files)
+}
+
+/// Classify discovered files by format for progress reporting.
+fn classify_files(files: &[PathBuf]) -> HashMap<String, usize> {
+    let mut counts: HashMap<String, usize> = HashMap::new();
+    for file in files {
+        let ext = file
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("other")
+            .to_lowercase();
+        *counts.entry(ext).or_insert(0) += 1;
+    }
+    counts
+}
+
+/// Load documents from discovered files, reporting progress and errors.
+fn load_documents(
+    files: &[PathBuf],
+    registry: &LoaderRegistry,
+) -> Result<Vec<Document>> {
+    let mut documents = Vec::new();
+    let mut load_errors = 0usize;
+
+    for (i, file) in files.iter().enumerate() {
+        match registry.load(file) {
+            Ok(doc) => documents.push(doc),
+            Err(e) => {
+                eprintln!("  Warning: failed to load {}: {}", file.display(), e);
+                load_errors += 1;
+            }
+        }
+        if (i + 1) % 100 == 0 {
+            println!("  Loaded {}/{} files...", i + 1, files.len());
+        }
+    }
+
+    if documents.is_empty() {
+        anyhow::bail!("All files failed to load ({} errors)", load_errors);
+    }
+
+    if load_errors > 0 {
+        println!(
+            "Loaded {} documents ({} failed)",
+            documents.len(),
+            load_errors
+        );
+    } else {
+        println!("Loaded {} documents", documents.len());
+    }
+
+    Ok(documents)
+}
+
+/// Chunk documents and compute embeddings, returning parallel vectors.
+fn chunk_and_embed(
+    documents: &[Document],
+    embedder: &dyn Embedder,
+    recursive_chunker: &RecursiveChunker,
+    timestamp_chunker: &TimestampChunker,
+    strategy: ChunkStrategy,
+) -> Result<(Vec<PersistedChunk>, Vec<Vec<f32>>)> {
+    let mut all_chunks = Vec::new();
+    let mut all_embeddings = Vec::new();
+
+    for doc in documents {
+        let use_timestamps = match strategy {
+            ChunkStrategy::Timestamp => true,
+            ChunkStrategy::Recursive => false,
+            ChunkStrategy::Auto => doc.metadata.contains_key("subtitle_cues"),
+        };
+        let chunks: Vec<Chunk> = if use_timestamps {
+            timestamp_chunker.chunk(doc)?
+        } else {
+            recursive_chunker.chunk(doc)?
+        };
+
+        for chunk in chunks {
+            all_embeddings.push(embedder.embed(&chunk.content)?);
+            all_chunks.push(PersistedChunk {
+                content: chunk.content.clone(),
+                title: chunk.metadata.title.clone(),
+                source: doc.source.clone(),
+                start_secs: chunk.metadata.custom.get("start_secs").and_then(serde_json::Value::as_f64),
+                end_secs: chunk.metadata.custom.get("end_secs").and_then(serde_json::Value::as_f64),
+            });
+        }
+    }
+
+    Ok((all_chunks, all_embeddings))
+}
+
+#[allow(clippy::too_many_arguments)]
 fn run_index(
     path: &str,
     output: &str,
@@ -288,6 +464,8 @@ fn run_index(
     dimension: usize,
     embedder_type: EmbedderType,
     #[allow(unused_variables)] model: SemanticModel,
+    recursive: bool,
+    chunk_strategy: ChunkStrategy,
 ) -> Result<()> {
     let path = Path::new(path);
 
@@ -296,46 +474,42 @@ fn run_index(
         anyhow::bail!("Path not found: {}", path.display());
     }
 
-    // Collect documents
-    let mut documents = Vec::new();
+    // Discover files via LoaderRegistry
+    let registry = LoaderRegistry::new();
+    let files = discover_files(path, recursive, &registry)?;
 
-    if path.is_file() {
-        let content = fs::read_to_string(path)
-            .with_context(|| format!("Failed to read file: {}", path.display()))?;
-        let title = path.file_name().and_then(|n| n.to_str()).map(String::from);
-        documents.push(
-            Document::new(&content)
-                .with_title(title.as_deref().unwrap_or("Untitled"))
-                .with_source(path.to_string_lossy()),
+    if files.is_empty() {
+        let exts = registry.supported_extensions().join(", ");
+        anyhow::bail!(
+            "No supported files found at: {} (supported: {})",
+            path.display(),
+            exts
         );
-    } else if path.is_dir() {
-        for entry in fs::read_dir(path)? {
-            let entry = entry?;
-            let file_path = entry.path();
-            if file_path.is_file() {
-                if let Some(ext) = file_path.extension() {
-                    if ext == "txt" || ext == "md" {
-                        let content = fs::read_to_string(&file_path)?;
-                        let title = file_path
-                            .file_name()
-                            .and_then(|n| n.to_str())
-                            .map(String::from);
-                        documents.push(
-                            Document::new(&content)
-                                .with_title(title.as_deref().unwrap_or("Untitled"))
-                                .with_source(file_path.to_string_lossy()),
-                        );
-                    }
-                }
-            }
-        }
     }
 
-    if documents.is_empty() {
-        anyhow::bail!("No documents found at path: {}", path.display());
+    // Report discovery
+    let classification = classify_files(&files);
+    println!(
+        "Scanning {}{}... found {} files",
+        path.display(),
+        if recursive { " (recursive)" } else { "" },
+        files.len()
+    );
+    for (ext, count) in &classification {
+        println!("  {} .{} files", count, ext);
     }
 
-    println!("Found {} documents", documents.len());
+    let documents = load_documents(&files, &registry)?;
+
+    // Determine which documents have timestamp metadata
+    let media_count = documents
+        .iter()
+        .filter(|d| d.metadata.contains_key("subtitle_cues"))
+        .count();
+    let text_count = documents.len() - media_count;
+    if media_count > 0 {
+        println!("  {} with timestamps, {} plain text", media_count, text_count);
+    }
 
     // Create embedder based on selection
     let (embedder_box, actual_dimension, embedder_name, model_name): (
@@ -380,23 +554,16 @@ fn run_index(
         }
     };
 
-    // Chunk documents
-    let chunker = RecursiveChunker::new(chunk_size, chunk_overlap);
-    let mut all_chunks: Vec<PersistedChunk> = Vec::new();
-    let mut all_embeddings: Vec<Vec<f32>> = Vec::new();
-
-    for doc in &documents {
-        let chunks: Vec<Chunk> = chunker.chunk(doc)?;
-        for chunk in chunks {
-            let embedding = embedder_box.embed(&chunk.content)?;
-            all_chunks.push(PersistedChunk {
-                content: chunk.content.clone(),
-                title: chunk.metadata.title.clone(),
-                source: doc.source.clone(),
-            });
-            all_embeddings.push(embedding);
-        }
-    }
+    // Chunk and embed all documents
+    let recursive_chunker = RecursiveChunker::new(chunk_size, chunk_overlap);
+    let timestamp_chunker = TimestampChunker::new(60.0);
+    let (all_chunks, all_embeddings) = chunk_and_embed(
+        &documents,
+        &*embedder_box,
+        &recursive_chunker,
+        &timestamp_chunker,
+        chunk_strategy,
+    )?;
 
     println!(
         "Indexed {} documents ({} chunks)",
@@ -491,36 +658,60 @@ fn run_query(query: &str, index_path: &str, top_k: usize, format: &str) -> Resul
     scores.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
     scores.truncate(top_k);
 
-    // Format output
+    format_query_results(query, &scores, &persisted.chunks, format)
+}
+
+/// Format and print query results in text or JSON format.
+fn format_query_results(
+    query: &str,
+    scores: &[(usize, f32)],
+    chunks: &[PersistedChunk],
+    format: &str,
+) -> Result<()> {
     if format == "json" {
         let results: Vec<serde_json::Value> = scores
             .iter()
             .enumerate()
             .map(|(rank, (i, score))| {
-                serde_json::json!({
+                let chunk = &chunks[*i];
+                let mut result = serde_json::json!({
                     "rank": rank + 1,
                     "score": score,
-                    "content": persisted.chunks[*i].content,
-                    "title": persisted.chunks[*i].title,
-                    "source": persisted.chunks[*i].source,
-                })
+                    "content": chunk.content,
+                    "title": chunk.title,
+                    "source": chunk.source,
+                });
+                if let Some(start) = chunk.start_secs {
+                    result["start_secs"] = serde_json::json!(start);
+                }
+                if let Some(end) = chunk.end_secs {
+                    result["end_secs"] = serde_json::json!(end);
+                }
+                result
             })
             .collect();
         println!("{}", serde_json::to_string_pretty(&results)?);
     } else {
-        println!("Query: \"{}\"\n", query);
+        println!("Query: \"{query}\"\n");
         println!("Results ({}):", scores.len());
         println!("{}", "-".repeat(50));
 
         for (rank, (i, score)) in scores.iter().enumerate() {
-            let chunk = &persisted.chunks[*i];
+            let chunk = &chunks[*i];
             let title = chunk.title.as_deref().unwrap_or("Untitled");
-            println!("{}. [Score: {:.3}] {}", rank + 1, score, title);
+            let time_info = match (chunk.start_secs, chunk.end_secs) {
+                (Some(start), Some(end)) => format!(
+                    " [{}–{}]",
+                    trueno_rag::media::format_display_time(start),
+                    trueno_rag::media::format_display_time(end),
+                ),
+                _ => String::new(),
+            };
+            println!("{}. [Score: {:.3}] {}{}", rank + 1, score, title, time_info);
             let preview = &chunk.content[..80.min(chunk.content.len())];
-            println!("   {}...\n", preview);
+            println!("   {preview}...\n");
         }
     }
-
     Ok(())
 }
 
@@ -577,5 +768,90 @@ mod tests {
         let a = vec![0.0, 0.0];
         let b = vec![1.0, 2.0];
         assert_eq!(cosine_similarity(&a, &b), 0.0);
+    }
+
+    #[test]
+    fn test_discover_files_single_file() {
+        let dir = std::env::temp_dir().join("trueno_rag_cli_test_discover_single");
+        let _ = fs::create_dir_all(&dir);
+        let file = dir.join("test.txt");
+        fs::write(&file, "hello").unwrap();
+
+        let registry = LoaderRegistry::new();
+        let files = discover_files(&file, false, &registry).unwrap();
+        assert_eq!(files.len(), 1);
+        assert_eq!(files[0], file);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_discover_files_directory_non_recursive() {
+        let dir = std::env::temp_dir().join("trueno_rag_cli_test_discover_dir");
+        let sub = dir.join("sub");
+        let _ = fs::create_dir_all(&sub);
+        fs::write(dir.join("a.txt"), "a").unwrap();
+        fs::write(dir.join("b.md"), "b").unwrap();
+        fs::write(dir.join("c.mp4"), "c").unwrap(); // unsupported
+        fs::write(sub.join("d.txt"), "d").unwrap(); // in subdir
+
+        let registry = LoaderRegistry::new();
+        let files = discover_files(&dir, false, &registry).unwrap();
+        // Only a.txt and b.md in top-level (not c.mp4, not sub/d.txt)
+        assert_eq!(files.len(), 2);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_discover_files_recursive() {
+        let dir = std::env::temp_dir().join("trueno_rag_cli_test_discover_recursive");
+        let sub = dir.join("sub");
+        let deep = sub.join("deep");
+        let _ = fs::create_dir_all(&deep);
+        fs::write(dir.join("a.txt"), "a").unwrap();
+        fs::write(sub.join("b.srt"), "1\n00:00:01,000 --> 00:00:02,000\nb\n").unwrap();
+        fs::write(deep.join("c.md"), "c").unwrap();
+
+        let registry = LoaderRegistry::new();
+        let files = discover_files(&dir, true, &registry).unwrap();
+        assert_eq!(files.len(), 3);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_discover_files_unsupported_single() {
+        let dir = std::env::temp_dir().join("trueno_rag_cli_test_discover_unsup");
+        let _ = fs::create_dir_all(&dir);
+        let file = dir.join("video.mp4");
+        fs::write(&file, "fake").unwrap();
+
+        let registry = LoaderRegistry::new();
+        let result = discover_files(&file, false, &registry);
+        assert!(result.is_err());
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_classify_files() {
+        let files = vec![
+            PathBuf::from("/data/a.txt"),
+            PathBuf::from("/data/b.txt"),
+            PathBuf::from("/data/c.srt"),
+            PathBuf::from("/data/d.md"),
+        ];
+        let counts = classify_files(&files);
+        assert_eq!(counts["txt"], 2);
+        assert_eq!(counts["srt"], 1);
+        assert_eq!(counts["md"], 1);
+    }
+
+    #[test]
+    fn test_chunk_strategy_default() {
+        // Ensure Auto is the default
+        let strategy = ChunkStrategy::default();
+        assert!(matches!(strategy, ChunkStrategy::Auto));
     }
 }

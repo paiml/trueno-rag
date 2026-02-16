@@ -98,6 +98,10 @@ fastembed = { version = "5", optional = true }
 # Large model (~4-32GB depending on quantization), requires GGUF file
 realizar = { version = "0.6", optional = true, default-features = false }
 
+# GPU-accelerated transcription via aprender (Whisper GGUF/safetensors/APR)
+# Sovereign stack: pure Rust ML inference with SIMD/GPU backends
+aprender = { version = "0.25", optional = true, default-features = false, features = ["audio"] }
+
 [dev-dependencies]
 tokio-test = "0.4"
 proptest = "1.9"
@@ -126,6 +130,9 @@ nemotron = ["dep:realizar"]
 # ColBERT-style multi-vector retrieval with WARP algorithm (PMAT-003)
 # Enables token-level late interaction scoring with residual quantization
 multivector = []
+# GPU-accelerated speech-to-text via aprender (Whisper GGUF/safetensors/APR models)
+# Sovereign stack: aprender + trueno for pure-Rust transcription
+transcription = ["dep:aprender"]
 
 [lints]
 workspace = true
