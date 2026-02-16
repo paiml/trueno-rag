@@ -44,6 +44,7 @@
 //! - [`ParagraphChunker`] - Paragraph grouping
 //! - [`SemanticChunker`] - Embedding similarity-based
 //! - [`StructuralChunker`] - Header/section-aware
+//! - [`TimestampChunker`] - Subtitle/transcript time-boundary aware
 //!
 //! # Fusion Strategies
 //!
@@ -90,6 +91,8 @@ pub mod embed;
 pub mod error;
 pub mod fusion;
 pub mod index;
+pub mod loader;
+pub mod media;
 pub mod metrics;
 #[cfg(feature = "multivector")]
 pub mod multivector;
@@ -106,8 +109,14 @@ pub mod sqlite;
 
 pub use chunk::{
     Chunk, ChunkId, ChunkMetadata, Chunker, ChunkingStrategy, FixedSizeChunker, ParagraphChunker,
-    RecursiveChunker, SemanticChunker, SentenceChunker, StructuralChunker,
+    RecursiveChunker, SemanticChunker, SentenceChunker, StructuralChunker, TimestampChunker,
 };
+pub use loader::{DocumentLoader, LoaderRegistry, SubtitleLoader, TextLoader};
+#[cfg(feature = "transcription")]
+pub use loader::transcription::{
+    TranscriptionBackend, TranscriptionConfig, TranscriptionLoader,
+};
+pub use media::{parse_subtitles, SubtitleCue, SubtitleFormat, SubtitleTrack};
 #[cfg(feature = "compression")]
 pub use compressed::Compression;
 pub use embed::{Embedder, EmbeddingConfig, PoolingStrategy};
