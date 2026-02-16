@@ -8,19 +8,31 @@
 
 ## Abstract
 
-This specification extends trueno-rag with media file support — enabling video and audio content to participate in RAG pipelines alongside text documents. The design introduces a `DocumentLoader` trait abstraction for pluggable file format support, built-in SRT/VTT subtitle parsing (zero additional dependencies), optional whisper-apr integration for GPU-accelerated speech-to-text transcription via .apr model format (feature-gated), timestamp-aware chunking that preserves temporal context, and a batch processing strategy suitable for large media corpora on GPU-equipped hardware.
+This specification extends trueno-rag with media file support — enabling video and audio
+content to participate in RAG pipelines alongside text documents. The design introduces a
+`DocumentLoader` trait abstraction for pluggable file format support, built-in SRT/VTT
+subtitle parsing (zero additional dependencies), optional whisper-apr integration for
+GPU-accelerated speech-to-text transcription via .apr model format (feature-gated),
+timestamp-aware chunking that preserves temporal context, and a batch processing strategy
+suitable for large media corpora on GPU-equipped hardware.
 
 ## 1. Introduction
 
 ### 1.1 Motivation
 
-trueno-rag currently operates exclusively on text — `.txt` and `.md` files loaded via `std::fs::read_to_string`. This excludes a significant class of knowledge assets: recorded lectures, conference talks, screencasts, podcasts, and other audio/video content. Most of this content lacks transcripts.
+trueno-rag currently operates exclusively on text — `.txt` and `.md` files loaded via
+`std::fs::read_to_string`. This excludes a significant class of knowledge assets:
+recorded lectures, conference talks, screencasts, podcasts, and other audio/video
+content. Most of this content lacks transcripts.
 
-The gap is architectural: trueno-rag has no abstraction for "how to turn a file into a `Document`." Text files happen to work because the CLI reads them directly. Adding media support requires:
+The gap is architectural: trueno-rag has no abstraction for "how to turn a file into
+a `Document`." Text files happen to work because the CLI reads them directly. Adding
+media support requires:
 
 1. **Format abstraction** — A trait that decouples file loading from the pipeline
 2. **Subtitle parsing** — SRT/VTT are the lingua franca of timed text; parsing them requires zero heavy dependencies
-3. **Transcription** — For media without subtitles, whisper-apr provides GPU-accelerated Whisper inference via `.apr` models
+3. **Transcription** — For media without subtitles, whisper-apr provides
+   GPU-accelerated Whisper inference via `.apr` models
 4. **Temporal chunking** — Chunks from media should carry timestamp metadata for citation and navigation
 
 ### 1.2 Design Principles
@@ -445,7 +457,9 @@ impl DocumentLoader for SubtitleLoader {
 
 ## 5. Whisper-APR Transcription Integration (Feature-Gated)
 
-The sovereign stack approach: whisper-apr provides GPU-accelerated Whisper ASR inference using `.apr` model files. trueno-rag uses whisper-apr for speech-to-text, keeping the entire pipeline in pure Rust with zero Python/C++ dependencies.
+The sovereign stack approach: whisper-apr provides GPU-accelerated Whisper ASR inference
+using `.apr` model files. trueno-rag uses whisper-apr for speech-to-text, keeping the
+entire pipeline in pure Rust with zero Python/C++ dependencies.
 
 ### 5.1 Feature Flag
 
@@ -587,11 +601,14 @@ pub enum TranscriptionBackend {
 }
 ```
 
-Model loading uses the `.apr` format — use the best available Whisper model variant (e.g., `base.apr`, `large-v3-turbo.apr` for maximum accuracy on GPU hardware).
+Model loading uses the `.apr` format — use the best available Whisper model variant
+(e.g., `base.apr`, `large-v3-turbo.apr` for maximum accuracy on GPU hardware).
 
 ### 5.3 Sidecar Strategy
 
-For large corpora, transcription is expensive. trueno-rag supports a **sidecar** pattern: if a `.srt` or `.vtt` file exists alongside a media file, the `SubtitleLoader` is used instead of invoking Whisper.
+For large corpora, transcription is expensive. trueno-rag supports a **sidecar**
+pattern: if a `.srt` or `.vtt` file exists alongside a media file, the
+`SubtitleLoader` is used instead of invoking Whisper.
 
 ```
 videos/
@@ -607,13 +624,15 @@ Resolution order in `LoaderRegistry`:
 3. If no sidecar and `transcription` feature is enabled, use `TranscriptionLoader`
 4. If no sidecar and feature disabled, skip file with warning
 
-This allows incremental transcription: run whisper-apr transcription on a batch, save `.srt` sidecars, then index everything cheaply.
+This allows incremental transcription: run whisper-apr transcription on a batch,
+save `.srt` sidecars, then index everything cheaply.
 
 ## 6. Timestamp-Aware Chunking
 
 ### 6.1 TimestampChunker
 
-Standard text chunkers split on character boundaries. Media transcripts have a natural temporal structure that should be preserved.
+Standard text chunkers split on character boundaries. Media transcripts have a
+natural temporal structure that should be preserved.
 
 ```rust
 /// Chunker that respects subtitle cue boundaries and preserves timestamps.
@@ -821,7 +840,10 @@ Processing [████████░░░░░░░░░░░░] 2,038/
 
 ### 8.1 Pipeline Architecture
 
-For large corpora, the bottleneck is transcription (Whisper inference). The batch pipeline separates discovery, transcription, and indexing into stages. With whisper-apr's GPU support, transcription throughput scales with GPU capability rather than CPU core count.
+For large corpora, the bottleneck is transcription (Whisper inference). The batch
+pipeline separates discovery, transcription, and indexing into stages. With
+whisper-apr's GPU support, transcription throughput scales with GPU capability
+rather than CPU core count.
 
 ```
 Stage 1: Discovery (single-threaded, fast)
@@ -1053,7 +1075,8 @@ proptest! {
 
 ## 13. References
 
-[1] Radford, A., et al. (2023). "Robust Speech Recognition via Large-Scale Weak Supervision." *Proceedings of ICML*. arXiv:2212.04356
+[1] Radford, A., et al. (2023). "Robust Speech Recognition via Large-Scale
+Weak Supervision." *Proceedings of ICML*. arXiv:2212.04356
 
 [2] W3C. (2019). "WebVTT: The Web Video Text Tracks Format." https://www.w3.org/TR/webvtt1/
 
