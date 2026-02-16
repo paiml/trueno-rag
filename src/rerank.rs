@@ -75,7 +75,7 @@ impl LexicalReranker {
             .iter()
             .filter(|term| content.contains(*term))
             .count() as f32;
-        let coverage = matches / query_terms.len() as f32;
+        let coverage = matches / query_terms.len().max(1) as f32;
 
         // Position score: how early do query terms appear
         let position_score = query_terms
@@ -83,7 +83,7 @@ impl LexicalReranker {
             .filter_map(|term| content.find(term))
             .map(|pos| 1.0 / (1.0 + pos as f32 / 100.0))
             .sum::<f32>()
-            / query_terms.len() as f32;
+            / query_terms.len().max(1) as f32;
 
         self.exact_match_weight * exact_match
             + self.coverage_weight * coverage
