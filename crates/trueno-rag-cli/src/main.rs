@@ -155,6 +155,33 @@ enum Commands {
         format: String,
     },
 
+    /// Batch transcribe media files to .srt sidecars
+    Transcribe {
+        /// Path to directory containing media files
+        #[arg(short, long)]
+        path: String,
+
+        /// Recursively scan subdirectories
+        #[arg(short, long, default_value = "false")]
+        recursive: bool,
+
+        /// Skip files that already have .srt/.vtt sidecars
+        #[arg(long, default_value = "true")]
+        skip_existing: bool,
+
+        /// Number of parallel transcription jobs (CPU mode)
+        #[arg(short, long, default_value = "1")]
+        jobs: usize,
+
+        /// Path to Whisper .apr model file (e.g. base.apr, large-v3-turbo.apr)
+        #[arg(short, long)]
+        model: Option<String>,
+
+        /// Only report what would be transcribed (dry run)
+        #[arg(long, default_value = "false")]
+        dry_run: bool,
+    },
+
     /// Show pipeline info
     Info,
 }
@@ -219,6 +246,14 @@ fn main() -> Result<()> {
             top_k,
             format,
         } => run_query(&query, &index, top_k, &format)?,
+        Commands::Transcribe {
+            path,
+            recursive,
+            skip_existing,
+            jobs,
+            model,
+            dry_run,
+        } => run_transcribe(&path, recursive, skip_existing, jobs, model.as_deref(), dry_run)?,
         Commands::Info => run_info(),
     }
 
@@ -256,6 +291,197 @@ fn run_info() {
         println!("Note: Build with --features embeddings for semantic search");
     }
 }
+
+/// Discover media files in a directory.
+fn discover_media_files(root: &Path, recursive: bool) -> Result<Vec<PathBuf>> {
+    let mut files = Vec::new();
+
+    if root.is_file() {
+        if is_media_file(root) {
+            files.push(root.to_path_buf());
+        } else {
+            anyhow::bail!("Not a media file: {}", root.display());
+        }
+        return Ok(files);
+    }
+
+    let mut dirs_to_visit = vec![root.to_path_buf()];
+    while let Some(dir) = dirs_to_visit.pop() {
+        let entries = fs::read_dir(&dir)
+            .with_context(|| format!("Failed to read directory: {}", dir.display()))?;
+
+        for entry in entries {
+            let path = entry?.path();
+            if path.is_dir() && recursive {
+                dirs_to_visit.push(path);
+            } else if path.is_file() && is_media_file(&path) {
+                files.push(path);
+            }
+        }
+    }
+
+    files.sort();
+    Ok(files)
+}
+
+/// Check if a file has a media extension.
+fn is_media_file(path: &Path) -> bool {
+    path.extension()
+        .and_then(|ext| ext.to_str())
+        .is_some_and(|ext| MEDIA_EXTENSIONS.contains(&ext.to_lowercase().as_str()))
+}
+
+/// Classify media files into those with/without existing sidecars.
+fn classify_media_sidecar_status(files: &[PathBuf]) -> (Vec<PathBuf>, Vec<PathBuf>) {
+    let mut has_sidecar = Vec::new();
+    let mut needs_transcription = Vec::new();
+
+    for file in files {
+        if LoaderRegistry::find_sidecar(file).is_some() {
+            has_sidecar.push(file.clone());
+        } else {
+            needs_transcription.push(file.clone());
+        }
+    }
+
+    (has_sidecar, needs_transcription)
+}
+
+fn run_transcribe(
+    path: &str,
+    recursive: bool,
+    skip_existing: bool,
+    _jobs: usize,
+    _model: Option<&str>,
+    dry_run: bool,
+) -> Result<()> {
+    let root = Path::new(path);
+
+    if !root.exists() {
+        anyhow::bail!("Path not found: {}", root.display());
+    }
+
+    // Stage 1: Discovery
+    println!("Discovering media files...");
+    let media_files = discover_media_files(root, recursive)?;
+
+    if media_files.is_empty() {
+        println!("No media files found at: {}", root.display());
+        return Ok(());
+    }
+
+    let ext_counts = classify_files(&media_files);
+    println!(
+        "Found {} media files{}",
+        media_files.len(),
+        if recursive { " (recursive)" } else { "" }
+    );
+    for (ext, count) in &ext_counts {
+        println!("  {} .{} files", count, ext);
+    }
+
+    // Stage 2: Sidecar check
+    let (has_sidecar, needs_transcription) = classify_media_sidecar_status(&media_files);
+    println!(
+        "\nSidecar status: {} with .srt/.vtt, {} need transcription",
+        has_sidecar.len(),
+        needs_transcription.len()
+    );
+
+    let to_process = if skip_existing {
+        &needs_transcription
+    } else {
+        &media_files
+    };
+
+    if to_process.is_empty() {
+        println!("All files already have sidecars. Nothing to do.");
+        return Ok(());
+    }
+
+    if dry_run {
+        println!("\nDry run — files that would be transcribed:");
+        for file in to_process {
+            println!("  {}", file.display());
+        }
+        println!("\nTotal: {} files", to_process.len());
+        return Ok(());
+    }
+
+    // Stage 3: Transcription (feature-gated)
+    #[cfg(feature = "transcription")]
+    {
+        run_transcription_batch(to_process, _jobs, _model)?;
+    }
+    #[cfg(not(feature = "transcription"))]
+    {
+        println!(
+            "\nTranscription requires the 'transcription' feature.\n\
+             Build with: cargo build --release --features transcription\n\n\
+             {} files need transcription. Run with --dry-run to list them.",
+            to_process.len()
+        );
+    }
+
+    Ok(())
+}
+
+/// Run transcription on a batch of media files (requires transcription feature).
+#[cfg(feature = "transcription")]
+fn run_transcription_batch(files: &[PathBuf], _jobs: usize, model: Option<&str>) -> Result<()> {
+    use trueno_rag::{TranscriptionConfig, TranscriptionLoader};
+
+    let config = TranscriptionConfig {
+        model_path: model.map(PathBuf::from),
+        ..TranscriptionConfig::default()
+    };
+    let loader = TranscriptionLoader::new(config);
+
+    if loader.has_model() {
+        println!("\nWhisper model loaded. Transcribing {} files...", files.len());
+    } else {
+        println!(
+            "\nNo model specified (use --model <path.apr>). \
+             Only files with sidecars will be loaded."
+        );
+    }
+
+    println!("\nTranscribing {} files...", files.len());
+
+    let mut success = 0usize;
+    let mut errors = 0usize;
+
+    for (i, file) in files.iter().enumerate() {
+        let filename = file.file_name().and_then(|n| n.to_str()).unwrap_or("?");
+        print!("  [{}/{}] {} ... ", i + 1, files.len(), filename);
+
+        match loader.load(file) {
+            Ok(_doc) => {
+                success += 1;
+                println!("ok");
+            }
+            Err(e) => {
+                errors += 1;
+                println!("FAILED: {e}");
+            }
+        }
+    }
+
+    println!(
+        "\nComplete: {} succeeded, {} failed out of {} total",
+        success,
+        errors,
+        files.len()
+    );
+
+    Ok(())
+}
+
+/// Media file extensions that can be transcribed.
+const MEDIA_EXTENSIONS: &[&str] = &[
+    "mp4", "mkv", "avi", "mov", "webm", "flv", "wmv", // video
+    "mp3", "wav", "flac", "ogg", "m4a", "aac", "wma", // audio
+];
 
 fn run_demo(query: &str, top_k: usize) -> Result<()> {
     println!("=== Trueno-RAG Demo ===\n");

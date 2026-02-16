@@ -307,6 +307,112 @@ fn test_query_top_k() {
 }
 
 // ============================================================================
+// TRANSCRIBE COMMAND TESTS
+// ============================================================================
+
+#[test]
+fn test_transcribe_dry_run_no_media() {
+    let tmp = TempDir::new().unwrap();
+    // Empty directory — no media files
+    cli()
+        .args([
+            "transcribe",
+            "--path",
+            tmp.path().to_str().unwrap(),
+            "--dry-run",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("No media files found"));
+}
+
+#[test]
+fn test_transcribe_dry_run_with_media() {
+    let tmp = TempDir::new().unwrap();
+    fs::write(tmp.path().join("lecture.mp4"), b"").unwrap();
+    fs::write(tmp.path().join("talk.wav"), b"").unwrap();
+
+    cli()
+        .args([
+            "transcribe",
+            "--path",
+            tmp.path().to_str().unwrap(),
+            "--dry-run",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("2 media files"))
+        .stdout(predicate::str::contains("2 need transcription"))
+        .stdout(predicate::str::contains("lecture.mp4"))
+        .stdout(predicate::str::contains("talk.wav"));
+}
+
+#[test]
+fn test_transcribe_skips_existing_sidecars() {
+    let tmp = TempDir::new().unwrap();
+    fs::write(tmp.path().join("lecture.mp4"), b"").unwrap();
+    fs::write(
+        tmp.path().join("lecture.srt"),
+        "1\n00:00:01,000 --> 00:00:05,000\nHello.\n",
+    )
+    .unwrap();
+    fs::write(tmp.path().join("talk.wav"), b"").unwrap();
+
+    cli()
+        .args([
+            "transcribe",
+            "--path",
+            tmp.path().to_str().unwrap(),
+            "--dry-run",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("1 with .srt/.vtt"))
+        .stdout(predicate::str::contains("1 need transcription"))
+        .stdout(predicate::str::contains("talk.wav"));
+}
+
+#[test]
+fn test_transcribe_all_have_sidecars() {
+    let tmp = TempDir::new().unwrap();
+    fs::write(tmp.path().join("lecture.mp4"), b"").unwrap();
+    fs::write(
+        tmp.path().join("lecture.srt"),
+        "1\n00:00:01,000 --> 00:00:05,000\nHello.\n",
+    )
+    .unwrap();
+
+    cli()
+        .args([
+            "transcribe",
+            "--path",
+            tmp.path().to_str().unwrap(),
+            "--dry-run",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Nothing to do"));
+}
+
+#[test]
+fn test_transcribe_nonexistent_path() {
+    cli()
+        .args(["transcribe", "--path", "/nonexistent/path", "--dry-run"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("not found"));
+}
+
+#[test]
+fn test_transcribe_help() {
+    cli()
+        .args(["transcribe", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Batch transcribe"));
+}
+
+// ============================================================================
 // HELP AND VERSION TESTS
 // ============================================================================
 

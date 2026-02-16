@@ -970,7 +970,7 @@ mod tests {
             ..Default::default()
         };
         let cloned = config.clone();
-        assert_eq!(cloned.normalize, false);
+        assert!(!cloned.normalize);
         assert_eq!(cloned.query_prefix, Some("q: ".to_string()));
     }
 
