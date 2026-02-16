@@ -1,13 +1,29 @@
 {
-  "tree_hash": "07cc1256ae5268ea86cae1e7c7003f60c9e2988e",
+  "tree_hash": "5d3c4b32dacfa71a952af85b0540bc966dacbe59",
   "pmat_version": "3.3.0",
-  "timestamp": "2026-02-16T19:03:31.961424109Z",
+  "timestamp": "2026-02-16T21:35:41.009475979Z",
   "report": {
-    "files_with_dead_code": [],
-    "total_dead_items": 0,
-    "dead_code_percentage": 0.0,
-    "total_lines": 20980,
-    "dead_lines": 0,
-    "dead_by_type": {}
+    "files_with_dead_code": [
+      {
+        "file_path": "crates/trueno-rag-cli/src/main.rs",
+        "dead_items": [
+          {
+            "name": "save",
+            "kind": "Suppressed",
+            "line": 410,
+            "column": 1,
+            "message": "fn `save` has #[allow(dead_code)] suppression (explicit dead code admission)"
+          }
+        ],
+        "file_dead_percentage": 0.30143180105501133
+      }
+    ],
+    "total_dead_items": 1,
+    "dead_code_percentage": 0.009357162908206233,
+    "total_lines": 21374,
+    "dead_lines": 2,
+    "dead_by_type": {
+      "suppressed": 1
+    }
   }
 }
