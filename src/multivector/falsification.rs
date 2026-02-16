@@ -98,9 +98,7 @@ fn error_to_falsified(name: &str, e: crate::Error) -> ConjectureResult {
 /// Determine overall verdict from a slice of conjecture results.
 /// Returns `Falsified` if any conjecture was falsified.
 fn overall_verdict(results: &[&ConjectureResult]) -> Verdict {
-    let any_falsified = results
-        .iter()
-        .any(|r| r.verdict == Verdict::Falsified);
+    let any_falsified = results.iter().any(|r| r.verdict == Verdict::Falsified);
     if any_falsified {
         Verdict::Falsified
     } else {

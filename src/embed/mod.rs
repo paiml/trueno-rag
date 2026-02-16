@@ -321,7 +321,11 @@ fn l2_norm(v: &[f32]) -> f32 {
 
 /// Divide numerator by denominator, returning 0.0 if denominator is zero.
 fn safe_divide(numerator: f32, denominator: f32) -> f32 {
-    if denominator == 0.0 { 0.0 } else { numerator / denominator }
+    if denominator == 0.0 {
+        0.0
+    } else {
+        numerator / denominator
+    }
 }
 
 /// Compute cosine similarity between two vectors.
