@@ -9,7 +9,11 @@
 
 ## Executive Summary
 
-Following the Popperian methodology, we subjected the WARP implementation to severe tests designed to expose flaws. The tests were conducted with a **MockMultiVectorEmbedder** which produces deterministic pseudo-random embeddings based on text hash. This is a critical limitation that affects the interpretability of semantic tests.
+Following the Popperian methodology, we subjected the WARP implementation to severe
+tests designed to expose flaws. The tests were conducted with a
+**MockMultiVectorEmbedder** which produces deterministic pseudo-random embeddings
+based on text hash. This is a critical limitation that affects the interpretability
+of semantic tests.
 
 | Conjecture | Observed | Threshold | Verdict |
 |------------|----------|-----------|---------|
@@ -41,9 +45,14 @@ Verdict:              FALSIFIED
 ```
 
 ### Analysis
-Both methods achieved perfect MRR@10 because the **MockMultiVectorEmbedder generates deterministic pseudo-random vectors based on text hash, not semantic content**. The mock embedder cannot distinguish semantic nuances like negation.
+Both methods achieved perfect MRR@10 because the **MockMultiVectorEmbedder generates
+deterministic pseudo-random vectors based on text hash, not semantic content**. The
+mock embedder cannot distinguish semantic nuances like negation.
 
-**CRITICAL CAVEAT:** This test is INCONCLUSIVE for semantic properties. A proper evaluation requires a real ColBERT-style model (e.g., `colbertv2-msmarco`). The infrastructure to support such evaluation is in place, but the semantic hypothesis cannot be tested with mock embeddings.
+**CRITICAL CAVEAT:** This test is INCONCLUSIVE for semantic properties. A proper
+evaluation requires a real ColBERT-style model (e.g., `colbertv2-msmarco`). The
+infrastructure to support such evaluation is in place, but the semantic hypothesis
+cannot be tested with mock embeddings.
 
 ### Verdict
 **FALSIFIED (with caveat)** - The test infrastructure works, but semantic evaluation requires real embeddings.
@@ -70,7 +79,8 @@ Verdict:        FALSIFIED
 ```
 
 ### Analysis
-The rank correlation of 0.8312 indicates **significant score ordering distortion** from quantization. This is concerning because:
+The rank correlation of 0.8312 indicates **significant score ordering distortion**
+from quantization. This is concerning because:
 
 1. **8.7% of pairwise orderings are inverted** - relevant documents may be incorrectly ranked below irrelevant ones
 2. **4-bit quantization was used** - 2-bit would be worse
@@ -82,7 +92,8 @@ The rank correlation of 0.8312 indicates **significant score ordering distortion
 3. **Mock embeddings** may have unusual distributions not well-suited to residual quantization
 
 ### Recommendation
-Investigate bucket boundary learning algorithm. Consider using ScaNN's asymmetric quantization or product quantization for better rank preservation.
+Investigate bucket boundary learning algorithm. Consider using ScaNN's asymmetric
+quantization or product quantization for better rank preservation.
 
 ### Verdict
 **FALSIFIED** - Compression does not preserve score ordering to the required 0.90 threshold.
@@ -227,9 +238,14 @@ Embedder: MockMultiVectorEmbedder (deterministic pseudo-random)
 
 ## 7. Conclusion
 
-The WARP implementation has been **partially falsified** under severe testing. The core algorithm is correctly implemented, but compression quality falls short of the 0.90 rank correlation threshold. This is a **scientific finding**, not a bug to be patched.
+The WARP implementation has been **partially falsified** under severe testing. The
+core algorithm is correctly implemented, but compression quality falls short of the
+0.90 rank correlation threshold. This is a **scientific finding**, not a bug to be
+patched.
 
-Following the Toyota Way's Jidoka principle, we recommend stopping to investigate the root cause rather than applying epicycles. The compression algorithm should be reformulated with better theoretical foundations before proceeding.
+Following the Toyota Way's Jidoka principle, we recommend stopping to investigate
+the root cause rather than applying epicycles. The compression algorithm should be
+reformulated with better theoretical foundations before proceeding.
 
 > "The wrong view of science betrays itself in the craving to be right."
 > — Karl Popper
