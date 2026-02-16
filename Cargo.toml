@@ -64,6 +64,7 @@ categories = ["text-processing", "science"]
 readme = "README.md"
 rust-version = "1.75"
 exclude = [
+    "target/",
     "book/",
     "docs/",
     "examples/",
@@ -72,6 +73,11 @@ exclude = [
     ".pmat-work/",
     ".pmat-tickets/",
     ".github/",
+    ".vscode/",
+    ".idea/",
+    "*.profraw",
+    "*.profdata",
+    "proptest-regressions/",
 ]
 
 [dependencies]
