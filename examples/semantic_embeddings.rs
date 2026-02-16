@@ -90,26 +90,7 @@ fn main() -> trueno_rag::Result<()> {
     ];
 
     for query in queries {
-        println!("Query: \"{}\"\n", query);
-
-        let results = pipeline.query(query, 2)?;
-
-        if results.is_empty() {
-            println!("  No relevant results found\n");
-        } else {
-            for (i, result) in results.iter().enumerate() {
-                let title = result.chunk.metadata.title.as_deref().unwrap_or("Untitled");
-                let preview = &result.chunk.content[..80.min(result.chunk.content.len())];
-                println!(
-                    "  {}. [Score: {:.3}] {}\n     {}...\n",
-                    i + 1,
-                    result.best_score(),
-                    title,
-                    preview
-                );
-            }
-        }
-        println!("{}\n", "-".repeat(60));
+        run_query(&mut pipeline, query)?;
     }
 
     // 6. Show embedding comparison
@@ -143,6 +124,32 @@ fn main() -> trueno_rag::Result<()> {
 
     println!("\nNote: Semantically similar sentences have higher scores!");
 
+    Ok(())
+}
+
+#[cfg(feature = "embeddings")]
+fn run_query(
+    pipeline: &mut trueno_rag::pipeline::RagPipeline<FastEmbedder, LexicalReranker>,
+    query: &str,
+) -> trueno_rag::Result<()> {
+    println!("Query: \"{}\"\n", query);
+    let results = pipeline.query(query, 2)?;
+    if results.is_empty() {
+        println!("  No relevant results found\n");
+    } else {
+        for (i, result) in results.iter().enumerate() {
+            let title = result.chunk.metadata.title.as_deref().unwrap_or("Untitled");
+            let preview = &result.chunk.content[..80.min(result.chunk.content.len())];
+            println!(
+                "  {}. [Score: {:.3}] {}\n     {}...\n",
+                i + 1,
+                result.best_score(),
+                title,
+                preview
+            );
+        }
+    }
+    println!("{}\n", "-".repeat(60));
     Ok(())
 }
 
