@@ -4528,6 +4528,7 @@ dependencies = [
  "assert_cmd",
  "clap",
  "predicates",
+ "rayon",
  "serde",
  "serde_json",
  "tempfile",
