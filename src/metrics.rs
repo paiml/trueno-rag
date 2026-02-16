@@ -111,14 +111,14 @@ impl RetrievalMetrics {
             .take(k)
             .enumerate()
             .filter(|(_, id)| relevant.contains(id) && seen.insert(**id))
-            .map(|(rank, _)| 1.0 / (rank as f32 + 2.0).log2())
+            .map(|(rank, _)| 1.0 / (rank as f32 + 2.0).max(f32::EPSILON).log2())
             .sum()
     }
 
     /// Compute Ideal DCG@k (best possible DCG)
     fn ideal_dcg_at_k(num_relevant: usize, k: usize) -> f32 {
         (0..num_relevant.min(k))
-            .map(|rank| 1.0 / (rank as f32 + 2.0).log2())
+            .map(|rank| 1.0 / (rank as f32 + 2.0).max(f32::EPSILON).log2())
             .sum()
     }
 

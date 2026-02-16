@@ -253,7 +253,7 @@ impl TfIdfEmbedder {
             .iter()
             .map(|t| {
                 let df = doc_freq.get(t).copied().unwrap_or(1) as f32;
-                (n / df).ln() + 1.0
+                (n / df).max(f32::EPSILON).ln() + 1.0
             })
             .collect();
     }
