@@ -86,9 +86,7 @@ fn demo_similarity() -> trueno_rag::Result<()> {
 }
 
 #[cfg(feature = "embeddings")]
-fn main() -> trueno_rag::Result<()> {
-    println!("=== Semantic Embeddings Example ===\n");
-
+fn demo_retrieval() -> trueno_rag::Result<()> {
     println!("Loading embedding model (first run downloads ~90MB)...");
     let embedder = FastEmbedder::new(EmbeddingModelType::AllMiniLmL6V2)?;
     println!(
@@ -120,7 +118,13 @@ fn main() -> trueno_rag::Result<()> {
     for query in queries {
         run_query(&mut pipeline, query)?;
     }
+    Ok(())
+}
 
+#[cfg(feature = "embeddings")]
+fn main() -> trueno_rag::Result<()> {
+    println!("=== Semantic Embeddings Example ===\n");
+    demo_retrieval()?;
     demo_similarity()
 }
 
