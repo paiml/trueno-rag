@@ -1,7 +1,7 @@
 //! NVIDIA Embed Nemotron 8B embedder (GH-3: via realizar)
 
-use crate::{Chunk, Error, Result};
 use super::Embedder;
+use crate::{Chunk, Error, Result};
 
 /// Configuration for NVIDIA Embed Nemotron 8B embedder
 ///

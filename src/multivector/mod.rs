@@ -206,7 +206,9 @@ mod tests {
 
         // Create documents with varying relevance
         let query = embedder.embed_tokens("machine learning").unwrap();
-        let doc_relevant = embedder.embed_tokens("machine learning algorithms").unwrap();
+        let doc_relevant = embedder
+            .embed_tokens("machine learning algorithms")
+            .unwrap();
         let doc_partial = embedder.embed_tokens("learning systems").unwrap();
         let doc_irrelevant = embedder.embed_tokens("cooking recipes").unwrap();
 
@@ -234,7 +236,10 @@ mod tests {
 
         // Train and build
         let texts: Vec<String> = (0..50).map(|i| format!("document number {}", i)).collect();
-        let embeddings: Vec<_> = texts.iter().map(|t| embedder.embed_tokens(t).unwrap()).collect();
+        let embeddings: Vec<_> = texts
+            .iter()
+            .map(|t| embedder.embed_tokens(t).unwrap())
+            .collect();
         index.train(&embeddings).unwrap();
 
         for (i, text) in texts.iter().enumerate() {
@@ -269,9 +274,17 @@ mod tests {
 
         // Train with more tokens per document (8 centroids * 10 = 80 tokens needed)
         let texts: Vec<String> = (0..50)
-            .map(|i| format!("document number {} contains important information about topic {}", i, i))
+            .map(|i| {
+                format!(
+                    "document number {} contains important information about topic {}",
+                    i, i
+                )
+            })
             .collect();
-        let embeddings: Vec<_> = texts.iter().map(|t| embedder.embed_tokens(t).unwrap()).collect();
+        let embeddings: Vec<_> = texts
+            .iter()
+            .map(|t| embedder.embed_tokens(t).unwrap())
+            .collect();
         index.train(&embeddings).unwrap();
 
         // Insert

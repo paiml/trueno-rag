@@ -86,11 +86,8 @@ pub fn search(conn: &Connection, query: &str, k: usize) -> Result<Vec<FtsResult>
 ///
 /// Should be called after large batch inserts, not on every query.
 pub fn optimize(conn: &Connection) -> Result<()> {
-    conn.execute(
-        "INSERT INTO chunks_fts(chunks_fts) VALUES('optimize')",
-        [],
-    )
-    .map_err(|e| crate::Error::Query(format!("FTS5 optimize failed: {e}")))?;
+    conn.execute("INSERT INTO chunks_fts(chunks_fts) VALUES('optimize')", [])
+        .map_err(|e| crate::Error::Query(format!("FTS5 optimize failed: {e}")))?;
     Ok(())
 }
 
@@ -122,7 +119,13 @@ mod tests {
     #[test]
     fn test_search_returns_results() {
         let conn = setup();
-        insert_chunk(&conn, "doc1", "c1", "SIMD vector operations for tensor math", 0);
+        insert_chunk(
+            &conn,
+            "doc1",
+            "c1",
+            "SIMD vector operations for tensor math",
+            0,
+        );
         insert_chunk(&conn, "doc1", "c2", "GPU kernel dispatch and scheduling", 1);
 
         let results = search(&conn, "SIMD tensor", 10).unwrap();
@@ -184,7 +187,10 @@ mod tests {
 
         // "tokenize" should match via Porter stemming conflation
         let results = search(&conn, "tokenize", 10).unwrap();
-        assert!(!results.is_empty(), "Porter stemmer should conflate 'tokenize' variants");
+        assert!(
+            !results.is_empty(),
+            "Porter stemmer should conflate 'tokenize' variants"
+        );
     }
 
     #[test]

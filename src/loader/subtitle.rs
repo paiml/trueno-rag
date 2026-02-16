@@ -37,10 +37,7 @@ impl DocumentLoader for SubtitleLoader {
             serde_json::json!(track.duration_secs()),
         );
         metadata.insert("format".into(), serde_json::json!(track.format.to_string()));
-        metadata.insert(
-            "cue_count".into(),
-            serde_json::json!(track.cues.len()),
-        );
+        metadata.insert("cue_count".into(), serde_json::json!(track.cues.len()));
         metadata.insert(
             "subtitle_cues".into(),
             serde_json::to_value(&track.cues).map_err(crate::Error::Serialization)?,

@@ -385,11 +385,7 @@ mod tests {
         let media = dir.join("lecture.wav");
         let srt = dir.join("lecture.srt");
         std::fs::write(&media, b"fake wav data").unwrap();
-        std::fs::write(
-            &srt,
-            "1\n00:00:01,000 --> 00:00:04,500\nSidecar text.\n",
-        )
-        .unwrap();
+        std::fs::write(&srt, "1\n00:00:01,000 --> 00:00:04,500\nSidecar text.\n").unwrap();
 
         let loader = TranscriptionLoader::with_defaults();
         let doc = loader.load(&media).unwrap();

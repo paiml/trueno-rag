@@ -222,10 +222,7 @@ fn parse_vtt(input: &str) -> Result<SubtitleTrack> {
     let normalized = input.replace("\r\n", "\n").replace('\r', "\n");
 
     // Skip the WEBVTT header block
-    let body = normalized
-        .split_once("\n\n")
-        .map(|x| x.1)
-        .unwrap_or("");
+    let body = normalized.split_once("\n\n").map(|x| x.1).unwrap_or("");
 
     for block in body.split("\n\n").filter(|b| !b.trim().is_empty()) {
         let lines: Vec<&str> = block.lines().collect();
@@ -240,9 +237,7 @@ fn parse_vtt(input: &str) -> Result<SubtitleTrack> {
 
         // Text is everything after the timestamp line, strip VTT tags
         let text_lines = &lines[ts_idx + 1..];
-        let text = strip_vtt_tags(&text_lines.join("\n"))
-            .trim()
-            .to_string();
+        let text = strip_vtt_tags(&text_lines.join("\n")).trim().to_string();
 
         if text.is_empty() {
             continue;

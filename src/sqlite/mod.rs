@@ -195,11 +195,9 @@ impl SqliteIndex {
     pub fn get_metadata(&self, key: &str) -> Result<Option<String>> {
         let conn = self.conn.lock().map_err(|e| lock_err(&e))?;
         let value: Option<String> = conn
-            .query_row(
-                "SELECT value FROM metadata WHERE key = ?1",
-                [key],
-                |row| row.get(0),
-            )
+            .query_row("SELECT value FROM metadata WHERE key = ?1", [key], |row| {
+                row.get(0)
+            })
             .ok();
         Ok(value)
     }
@@ -487,8 +485,14 @@ mod tests {
             None,
             "",
             &[
-                ("c1".into(), "machine learning algorithms for classification".into()),
-                ("c2".into(), "database indexing and query optimization".into()),
+                (
+                    "c1".into(),
+                    "machine learning algorithms for classification".into(),
+                ),
+                (
+                    "c2".into(),
+                    "database indexing and query optimization".into(),
+                ),
             ],
             None,
         )
@@ -506,8 +510,15 @@ mod tests {
         let hash2 = [2u8; 32];
 
         // First insert with fingerprint
-        idx.insert_document("doc1", None, None, "", &[("c1".into(), "content".into())], Some(("/test.md", &hash1)))
-            .unwrap();
+        idx.insert_document(
+            "doc1",
+            None,
+            None,
+            "",
+            &[("c1".into(), "content".into())],
+            Some(("/test.md", &hash1)),
+        )
+        .unwrap();
 
         // Same hash should not need reindex
         assert!(!idx.needs_reindex("/test.md", &hash1).unwrap());
@@ -552,10 +563,24 @@ mod tests {
     #[test]
     fn test_index_update_document() {
         let idx = SqliteIndex::open_in_memory().unwrap();
-        idx.insert_document("doc1", None, None, "", &[("c1".into(), "old content".into())], None)
-            .unwrap();
-        idx.insert_document("doc1", None, None, "", &[("c2".into(), "new content".into())], None)
-            .unwrap();
+        idx.insert_document(
+            "doc1",
+            None,
+            None,
+            "",
+            &[("c1".into(), "old content".into())],
+            None,
+        )
+        .unwrap();
+        idx.insert_document(
+            "doc1",
+            None,
+            None,
+            "",
+            &[("c2".into(), "new content".into())],
+            None,
+        )
+        .unwrap();
 
         // Old chunk should be gone, new chunk present
         assert_eq!(idx.chunk_count().unwrap(), 1);
@@ -604,7 +629,10 @@ mod tests {
     fn test_store_index_and_search() {
         let store = SqliteStore::open_in_memory().unwrap();
         let doc = make_doc("SIMD vector operations for tensor computation");
-        let chunks = vec![make_chunk(doc.id, "SIMD vector operations for tensor computation")];
+        let chunks = vec![make_chunk(
+            doc.id,
+            "SIMD vector operations for tensor computation",
+        )];
         store.index_document(&doc, &chunks, None).unwrap();
 
         let results = store.search("SIMD tensor", 10).unwrap();

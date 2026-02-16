@@ -1,7 +1,7 @@
 //! Timestamp-aware chunker for subtitle/transcript content.
 
-use crate::{Document, Error, Result};
 use super::{Chunk, Chunker, RecursiveChunker};
+use crate::{Document, Error, Result};
 
 /// Timestamp-aware chunker for subtitle/transcript content.
 ///
@@ -126,10 +126,10 @@ impl TimestampChunker {
             "end_display".into(),
             serde_json::json!(crate::media::format_display_time(end_secs)),
         );
-        chunk.metadata.custom.insert(
-            "cue_count".into(),
-            serde_json::json!(cues.len()),
-        );
+        chunk
+            .metadata
+            .custom
+            .insert("cue_count".into(), serde_json::json!(cues.len()));
         chunk
     }
 }
@@ -193,11 +193,8 @@ impl Chunker for TimestampChunker {
 
         // Emit final chunk
         if !current_cues.is_empty() {
-            let final_duration = current_cues
-                .last()
-                .map(|c| c.end_secs)
-                .unwrap_or(0.0)
-                - chunk_start;
+            let final_duration =
+                current_cues.last().map(|c| c.end_secs).unwrap_or(0.0) - chunk_start;
 
             if final_duration < self.min_duration_secs && !chunks.is_empty() {
                 // Merge into previous chunk if too short
@@ -266,13 +263,15 @@ mod tests {
     }
 
     fn doc_with_cues(cues: &[crate::media::SubtitleCue]) -> Document {
-        let text: String = cues.iter().map(|c| c.text.as_str()).collect::<Vec<_>>().join(" ");
+        let text: String = cues
+            .iter()
+            .map(|c| c.text.as_str())
+            .collect::<Vec<_>>()
+            .join(" ");
         let duration = cues.last().map(|c| c.end_secs).unwrap_or(0.0);
         let mut doc = Document::new(text);
-        doc.metadata.insert(
-            "subtitle_cues".into(),
-            serde_json::to_value(cues).unwrap(),
-        );
+        doc.metadata
+            .insert("subtitle_cues".into(), serde_json::to_value(cues).unwrap());
         doc.metadata
             .insert("duration_secs".into(), serde_json::json!(duration));
         doc
@@ -291,7 +290,11 @@ mod tests {
         let chunker = TimestampChunker::new(60.0);
         let chunks = chunker.chunk(&doc).unwrap();
 
-        assert!(chunks.len() >= 2, "Expected at least 2 chunks, got {}", chunks.len());
+        assert!(
+            chunks.len() >= 2,
+            "Expected at least 2 chunks, got {}",
+            chunks.len()
+        );
         for chunk in &chunks {
             assert!(chunk.metadata.custom.contains_key("start_secs"));
             assert!(chunk.metadata.custom.contains_key("end_secs"));
@@ -303,10 +306,7 @@ mod tests {
 
     #[test]
     fn test_timestamp_chunker_single_short_chunk() {
-        let cues = make_cues(&[
-            (0.0, 10.0, "Only one."),
-            (10.0, 20.0, "Short transcript."),
-        ]);
+        let cues = make_cues(&[(0.0, 10.0, "Only one."), (10.0, 20.0, "Short transcript.")]);
         let doc = doc_with_cues(&cues);
 
         let chunker = TimestampChunker::new(60.0);

@@ -314,12 +314,7 @@ impl ResidualCodec {
     // ============ K-means Implementation ============
 
     /// K-means clustering with k-means++ initialization.
-    fn kmeans_clustering(
-        embeddings: &[f32],
-        dim: usize,
-        k: usize,
-        iterations: usize,
-    ) -> Vec<f32> {
+    fn kmeans_clustering(embeddings: &[f32], dim: usize, k: usize, iterations: usize) -> Vec<f32> {
         let n = embeddings.len() / dim;
 
         // K-means++ initialization
@@ -462,11 +457,7 @@ impl ResidualCodec {
     }
 
     /// Learn quantization bucket boundaries and weights from residuals.
-    fn learn_quantization_params(
-        residuals: &[f32],
-        dim: usize,
-        nbits: u8,
-    ) -> (Vec<f32>, Vec<f32>) {
+    fn learn_quantization_params(residuals: &[f32], dim: usize, nbits: u8) -> (Vec<f32>, Vec<f32>) {
         let num_buckets = 1usize << nbits;
         let n = residuals.len() / dim;
 
@@ -510,12 +501,16 @@ impl ResidualCodec {
     }
 
     fn simple_random(state: &mut u64, max: usize) -> usize {
-        *state = state.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1);
+        *state = state
+            .wrapping_mul(6_364_136_223_846_793_005)
+            .wrapping_add(1);
         ((*state >> 33) as usize) % max
     }
 
     fn simple_random_f32(state: &mut u64) -> f32 {
-        *state = state.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1);
+        *state = state
+            .wrapping_mul(6_364_136_223_846_793_005)
+            .wrapping_add(1);
         ((*state >> 33) as f32) / (u32::MAX as f32)
     }
 }

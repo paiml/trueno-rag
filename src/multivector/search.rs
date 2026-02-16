@@ -52,9 +52,7 @@ impl CentroidSelector {
                     .collect();
 
                 // Sort by score descending
-                scores.sort_by(|a, b| {
-                    b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal)
-                });
+                scores.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
 
                 // Take top nprobe, filtered by threshold
                 scores
@@ -70,11 +68,7 @@ impl CentroidSelector {
     ///
     /// Returns scores for all centroids sorted by score descending.
     #[must_use]
-    pub fn batch_scores(
-        query_token: &[f32],
-        centroids: &[f32],
-        dim: usize,
-    ) -> Vec<(usize, f32)> {
+    pub fn batch_scores(query_token: &[f32], centroids: &[f32], dim: usize) -> Vec<(usize, f32)> {
         let num_centroids = centroids.len() / dim;
 
         let mut scores: Vec<(usize, f32)> = (0..num_centroids)
@@ -217,10 +211,7 @@ impl ScoreMerger {
         let mut doc_scores: Vec<(ChunkId, f32)> = doc_token_maxes
             .into_iter()
             .map(|(chunk_id, maxes)| {
-                let score: f32 = maxes
-                    .into_iter()
-                    .filter(|&s| s > f32::NEG_INFINITY)
-                    .sum();
+                let score: f32 = maxes.into_iter().filter(|&s| s > f32::NEG_INFINITY).sum();
                 (chunk_id, score)
             })
             .collect();

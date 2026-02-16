@@ -284,7 +284,15 @@ fn main() -> Result<()> {
             model,
             backend,
             dry_run,
-        } => run_transcribe(&path, recursive, skip_existing, jobs, model.as_deref(), backend, dry_run)?,
+        } => run_transcribe(
+            &path,
+            recursive,
+            skip_existing,
+            jobs,
+            model.as_deref(),
+            backend,
+            dry_run,
+        )?,
         Commands::Info => run_info(),
     }
 
@@ -297,7 +305,9 @@ fn run_info() {
     println!("Version: {}", env!("CARGO_PKG_VERSION"));
     println!();
     println!("Components:");
-    println!("  - Chunkers: Recursive, Fixed, Sentence, Paragraph, Semantic, Structural, Timestamp");
+    println!(
+        "  - Chunkers: Recursive, Fixed, Sentence, Paragraph, Semantic, Structural, Timestamp"
+    );
     #[cfg(feature = "embeddings")]
     println!("  - Embedders: TF-IDF, FastEmbed (semantic) ✓");
     #[cfg(not(feature = "embeddings"))]
@@ -474,7 +484,10 @@ fn run_transcribe(
         to_process.len()
     );
     if previously_completed > 0 {
-        println!("  {} previously completed (from manifest)", previously_completed);
+        println!(
+            "  {} previously completed (from manifest)",
+            previously_completed
+        );
     }
 
     if to_process.is_empty() {
@@ -543,7 +556,10 @@ fn run_transcription_batch(
     let loader = TranscriptionLoader::new(config);
 
     if loader.has_model() {
-        println!("\nWhisper model loaded. Transcribing {} files...", files.len());
+        println!(
+            "\nWhisper model loaded. Transcribing {} files...",
+            files.len()
+        );
     } else {
         println!(
             "\nNo model specified (use --model <path.apr>). \
@@ -562,12 +578,20 @@ fn run_transcription_batch(
         match loader.load(file) {
             Ok(_doc) => {
                 *success.lock().unwrap() += 1;
-                manifest.lock().unwrap().completed.push(file.to_string_lossy().to_string());
+                manifest
+                    .lock()
+                    .unwrap()
+                    .completed
+                    .push(file.to_string_lossy().to_string());
                 println!("  {} ... ok", filename);
             }
             Err(e) => {
                 *errors.lock().unwrap() += 1;
-                manifest.lock().unwrap().failed.push(file.to_string_lossy().to_string());
+                manifest
+                    .lock()
+                    .unwrap()
+                    .failed
+                    .push(file.to_string_lossy().to_string());
                 println!("  {} ... FAILED: {e}", filename);
             }
         }
@@ -678,11 +702,7 @@ fn run_demo(query: &str, top_k: usize) -> Result<()> {
 }
 
 /// Discover files from a path using the loader registry.
-fn discover_files(
-    root: &Path,
-    recursive: bool,
-    registry: &LoaderRegistry,
-) -> Result<Vec<PathBuf>> {
+fn discover_files(root: &Path, recursive: bool, registry: &LoaderRegistry) -> Result<Vec<PathBuf>> {
     let mut files = Vec::new();
 
     if root.is_file() {
@@ -784,13 +804,11 @@ fn load_documents_parallel(
     let load_errors = Mutex::new(0usize);
 
     pool.install(|| {
-        files.par_iter().for_each(|file| {
-            match registry.load(file) {
-                Ok(doc) => documents.lock().unwrap().push(doc),
-                Err(e) => {
-                    eprintln!("  Warning: failed to load {}: {}", file.display(), e);
-                    *load_errors.lock().unwrap() += 1;
-                }
+        files.par_iter().for_each(|file| match registry.load(file) {
+            Ok(doc) => documents.lock().unwrap().push(doc),
+            Err(e) => {
+                eprintln!("  Warning: failed to load {}: {}", file.display(), e);
+                *load_errors.lock().unwrap() += 1;
             }
         });
     });
@@ -847,8 +865,16 @@ fn chunk_and_embed(
                 content: chunk.content.clone(),
                 title: chunk.metadata.title.clone(),
                 source: doc.source.clone(),
-                start_secs: chunk.metadata.custom.get("start_secs").and_then(serde_json::Value::as_f64),
-                end_secs: chunk.metadata.custom.get("end_secs").and_then(serde_json::Value::as_f64),
+                start_secs: chunk
+                    .metadata
+                    .custom
+                    .get("start_secs")
+                    .and_then(serde_json::Value::as_f64),
+                end_secs: chunk
+                    .metadata
+                    .custom
+                    .get("end_secs")
+                    .and_then(serde_json::Value::as_f64),
             });
         }
     }
@@ -914,7 +940,10 @@ fn run_index(
         .count();
     let text_count = documents.len() - media_count;
     if media_count > 0 {
-        println!("  {} with timestamps, {} plain text", media_count, text_count);
+        println!(
+            "  {} with timestamps, {} plain text",
+            media_count, text_count
+        );
     }
 
     // Create embedder based on selection

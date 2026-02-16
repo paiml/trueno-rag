@@ -104,10 +104,7 @@ impl LoaderRegistry {
     /// Load a document, selecting the appropriate loader automatically.
     pub fn load(&self, path: &Path) -> Result<Document> {
         let loader = self.loader_for(path).ok_or_else(|| {
-            Error::InvalidInput(format!(
-                "No loader registered for: {}",
-                path.display()
-            ))
+            Error::InvalidInput(format!("No loader registered for: {}", path.display()))
         })?;
         loader.load(path)
     }
@@ -201,7 +198,9 @@ mod tests {
     #[test]
     fn test_find_sidecar_none() {
         // No sidecar for a file in /tmp that doesn't exist
-        assert!(LoaderRegistry::find_sidecar(Path::new("/tmp/nonexistent_video_12345.mp4")).is_none());
+        assert!(
+            LoaderRegistry::find_sidecar(Path::new("/tmp/nonexistent_video_12345.mp4")).is_none()
+        );
     }
 
     #[test]
@@ -212,8 +211,7 @@ mod tests {
                 vec!["xyz"]
             }
             fn load(&self, path: &Path) -> Result<Document> {
-                Ok(Document::new("dummy")
-                    .with_source(path.to_string_lossy()))
+                Ok(Document::new("dummy").with_source(path.to_string_lossy()))
             }
         }
 
