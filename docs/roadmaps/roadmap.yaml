@@ -78,7 +78,7 @@ roadmap:
   priority: medium
   assigned_to: null
   created: 2026-02-16T19:01:50Z
-  updated: 2026-02-16T19:03:38.049290052+00:00
+  updated: 2026-02-16T21:38:18.256828274+00:00
   spec: null
   acceptance_criteria:
   - 'Phase 2.3: Add --jobs flag to index subcommand for parallel document loading via rayon or tokio tasks'
