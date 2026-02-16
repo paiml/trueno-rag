@@ -75,6 +75,18 @@ enum ChunkStrategy {
     Timestamp,
 }
 
+/// Compute backend for transcription
+#[derive(Debug, Clone, Copy, Default, ValueEnum)]
+enum BackendType {
+    /// CPU with SIMD acceleration
+    #[default]
+    Cpu,
+    /// GPU via wgpu (cross-platform)
+    Gpu,
+    /// NVIDIA CUDA (Linux/Windows)
+    Cuda,
+}
+
 #[derive(Parser)]
 #[command(name = "trueno-rag")]
 #[command(author = "Pragmatic AI Labs")]
@@ -135,6 +147,10 @@ enum Commands {
         /// Chunking strategy (auto, recursive, timestamp)
         #[arg(long, value_enum, default_value = "auto")]
         chunk_strategy: ChunkStrategy,
+
+        /// Write a JSON manifest of indexed files and chunks
+        #[arg(long, default_value = "false")]
+        manifest: bool,
     },
 
     /// Query the RAG pipeline
@@ -176,6 +192,10 @@ enum Commands {
         /// Path to Whisper .apr model file (e.g. base.apr, large-v3-turbo.apr)
         #[arg(short, long)]
         model: Option<String>,
+
+        /// Compute backend (cpu, gpu, cuda)
+        #[arg(short, long, value_enum, default_value = "cpu")]
+        backend: BackendType,
 
         /// Only report what would be transcribed (dry run)
         #[arg(long, default_value = "false")]
@@ -229,6 +249,7 @@ fn main() -> Result<()> {
             model,
             recursive,
             chunk_strategy,
+            manifest,
         } => run_index(
             &path,
             &output,
@@ -239,6 +260,7 @@ fn main() -> Result<()> {
             model,
             recursive,
             chunk_strategy,
+            manifest,
         )?,
         Commands::Query {
             query,
@@ -252,8 +274,9 @@ fn main() -> Result<()> {
             skip_existing,
             jobs,
             model,
+            backend,
             dry_run,
-        } => run_transcribe(&path, recursive, skip_existing, jobs, model.as_deref(), dry_run)?,
+        } => run_transcribe(&path, recursive, skip_existing, jobs, model.as_deref(), backend, dry_run)?,
         Commands::Info => run_info(),
     }
 
@@ -347,12 +370,41 @@ fn classify_media_sidecar_status(files: &[PathBuf]) -> (Vec<PathBuf>, Vec<PathBu
     (has_sidecar, needs_transcription)
 }
 
+/// Transcription manifest for resume support.
+#[derive(Serialize, Deserialize, Default)]
+struct TranscribeManifest {
+    /// Files that have been successfully transcribed.
+    completed: Vec<String>,
+    /// Files that failed transcription.
+    failed: Vec<String>,
+}
+
+impl TranscribeManifest {
+    fn load(root: &Path) -> Self {
+        let manifest_path = root.join(".transcribe-manifest.json");
+        fs::read_to_string(manifest_path)
+            .ok()
+            .and_then(|s| serde_json::from_str(&s).ok())
+            .unwrap_or_default()
+    }
+
+    #[allow(dead_code)]
+    fn save(&self, root: &Path) -> Result<()> {
+        let manifest_path = root.join(".transcribe-manifest.json");
+        let json = serde_json::to_string_pretty(self)?;
+        fs::write(manifest_path, json)?;
+        Ok(())
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
 fn run_transcribe(
     path: &str,
     recursive: bool,
     skip_existing: bool,
     _jobs: usize,
     _model: Option<&str>,
+    _backend: BackendType,
     dry_run: bool,
 ) -> Result<()> {
     let root = Path::new(path);
@@ -362,6 +414,7 @@ fn run_transcribe(
     }
 
     // Stage 1: Discovery
+    let start_time = std::time::Instant::now();
     println!("Discovering media files...");
     let media_files = discover_media_files(root, recursive)?;
 
@@ -380,19 +433,41 @@ fn run_transcribe(
         println!("  {} .{} files", count, ext);
     }
 
-    // Stage 2: Sidecar check
+    // Stage 2: Sidecar check + manifest resume
     let (has_sidecar, needs_transcription) = classify_media_sidecar_status(&media_files);
+    let manifest = TranscribeManifest::load(root);
+    let previously_completed = manifest.completed.len();
+
+    // Filter out files already in the manifest (resume support)
+    let to_process: Vec<PathBuf> = if skip_existing {
+        needs_transcription
+            .into_iter()
+            .filter(|f| {
+                !manifest
+                    .completed
+                    .contains(&f.to_string_lossy().to_string())
+            })
+            .collect()
+    } else {
+        media_files
+            .iter()
+            .filter(|f| {
+                !manifest
+                    .completed
+                    .contains(&f.to_string_lossy().to_string())
+            })
+            .cloned()
+            .collect()
+    };
+
     println!(
         "\nSidecar status: {} with .srt/.vtt, {} need transcription",
         has_sidecar.len(),
-        needs_transcription.len()
+        to_process.len()
     );
-
-    let to_process = if skip_existing {
-        &needs_transcription
-    } else {
-        &media_files
-    };
+    if previously_completed > 0 {
+        println!("  {} previously completed (from manifest)", previously_completed);
+    }
 
     if to_process.is_empty() {
         println!("All files already have sidecars. Nothing to do.");
@@ -401,7 +476,7 @@ fn run_transcribe(
 
     if dry_run {
         println!("\nDry run — files that would be transcribed:");
-        for file in to_process {
+        for file in &to_process {
             println!("  {}", file.display());
         }
         println!("\nTotal: {} files", to_process.len());
@@ -411,7 +486,7 @@ fn run_transcribe(
     // Stage 3: Transcription (feature-gated)
     #[cfg(feature = "transcription")]
     {
-        run_transcription_batch(to_process, _jobs, _model)?;
+        run_transcription_batch(&to_process, _jobs, _model, _backend, root)?;
     }
     #[cfg(not(feature = "transcription"))]
     {
@@ -423,16 +498,37 @@ fn run_transcribe(
         );
     }
 
+    // Throughput reporting
+    let elapsed = start_time.elapsed();
+    println!(
+        "\nTotal time: {:.1}s ({:.1} files/sec)",
+        elapsed.as_secs_f64(),
+        media_files.len() as f64 / elapsed.as_secs_f64().max(0.001)
+    );
+
     Ok(())
 }
 
 /// Run transcription on a batch of media files (requires transcription feature).
 #[cfg(feature = "transcription")]
-fn run_transcription_batch(files: &[PathBuf], _jobs: usize, model: Option<&str>) -> Result<()> {
-    use trueno_rag::{TranscriptionConfig, TranscriptionLoader};
+fn run_transcription_batch(
+    files: &[PathBuf],
+    _jobs: usize,
+    model: Option<&str>,
+    _backend: BackendType,
+    root: &Path,
+) -> Result<()> {
+    use trueno_rag::{TranscriptionBackend, TranscriptionConfig, TranscriptionLoader};
+
+    let backend = match _backend {
+        BackendType::Cpu => TranscriptionBackend::Cpu,
+        BackendType::Gpu => TranscriptionBackend::Gpu,
+        BackendType::Cuda => TranscriptionBackend::Cuda,
+    };
 
     let config = TranscriptionConfig {
         model_path: model.map(PathBuf::from),
+        backend,
         ..TranscriptionConfig::default()
     };
     let loader = TranscriptionLoader::new(config);
@@ -446,8 +542,8 @@ fn run_transcription_batch(files: &[PathBuf], _jobs: usize, model: Option<&str>)
         );
     }
 
-    println!("\nTranscribing {} files...", files.len());
-
+    let batch_start = std::time::Instant::now();
+    let mut manifest = TranscribeManifest::load(root);
     let mut success = 0usize;
     let mut errors = 0usize;
 
@@ -458,20 +554,33 @@ fn run_transcription_batch(files: &[PathBuf], _jobs: usize, model: Option<&str>)
         match loader.load(file) {
             Ok(_doc) => {
                 success += 1;
+                manifest.completed.push(file.to_string_lossy().to_string());
                 println!("ok");
             }
             Err(e) => {
                 errors += 1;
+                manifest.failed.push(file.to_string_lossy().to_string());
                 println!("FAILED: {e}");
             }
         }
+
+        // Persist manifest every 10 files for resume support
+        if (i + 1) % 10 == 0 {
+            let _ = manifest.save(root);
+        }
     }
 
+    // Final manifest save
+    manifest.save(root)?;
+
+    let elapsed = batch_start.elapsed();
     println!(
-        "\nComplete: {} succeeded, {} failed out of {} total",
+        "\nComplete: {} succeeded, {} failed out of {} total ({:.1}s, {:.1} files/sec)",
         success,
         errors,
-        files.len()
+        files.len(),
+        elapsed.as_secs_f64(),
+        files.len() as f64 / elapsed.as_secs_f64().max(0.001),
     );
 
     Ok(())
@@ -692,6 +801,7 @@ fn run_index(
     #[allow(unused_variables)] model: SemanticModel,
     recursive: bool,
     chunk_strategy: ChunkStrategy,
+    manifest: bool,
 ) -> Result<()> {
     let path = Path::new(path);
 
@@ -816,7 +926,42 @@ fn run_index(
 
     println!("Index saved to: {}", index_file.display());
 
+    // Write manifest if requested
+    if manifest {
+        let manifest_data = build_index_manifest(&files, &classification, &persisted.chunks);
+        let manifest_file = output_path.join("manifest.json");
+        let manifest_json = serde_json::to_string_pretty(&manifest_data)?;
+        fs::write(&manifest_file, manifest_json)?;
+        println!("Manifest saved to: {}", manifest_file.display());
+    }
+
     Ok(())
+}
+
+/// Build a JSON manifest of indexed files and chunks.
+fn build_index_manifest(
+    files: &[PathBuf],
+    classification: &HashMap<String, usize>,
+    chunks: &[PersistedChunk],
+) -> serde_json::Value {
+    let file_entries: Vec<serde_json::Value> = files
+        .iter()
+        .map(|f| {
+            let ext = f.extension().and_then(|e| e.to_str()).unwrap_or("unknown");
+            serde_json::json!({
+                "path": f.to_string_lossy(),
+                "extension": ext,
+            })
+        })
+        .collect();
+
+    serde_json::json!({
+        "version": env!("CARGO_PKG_VERSION"),
+        "file_count": files.len(),
+        "chunk_count": chunks.len(),
+        "format_counts": classification,
+        "files": file_entries,
+    })
 }
 
 fn run_query(query: &str, index_path: &str, top_k: usize, format: &str) -> Result<()> {
