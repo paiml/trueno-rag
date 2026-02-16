@@ -2,7 +2,10 @@
 
 **Pure-Rust Retrieval-Augmented Generation Pipeline**
 
-Trueno-RAG is a high-performance, zero-dependency RAG implementation built entirely in Rust. It provides a complete pipeline for document ingestion, chunking, embedding, retrieval, and context assembly for large language model applications.
+Trueno-RAG is a high-performance, zero-dependency RAG implementation
+built entirely in Rust. It provides a complete pipeline for document
+ingestion, chunking, embedding, retrieval, and context assembly
+for large language model applications.
 
 ## Features
 

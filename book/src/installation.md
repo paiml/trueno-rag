@@ -58,4 +58,5 @@ cargo run --example metrics_evaluation
 
 ## Feature Flags
 
-Currently all features are enabled by default. Future releases may include optional features for different embedding backends.
+Currently all features are enabled by default. Future releases
+may include optional features for different embedding backends.
