@@ -412,6 +412,57 @@ fn test_transcribe_help() {
         .stdout(predicate::str::contains("Batch transcribe"));
 }
 
+#[test]
+fn test_transcribe_backend_flag() {
+    let tmp = TempDir::new().unwrap();
+    fs::write(tmp.path().join("lecture.wav"), b"").unwrap();
+
+    cli()
+        .args([
+            "transcribe",
+            "--path",
+            tmp.path().to_str().unwrap(),
+            "--backend",
+            "gpu",
+            "--dry-run",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("1 media files"));
+}
+
+#[test]
+fn test_index_with_manifest() {
+    let tmp = TempDir::new().unwrap();
+    let doc_path = tmp.path().join("test.txt");
+    fs::write(&doc_path, "This is a test document about machine learning.").unwrap();
+
+    let index_path = tmp.path().join("index");
+
+    cli()
+        .args([
+            "index",
+            "--path",
+            doc_path.to_str().unwrap(),
+            "--output",
+            index_path.to_str().unwrap(),
+            "--manifest",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Manifest saved to"));
+
+    // Verify manifest file was created
+    let manifest_file = index_path.join("manifest.json");
+    assert!(manifest_file.exists(), "Manifest file should exist");
+
+    let manifest: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(&manifest_file).unwrap()).unwrap();
+    assert_eq!(manifest["file_count"], 1);
+    assert!(manifest["chunk_count"].as_u64().unwrap() >= 1);
+    assert!(manifest["files"].is_array());
+}
+
 // ============================================================================
 // HELP AND VERSION TESTS
 // ============================================================================

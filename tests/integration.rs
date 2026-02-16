@@ -1,9 +1,12 @@
 //! Integration tests for trueno-rag
 
 use trueno_rag::{
-    chunk::{Chunker, ParagraphChunker, RecursiveChunker, SentenceChunker, StructuralChunker},
+    chunk::{Chunker, ParagraphChunker, RecursiveChunker, SentenceChunker, StructuralChunker,
+            TimestampChunker},
     embed::MockEmbedder,
     fusion::FusionStrategy,
+    loader::{DocumentLoader, LoaderRegistry, SubtitleLoader},
+    media::SubtitleCue,
     pipeline::RagPipelineBuilder,
     rerank::{LexicalReranker, NoOpReranker},
     Document,
@@ -202,4 +205,187 @@ fn test_query_ranking_consistency() {
             "Results should be sorted by score"
         );
     }
+}
+
+// ============================================================================
+// MEDIA SUPPORT INTEGRATION TESTS (Spec Section 11.3)
+// ============================================================================
+
+/// Spec 11.3.1: Load a real .srt file → chunk → embed → retrieve by query.
+#[test]
+fn test_srt_full_pipeline_chunk_embed_retrieve() {
+    // Create a temp .srt file
+    let dir = std::env::temp_dir().join("trueno_rag_integ_srt_pipeline");
+    let _ = std::fs::create_dir_all(&dir);
+    let srt_path = dir.join("lecture.srt");
+    std::fs::write(
+        &srt_path,
+        "\
+1
+00:00:01,000 --> 00:00:10,000
+Machine learning enables computers to learn from data without explicit programming.
+
+2
+00:00:11,000 --> 00:00:20,000
+Deep learning uses neural networks with many layers for complex pattern recognition.
+
+3
+00:00:21,000 --> 00:00:30,000
+Reinforcement learning trains agents through reward signals in an environment.
+
+4
+00:00:31,000 --> 00:00:40,000
+Natural language processing handles text understanding and generation tasks.
+
+5
+00:00:41,000 --> 00:00:50,000
+Computer vision focuses on image and video analysis using convolutional networks.
+",
+    )
+    .unwrap();
+
+    // Load via SubtitleLoader
+    let loader = SubtitleLoader;
+    let doc = loader.load(&srt_path).unwrap();
+    assert!(doc.content.contains("Machine learning"));
+    assert!(doc.metadata.contains_key("subtitle_cues"));
+
+    // Build pipeline, index, and query
+    let mut pipeline = RagPipelineBuilder::new()
+        .chunker(TimestampChunker::new(20.0).with_min_duration(0.0))
+        .embedder(MockEmbedder::new(64))
+        .reranker(LexicalReranker::new())
+        .fusion(FusionStrategy::RRF { k: 60.0 })
+        .build()
+        .expect("Failed to build pipeline");
+
+    pipeline.index_document(&doc).expect("Failed to index");
+
+    let results = pipeline
+        .query("neural networks deep learning", 3)
+        .expect("Query failed");
+
+    assert!(!results.is_empty(), "Should return results for SRT content");
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Spec 11.3.2: Verify timestamp metadata survives the full pipeline.
+#[test]
+fn test_timestamp_metadata_survives_pipeline() {
+    // Build document with subtitle cues in metadata
+    let cues = vec![
+        SubtitleCue { index: 0, start_secs: 0.0, end_secs: 30.0,
+            text: "Introduction to distributed systems.".into() },
+        SubtitleCue { index: 1, start_secs: 30.0, end_secs: 60.0,
+            text: "Consensus algorithms like Raft and Paxos.".into() },
+        SubtitleCue { index: 2, start_secs: 60.0, end_secs: 90.0,
+            text: "Fault tolerance and replication strategies.".into() },
+    ];
+
+    let mut doc = Document::new("Introduction to distributed systems. Consensus algorithms like Raft and Paxos. Fault tolerance and replication strategies.")
+        .with_title("Distributed Systems Lecture");
+    doc.metadata.insert(
+        "subtitle_cues".into(),
+        serde_json::to_value(&cues).unwrap(),
+    );
+    doc.metadata.insert(
+        "duration_secs".into(),
+        serde_json::json!(90.0),
+    );
+
+    // Chunk with TimestampChunker
+    let chunker = TimestampChunker::new(45.0).with_min_duration(0.0);
+    let chunks = chunker.chunk(&doc).expect("Chunking failed");
+
+    assert!(!chunks.is_empty());
+
+    // Every chunk should carry start_secs and end_secs metadata
+    for chunk in &chunks {
+        assert!(
+            chunk.metadata.custom.contains_key("start_secs"),
+            "Chunk missing start_secs metadata"
+        );
+        assert!(
+            chunk.metadata.custom.contains_key("end_secs"),
+            "Chunk missing end_secs metadata"
+        );
+        assert!(
+            chunk.metadata.custom.contains_key("start_display"),
+            "Chunk missing start_display metadata"
+        );
+        assert!(
+            chunk.metadata.custom.contains_key("end_display"),
+            "Chunk missing end_display metadata"
+        );
+        assert!(
+            chunk.metadata.custom.contains_key("cue_count"),
+            "Chunk missing cue_count metadata"
+        );
+    }
+
+    // Index into pipeline and verify metadata accessible through retrieval
+    let mut pipeline = RagPipelineBuilder::new()
+        .chunker(TimestampChunker::new(45.0).with_min_duration(0.0))
+        .embedder(MockEmbedder::new(64))
+        .reranker(LexicalReranker::new())
+        .build()
+        .expect("Failed to build pipeline");
+
+    pipeline.index_document(&doc).expect("Failed to index");
+
+    let results = pipeline.query("consensus Raft Paxos", 3).expect("Query failed");
+    assert!(!results.is_empty());
+
+    // Retrieved chunks should still have timestamp metadata
+    let top = &results[0].chunk;
+    assert!(
+        top.metadata.custom.contains_key("start_secs"),
+        "Retrieved chunk lost start_secs metadata"
+    );
+}
+
+/// Spec 11.3.3: Sidecar resolution — .mp4 + .srt in temp dir, subtitle loader selected.
+#[test]
+fn test_sidecar_resolution_selects_subtitle_loader() {
+    let dir = std::env::temp_dir().join("trueno_rag_integ_sidecar_resolution");
+    let _ = std::fs::create_dir_all(&dir);
+
+    // Create a fake .mp4 and a real .srt sidecar
+    let mp4 = dir.join("lecture.mp4");
+    let srt = dir.join("lecture.srt");
+    std::fs::write(&mp4, b"fake mp4 data").unwrap();
+    std::fs::write(
+        &srt,
+        "1\n00:00:01,000 --> 00:00:05,000\nSidecar content here.\n",
+    )
+    .unwrap();
+
+    // LoaderRegistry should find the sidecar
+    let sidecar = LoaderRegistry::find_sidecar(&mp4);
+    assert!(sidecar.is_some(), "Should find .srt sidecar for .mp4");
+    assert_eq!(sidecar.unwrap().extension().unwrap(), "srt");
+
+    // The .srt file itself should be loadable via registry
+    let registry = LoaderRegistry::new();
+    let doc = registry.load(&srt).unwrap();
+    assert!(doc.content.contains("Sidecar content"));
+    assert!(doc.metadata.contains_key("subtitle_cues"));
+
+    // VTT sidecar should also work
+    let mp4_2 = dir.join("talk.mp4");
+    let vtt = dir.join("talk.vtt");
+    std::fs::write(&mp4_2, b"fake mp4").unwrap();
+    std::fs::write(
+        &vtt,
+        "WEBVTT\n\n00:00:01.000 --> 00:00:05.000\nVTT sidecar content.\n",
+    )
+    .unwrap();
+
+    let sidecar2 = LoaderRegistry::find_sidecar(&mp4_2);
+    assert!(sidecar2.is_some());
+    let doc2 = registry.load(sidecar2.as_ref().unwrap()).unwrap();
+    assert!(doc2.content.contains("VTT sidecar content"));
+
+    let _ = std::fs::remove_dir_all(&dir);
 }
