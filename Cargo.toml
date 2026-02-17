@@ -117,7 +117,7 @@ realizar = { version = "0.6", optional = true, default-features = false }
 
 # Speech-to-text via whisper-apr (Whisper ASR, .apr model format)
 # Sovereign stack: whisper-apr + aprender + trueno for pure-Rust transcription
-whisper-apr = { version = "0.2", optional = true, default-features = false, features = ["std"] }
+whisper-apr = { path = "../whisper.apr", optional = true, default-features = false, features = ["std", "symphonia"] }
 
 [dev-dependencies]
 tokio-test = "0.4"
