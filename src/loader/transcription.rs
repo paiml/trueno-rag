@@ -1,9 +1,9 @@
 //! Feature-gated transcription loader using whisper-apr for speech-to-text.
 //!
 //! When a media file has a sidecar subtitle (`.srt` or `.vtt`) adjacent to it,
-//! the subtitle is loaded directly without transcription. For WAV files without
-//! sidecars, the audio is decoded and transcribed using whisper-apr's Whisper
-//! ASR engine.
+//! the subtitle is loaded directly without transcription. For media files without
+//! sidecars, the audio is decoded (WAV natively, MP4/MP3/etc via symphonia)
+//! and transcribed using whisper-apr's Whisper ASR engine.
 //!
 //! Full ASR inference requires a `.apr` model file (e.g. `base.apr`,
 //! `large-v3-turbo.apr`). When no model is configured, the loader computes
@@ -170,37 +170,12 @@ impl DocumentLoader for TranscriptionLoader {
             return SubtitleLoader.load(&sidecar);
         }
 
-        // 2. Read audio (WAV support for now)
-        let ext = path
-            .extension()
-            .and_then(|e| e.to_str())
-            .map(|e| e.to_lowercase())
-            .unwrap_or_default();
-
-        if ext != "wav" {
-            return Err(Error::InvalidInput(format!(
-                "Direct transcription for .{ext} files requires audio codec support. \
-                 Provide a .srt or .vtt sidecar file alongside the media, \
-                 or convert to WAV first: {}",
+        // 2. Load and decode audio (WAV native, MP4/MP3/etc via symphonia)
+        let samples_16k = whisper_apr::audio::load_audio_file(path)
+            .map_err(|e| Error::InvalidInput(format!(
+                "Audio decode failed for {}: {e}",
                 path.display()
-            )));
-        }
-
-        let wav_data = std::fs::read(path).map_err(Error::Io)?;
-        let wav = whisper_apr::audio::wav::parse_wav_file(&wav_data)
-            .map_err(|e| Error::InvalidInput(format!("WAV parse failed: {e}")))?;
-
-        // 3. Convert to mono and resample to 16 kHz
-        let mono = if wav.original_channels > 1 {
-            stereo_to_mono(&wav.samples, wav.original_channels as u8)
-        } else {
-            wav.samples.clone()
-        };
-        let samples_16k = if wav.sample_rate == 16000 {
-            mono
-        } else {
-            whisper_apr::audio::wav::resample(&mono, wav.sample_rate, 16000)
-        };
+            )))?;
 
         // 4. Transcribe
         let result = self.transcribe_audio(&samples_16k)?;
@@ -288,18 +263,6 @@ pub fn write_sidecar(media_path: &Path, track: &SubtitleTrack) -> Result<PathBuf
     Ok(sidecar_path)
 }
 
-/// Convert interleaved multi-channel audio to mono by averaging channels.
-fn stereo_to_mono(samples: &[f32], channels: u8) -> Vec<f32> {
-    let ch = channels as usize;
-    if ch <= 1 {
-        return samples.to_vec();
-    }
-    samples
-        .chunks_exact(ch)
-        .map(|frame| frame.iter().sum::<f32>() / ch as f32)
-        .collect()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -375,7 +338,7 @@ mod tests {
         let result = loader.load(Path::new("/tmp/nonexistent_video.mp4"));
         assert!(result.is_err());
         let err = result.unwrap_err().to_string();
-        assert!(err.contains("codec") || err.contains("sidecar") || err.contains("WAV"));
+        assert!(err.contains("Audio decode") || err.contains("sidecar") || err.contains("not found"));
     }
 
     #[test]
