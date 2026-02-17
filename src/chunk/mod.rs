@@ -281,7 +281,9 @@ impl RecursiveChunker {
                 // Add overlap from previous chunk
                 let prev = &chunks[i - 1];
                 let overlap_text = if prev.len() > self.overlap {
-                    &prev[prev.len() - self.overlap..]
+                    let start = prev.len() - self.overlap;
+                    let start = prev.ceil_char_boundary(start);
+                    &prev[start..]
                 } else {
                     prev.as_str()
                 };
