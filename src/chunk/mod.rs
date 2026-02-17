@@ -312,17 +312,19 @@ impl Chunker for RecursiveChunker {
         let mut chunks = Vec::new();
 
         for content in overlapped {
+            // Snap offset to a valid char boundary
+            let safe_offset = document.content.ceil_char_boundary(offset);
             // Find actual position in document
-            let start = document.content[offset..]
+            let start = document.content[safe_offset..]
                 .find(&content)
-                .map_or(offset, |pos| offset + pos);
+                .map_or(safe_offset, |pos| safe_offset + pos);
             let end = start + content.len();
 
             let mut chunk = Chunk::new(document.id, content, start, end);
             chunk.metadata.title = document.title.clone();
 
             chunks.push(chunk);
-            offset = start + 1; // Move past to find next occurrence
+            offset = document.content.ceil_char_boundary(start + 1);
         }
 
         Ok(chunks)
