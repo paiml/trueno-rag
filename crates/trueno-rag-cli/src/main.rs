@@ -871,7 +871,12 @@ fn chunk_and_embed(
     let mut all_chunks = Vec::new();
     let mut all_embeddings = Vec::new();
 
+    let mut skipped_empty = 0usize;
     for doc in documents {
+        if doc.content.is_empty() {
+            skipped_empty += 1;
+            continue;
+        }
         let use_timestamps = match strategy {
             ChunkStrategy::Timestamp => true,
             ChunkStrategy::Recursive => false,
@@ -901,6 +906,10 @@ fn chunk_and_embed(
                     .and_then(serde_json::Value::as_f64),
             });
         }
+    }
+
+    if skipped_empty > 0 {
+        println!("Skipped {} empty documents", skipped_empty);
     }
 
     Ok((all_chunks, all_embeddings))
