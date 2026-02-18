@@ -101,9 +101,19 @@ impl TranscriptionLoader {
     /// Otherwise, transcription of files without sidecars will fail gracefully.
     pub fn new(config: TranscriptionConfig) -> Self {
         let whisper = config.model_path.as_ref().and_then(|path| {
-            std::fs::read(path)
-                .ok()
-                .and_then(|data| WhisperApr::load_from_apr(&data).ok())
+            match std::fs::read(path) {
+                Ok(data) => match WhisperApr::load_from_apr(&data) {
+                    Ok(w) => Some(w),
+                    Err(e) => {
+                        eprintln!("Warning: failed to load whisper model from {}: {e}", path.display());
+                        None
+                    }
+                },
+                Err(e) => {
+                    eprintln!("Warning: failed to read model file {}: {e}", path.display());
+                    None
+                }
+            }
         });
         Self { config, whisper }
     }
