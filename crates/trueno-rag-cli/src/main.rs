@@ -206,6 +206,14 @@ enum Commands {
         /// Only report what would be transcribed (dry run)
         #[arg(long, default_value = "false")]
         dry_run: bool,
+
+        /// Initial prompt to condition decoder vocabulary (e.g. "AWS, Kubernetes, YAML")
+        #[arg(long)]
+        prompt: Option<String>,
+
+        /// Path to file with hotwords (one per line) to boost during decoding
+        #[arg(long)]
+        hotwords: Option<String>,
     },
 
     /// Show pipeline info
@@ -284,6 +292,8 @@ fn main() -> Result<()> {
             model,
             backend,
             dry_run,
+            prompt,
+            hotwords,
         } => run_transcribe(
             &path,
             recursive,
@@ -292,6 +302,8 @@ fn main() -> Result<()> {
             model.as_deref(),
             backend,
             dry_run,
+            prompt.as_deref(),
+            hotwords.as_deref(),
         )?,
         Commands::Info => run_info(),
     }
@@ -490,14 +502,16 @@ fn run_transcription_or_report(
     model: Option<&str>,
     backend: BackendType,
     root: &Path,
+    prompt: Option<&str>,
+    hotwords: &[String],
 ) -> Result<()> {
     #[cfg(feature = "transcription")]
     {
-        run_transcription_batch(to_process, jobs, model, backend, root)?;
+        run_transcription_batch(to_process, jobs, model, backend, root, prompt, hotwords)?;
     }
     #[cfg(not(feature = "transcription"))]
     {
-        let _ = (to_process, jobs, model, backend, root);
+        let _ = (to_process, jobs, model, backend, root, prompt, hotwords);
         println!(
             "\nTranscription requires the 'transcription' feature.\n\
              Build with: cargo build --release --features transcription\n\n\
@@ -517,6 +531,8 @@ fn run_transcribe(
     model: Option<&str>,
     backend: BackendType,
     dry_run: bool,
+    prompt: Option<&str>,
+    hotwords_file: Option<&str>,
 ) -> Result<()> {
     let root = Path::new(path);
     if !root.exists() {
@@ -544,7 +560,26 @@ fn run_transcribe(
         return Ok(());
     }
 
-    run_transcription_or_report(&to_process, jobs, model, backend, root)?;
+    // Load hotwords from file if provided (one word per line)
+    let hotwords: Vec<String> = hotwords_file
+        .map(|path| {
+            fs::read_to_string(path)
+                .unwrap_or_default()
+                .lines()
+                .map(|l| l.trim().to_string())
+                .filter(|l| !l.is_empty() && !l.starts_with('#'))
+                .collect()
+        })
+        .unwrap_or_default();
+
+    if !hotwords.is_empty() {
+        println!("Loaded {} hotwords for vocabulary biasing", hotwords.len());
+    }
+    if let Some(p) = prompt {
+        println!("Using prompt: {:?}", p);
+    }
+
+    run_transcription_or_report(&to_process, jobs, model, backend, root, prompt, &hotwords)?;
 
     let elapsed = start_time.elapsed();
     println!(
@@ -563,6 +598,8 @@ fn run_transcription_batch(
     model: Option<&str>,
     backend_type: BackendType,
     root: &Path,
+    prompt: Option<&str>,
+    hotwords: &[String],
 ) -> Result<()> {
     use trueno_rag::{DocumentLoader, TranscriptionBackend, TranscriptionConfig, TranscriptionLoader};
 
@@ -575,6 +612,8 @@ fn run_transcription_batch(
     let config = TranscriptionConfig {
         model_path: model.map(PathBuf::from),
         backend,
+        prompt: prompt.map(String::from),
+        hotwords: hotwords.to_vec(),
         ..TranscriptionConfig::default()
     };
     let loader = TranscriptionLoader::new(config);

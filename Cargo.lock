@@ -123,7 +123,7 @@ checksum = "a23eb6b1614318a8071c9b2521f36b424b2c83db5eb3a0fead4a6c0809af6e61"
 
 [[package]]
 name = "aprender"
-version = "0.25.8"
+version = "0.25.9"
 dependencies = [
  "bincode",
  "dirs",
@@ -135,10 +135,12 @@ dependencies = [
  "rand 0.8.5",
  "rand_chacha 0.3.1",
  "rmp-serde",
+ "rustfft",
  "safetensors",
  "serde",
  "serde_json",
  "sha2",
+ "thiserror 2.0.17",
  "trueno 0.14.6",
  "trueno-quant",
  "ureq 2.12.1",
@@ -4699,7 +4701,7 @@ dependencies = [
 
 [[package]]
 name = "trueno-rag-cli"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -5227,12 +5229,12 @@ dependencies = [
 
 [[package]]
 name = "whisper-apr"
-version = "0.2.3"
+version = "0.2.4"
 dependencies = [
  "aprender",
  "getrandom 0.2.16",
  "getrandom 0.3.4",
- "rustfft",
+ "half",
  "symphonia",
  "thiserror 2.0.17",
  "trueno 0.14.6 (registry+https://github.com/rust-lang/crates.io-index)",
