@@ -67,6 +67,12 @@ pub enum Error {
     InvalidInput(String),
 }
 
+impl From<batuta_common::compression::CompressionError> for Error {
+    fn from(e: batuta_common::compression::CompressionError) -> Self {
+        Self::SerializationError(e.to_string())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
