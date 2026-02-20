@@ -2,6 +2,8 @@
 //!
 //! Provides LZ4/ZSTD compression for BM25 and vector index storage.
 //! Reduces storage footprint by 5-10x for typical RAG indices.
+//!
+//! Compression algorithm is shared via `batuta_common::compression`.
 
 use crate::{BM25Index, Result};
 use serde::{de::DeserializeOwned, Serialize};
@@ -9,60 +11,7 @@ use serde::{de::DeserializeOwned, Serialize};
 // Note: VectorStore compression can be added in the future
 // by implementing Serialize/Deserialize for VectorStore
 
-/// Compression algorithm for index serialization
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum Compression {
-    /// LZ4 - Fast compression, good for real-time (default)
-    #[default]
-    Lz4,
-    /// ZSTD - Better ratio, slower
-    Zstd,
-}
-
-impl Compression {
-    /// Get algorithm name as string
-    #[must_use]
-    pub const fn as_str(&self) -> &'static str {
-        match self {
-            Self::Lz4 => "lz4",
-            Self::Zstd => "zstd",
-        }
-    }
-
-    /// Compress data using this algorithm
-    ///
-    /// # Errors
-    /// Returns error if compression fails (e.g., ZSTD internal error)
-    pub fn compress(&self, data: &[u8]) -> Result<Vec<u8>> {
-        if data.is_empty() {
-            return Ok(Vec::new());
-        }
-        match self {
-            Self::Lz4 => Ok(lz4_flex::compress_prepend_size(data)),
-            Self::Zstd => zstd::encode_all(data, 3).map_err(|e| {
-                crate::Error::SerializationError(format!("ZSTD compression failed: {e}"))
-            }),
-        }
-    }
-
-    /// Decompress data using this algorithm
-    ///
-    /// # Errors
-    /// Returns error if decompression fails (e.g., corrupted data)
-    pub fn decompress(&self, data: &[u8]) -> Result<Vec<u8>> {
-        if data.is_empty() {
-            return Ok(Vec::new());
-        }
-        match self {
-            Self::Lz4 => lz4_flex::decompress_size_prepended(data).map_err(|e| {
-                crate::Error::SerializationError(format!("LZ4 decompression failed: {e}"))
-            }),
-            Self::Zstd => zstd::decode_all(data).map_err(|e| {
-                crate::Error::SerializationError(format!("ZSTD decompression failed: {e}"))
-            }),
-        }
-    }
-}
+pub use batuta_common::compression::Compression;
 
 /// Serialize an index to compressed bytes
 ///
@@ -72,7 +21,7 @@ pub fn serialize_compressed<T: Serialize>(index: &T, compression: Compression) -
     let bytes = bincode::serialize(index).map_err(|e| {
         crate::Error::SerializationError(format!("Bincode serialization failed: {e}"))
     })?;
-    compression.compress(&bytes)
+    Ok(compression.compress(&bytes)?)
 }
 
 /// Deserialize an index from compressed bytes
