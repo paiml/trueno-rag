@@ -100,7 +100,7 @@ uuid = { version = "1.11", features = ["v4", "serde"] }
 async-trait = "0.1"
 
 # Compression for index storage (GH-2) - via batuta-common shared module
-batuta-common = { path = "../batuta-common" }
+batuta-common = "0.1"
 lz4_flex = { version = "0.11", optional = true }
 zstd = { version = "0.13", optional = true }
 bincode = { version = "1.3", optional = true }  # Binary serialization for indices
