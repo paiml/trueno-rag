@@ -82,7 +82,7 @@ exclude = [
 
 [dependencies]
 # Core compute
-trueno = "0.14.2"
+trueno = "0.15"
 trueno-db = "0.3.13"
 
 # Async runtime
@@ -114,7 +114,7 @@ fastembed = { version = "5", optional = true }
 
 # NVIDIA Embed Nemotron 8B via realizar GGUF infrastructure (GH-3)
 # Large model (~4-32GB depending on quantization), requires GGUF file
-realizar = { version = "0.6", optional = true, default-features = false }
+realizar = { version = "0.7", optional = true, default-features = false }
 
 # Speech-to-text via whisper-apr (Whisper ASR, .apr model format)
 # Sovereign stack: whisper-apr + aprender + trueno for pure-Rust transcription

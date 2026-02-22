@@ -601,7 +601,9 @@ fn run_transcription_batch(
     prompt: Option<&str>,
     hotwords: &[String],
 ) -> Result<()> {
-    use trueno_rag::{DocumentLoader, TranscriptionBackend, TranscriptionConfig, TranscriptionLoader};
+    use trueno_rag::{
+        DocumentLoader, TranscriptionBackend, TranscriptionConfig, TranscriptionLoader,
+    };
 
     let backend = match backend_type {
         BackendType::Cpu => TranscriptionBackend::Cpu,

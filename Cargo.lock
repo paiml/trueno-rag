@@ -123,7 +123,7 @@ checksum = "a23eb6b1614318a8071c9b2521f36b424b2c83db5eb3a0fead4a6c0809af6e61"
 
 [[package]]
 name = "aprender"
-version = "0.25.9"
+version = "0.26.0"
 dependencies = [
  "batuta-common",
  "bincode",
@@ -144,8 +144,8 @@ dependencies = [
  "serde_yaml",
  "sha2",
  "thiserror 2.0.17",
- "trueno 0.14.6",
- "trueno-quant",
+ "trueno 0.15.0",
+ "trueno-quant 0.1.0",
  "ureq 2.12.1",
 ]
 
@@ -3157,7 +3157,7 @@ dependencies = [
 
 [[package]]
 name = "provable-contracts-macros"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3378,9 +3378,9 @@ dependencies = [
 
 [[package]]
 name = "realizar"
-version = "0.6.8"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "89e6d6866d26aa376b0019e7a73138834109557bfde0fac8e43bc562445cc7f2"
+checksum = "09ad9aee5aae114fe2cda87706bbd9e7782a72167839df5268ef5cd5e61ea7af"
 dependencies = [
  "anyhow",
  "chrono",
@@ -3394,9 +3394,11 @@ dependencies = [
  "rayon",
  "serde",
  "serde_json",
+ "serde_yaml",
  "smallvec 1.15.1",
  "thiserror 1.0.69",
- "trueno 0.13.0",
+ "trueno 0.15.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "trueno-quant 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "uuid",
 ]
 
@@ -4626,41 +4628,6 @@ dependencies = [
 
 [[package]]
 name = "trueno"
-version = "0.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5ba5457f1f184520c46e6b315d540baa4cf2a2ae3d047e13001a4a23a12c6ab8"
-dependencies = [
- "anyhow",
- "bytemuck",
- "chrono",
- "futures-intrusive",
- "hostname",
- "num_cpus",
- "pollster",
- "serde",
- "serde_json",
- "thiserror 2.0.17",
- "toml",
- "wgpu",
-]
-
-[[package]]
-name = "trueno"
-version = "0.14.6"
-dependencies = [
- "anyhow",
- "chrono",
- "hostname",
- "num_cpus",
- "serde",
- "serde_json",
- "thiserror 2.0.17",
- "toml",
- "trueno-quant",
-]
-
-[[package]]
-name = "trueno"
 version = "0.14.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "90b0f08c743a6d63e691f80624e67e306e83f9bc532ebc618b2352cd02126e7e"
@@ -4673,6 +4640,42 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.17",
  "toml",
+]
+
+[[package]]
+name = "trueno"
+version = "0.15.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "hostname",
+ "num_cpus",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.17",
+ "toml",
+ "trueno-quant 0.1.0",
+]
+
+[[package]]
+name = "trueno"
+version = "0.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "85e19fa22753d395f043b205999122520efd45a33e0867d137f20b777ad794ef"
+dependencies = [
+ "anyhow",
+ "bytemuck",
+ "chrono",
+ "futures-intrusive",
+ "hostname",
+ "num_cpus",
+ "pollster",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.17",
+ "toml",
+ "trueno-quant 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "wgpu",
 ]
 
 [[package]]
@@ -4698,7 +4701,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
- "trueno 0.14.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "trueno 0.14.6",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
@@ -4707,6 +4710,15 @@ dependencies = [
 [[package]]
 name = "trueno-quant"
 version = "0.1.0"
+dependencies = [
+ "half",
+]
+
+[[package]]
+name = "trueno-quant"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5da5ac788b596e45d1d3fa0991c04b0e1bac63ffe4ae2faf6ae7c0d9fdfc00eb"
 dependencies = [
  "half",
 ]
@@ -4729,7 +4741,7 @@ dependencies = [
  "thiserror 2.0.17",
  "tokio",
  "tokio-test",
- "trueno 0.14.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "trueno 0.15.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "trueno-db",
  "uuid",
  "whisper-apr",
@@ -5280,7 +5292,7 @@ dependencies = [
  "half",
  "symphonia",
  "thiserror 2.0.17",
- "trueno 0.14.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "trueno 0.15.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
