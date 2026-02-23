@@ -30,6 +30,8 @@ embeddings = ["trueno-rag/embeddings"]
 nemotron = ["trueno-rag/nemotron"]
 # Enable GPU-accelerated transcription via aprender (GH-2)
 transcription = ["trueno-rag/transcription"]
+# LLM-as-judge evaluation via Anthropic API (PMAT-015)
+eval = ["trueno-rag/eval"]
 
 [dev-dependencies]
 assert_cmd = "2.0"

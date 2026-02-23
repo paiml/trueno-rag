@@ -227,6 +227,117 @@ enum Commands {
 
     /// Show pipeline info
     Info,
+
+    /// Evaluation framework: generate ground truth, run retrieval, judge relevance
+    #[cfg(feature = "eval")]
+    Eval {
+        #[command(subcommand)]
+        action: EvalAction,
+    },
+}
+
+/// Eval sub-subcommands
+#[cfg(feature = "eval")]
+#[derive(Subcommand)]
+enum EvalAction {
+    /// Generate synthetic ground truth from an index via Claude API
+    Generate {
+        /// Path to index directory (containing index.json)
+        #[arg(short, long)]
+        index: String,
+
+        /// Output path for ground-truth JSONL
+        #[arg(short, long)]
+        output: String,
+
+        /// Number of query-chunk pairs to generate
+        #[arg(long, default_value = "250")]
+        sample_size: usize,
+
+        /// Random seed for reproducibility
+        #[arg(long, default_value = "42")]
+        seed: u64,
+
+        /// Claude model for question generation
+        #[arg(long, default_value = "claude-sonnet-4-20250514")]
+        model: String,
+
+        /// Sample chunks only — no API calls (dry run)
+        #[arg(long, default_value = "false")]
+        dry_run: bool,
+    },
+
+    /// Run retrieval queries from ground truth and dump raw results
+    Retrieve {
+        /// Path to index directory
+        #[arg(short, long)]
+        index: String,
+
+        /// Path to ground-truth JSONL
+        #[arg(short, long)]
+        ground_truth: String,
+
+        /// Output path for retrieval results JSONL
+        #[arg(short, long)]
+        output: String,
+
+        /// Number of results per query
+        #[arg(long, default_value = "10")]
+        top_k: usize,
+    },
+
+    /// Judge retrieval results for relevance via Claude API and compute metrics
+    Judge {
+        /// Path to retrieval-results JSONL
+        #[arg(short, long)]
+        retrieval_results: String,
+
+        /// Path to ground-truth JSONL (for metadata)
+        #[arg(short, long)]
+        ground_truth: String,
+
+        /// Output path for eval results JSON
+        #[arg(short, long)]
+        output: String,
+
+        /// Path to judge cache JSON (created if absent)
+        #[arg(long, default_value = "judge-cache.json")]
+        cache: String,
+
+        /// Number of results to judge per query
+        #[arg(long, default_value = "10")]
+        top_k: usize,
+
+        /// Claude model for judging
+        #[arg(long, default_value = "claude-sonnet-4-20250514")]
+        model: String,
+    },
+
+    /// Compare two eval result files
+    Compare {
+        /// Baseline results JSON
+        #[arg(long)]
+        baseline: String,
+
+        /// Candidate results JSON
+        #[arg(long)]
+        candidate: String,
+    },
+
+    /// Regression gate — exit non-zero if below thresholds
+    Gate {
+        /// Path to eval results JSON
+        #[arg(long)]
+        results: String,
+
+        /// Minimum MRR threshold
+        #[arg(long, default_value = "0.50")]
+        min_mrr: f64,
+
+        /// Minimum Hit@5 threshold
+        #[arg(long, default_value = "0.70")]
+        min_hit5: f64,
+    },
 }
 
 /// Persisted index structure
@@ -319,6 +430,8 @@ fn main() -> Result<()> {
             &exclude,
         )?,
         Commands::Info => run_info(),
+        #[cfg(feature = "eval")]
+        Commands::Eval { action } => run_eval(action)?,
     }
 
     Ok(())
@@ -1363,6 +1476,312 @@ fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
         0.0
     } else {
         dot / (norm_a * norm_b)
+    }
+}
+
+#[cfg(feature = "eval")]
+fn run_eval(action: EvalAction) -> Result<()> {
+    match action {
+        EvalAction::Generate {
+            index,
+            output,
+            sample_size,
+            seed,
+            model,
+            dry_run,
+        } => run_eval_generate(&index, &output, sample_size, seed, &model, dry_run),
+
+        EvalAction::Retrieve {
+            index,
+            ground_truth,
+            output,
+            top_k,
+        } => run_eval_retrieve(&index, &ground_truth, &output, top_k),
+
+        EvalAction::Judge {
+            retrieval_results,
+            ground_truth: _,
+            output,
+            cache,
+            top_k,
+            model,
+        } => {
+            let rt = tokio::runtime::Runtime::new().context("Failed to create tokio runtime")?;
+            rt.block_on(run_eval_judge(
+                &retrieval_results,
+                &output,
+                &cache,
+                top_k,
+                &model,
+            ))
+        }
+
+        EvalAction::Compare {
+            baseline,
+            candidate,
+        } => run_eval_compare(&baseline, &candidate),
+
+        EvalAction::Gate {
+            results,
+            min_mrr,
+            min_hit5,
+        } => run_eval_gate(&results, min_mrr, min_hit5),
+    }
+}
+
+#[cfg(feature = "eval")]
+fn run_eval_generate(
+    index_path: &str,
+    output_path: &str,
+    sample_size: usize,
+    seed: u64,
+    model: &str,
+    dry_run: bool,
+) -> Result<()> {
+    use trueno_rag::eval::{generate::IndexChunk, AnthropicClient, GroundTruthGenerator};
+
+    let index_file = Path::new(index_path).join("index.json");
+    if !index_file.exists() {
+        anyhow::bail!("Index not found: {}", index_file.display());
+    }
+
+    println!("Loading index from {}...", index_file.display());
+    let json = fs::read_to_string(&index_file)?;
+    let persisted: PersistedIndex = serde_json::from_str(&json)?;
+
+    let chunks: Vec<IndexChunk> = persisted
+        .chunks
+        .iter()
+        .map(|c| IndexChunk {
+            content: c.content.clone(),
+            source: c.source.clone().unwrap_or_default(),
+            title: c.title.clone(),
+            start_secs: c.start_secs,
+            end_secs: c.end_secs,
+        })
+        .collect();
+
+    println!("Loaded {} chunks", chunks.len());
+
+    if dry_run {
+        let client = AnthropicClient::new("dry-run");
+        let gen = GroundTruthGenerator::new(client, model, sample_size, seed);
+        let sampled = gen.sample_chunks(&chunks);
+        println!("\nDry run: would generate {} questions", sampled.len());
+        for s in sampled.iter().take(10) {
+            println!(
+                "  [{}] {}: {}...",
+                s.domain,
+                s.course,
+                &s.content[..s.content.len().min(80)]
+            );
+        }
+        return Ok(());
+    }
+
+    let client = AnthropicClient::from_env()
+        .map_err(|e| anyhow::anyhow!("{e}"))?;
+    let gen = GroundTruthGenerator::new(client, model, sample_size, seed);
+
+    let rt = tokio::runtime::Runtime::new().context("Failed to create tokio runtime")?;
+    let results = rt.block_on(gen.generate(&chunks))
+        .map_err(|e| anyhow::anyhow!("{e}"))?;
+
+    // Write JSONL output
+    let mut file = std::io::BufWriter::new(fs::File::create(output_path)?);
+    use std::io::Write;
+    for entry in &results {
+        serde_json::to_writer(&mut file, entry)?;
+        writeln!(file)?;
+    }
+
+    println!("\nGround truth saved to: {output_path} ({} entries)", results.len());
+    Ok(())
+}
+
+#[cfg(feature = "eval")]
+fn run_eval_retrieve(
+    index_path: &str,
+    ground_truth_path: &str,
+    output_path: &str,
+    top_k: usize,
+) -> Result<()> {
+    use trueno_rag::eval::types::{GroundTruthEntry, RetrievalResultEntry, RetrievedChunk};
+
+    let index_file = Path::new(index_path).join("index.json");
+    if !index_file.exists() {
+        anyhow::bail!("Index not found: {}", index_file.display());
+    }
+
+    // Load ground truth
+    let gt_text = fs::read_to_string(ground_truth_path)
+        .with_context(|| format!("Failed to read {ground_truth_path}"))?;
+    let queries: Vec<GroundTruthEntry> = gt_text
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(|l| serde_json::from_str(l))
+        .collect::<std::result::Result<_, _>>()
+        .context("Failed to parse ground truth JSONL")?;
+
+    println!("Loaded {} queries from {}", queries.len(), ground_truth_path);
+
+    // Load index
+    println!("Loading index from {}...", index_file.display());
+    let json = fs::read_to_string(&index_file)?;
+    let persisted: PersistedIndex = serde_json::from_str(&json)?;
+    println!("Index: {} chunks, dim={}", persisted.chunks.len(), persisted.dimension);
+
+    // Build TF-IDF embedder (same as run_query)
+    let mut embedder = TfIdfEmbedder::new(persisted.dimension);
+    let refs: Vec<&str> = persisted.chunks.iter().map(|c| c.content.as_str()).collect();
+    embedder.fit(&refs);
+
+    // Run queries
+    let mut output_file = std::io::BufWriter::new(fs::File::create(output_path)?);
+    use std::io::Write;
+
+    for (i, entry) in queries.iter().enumerate() {
+        print!(
+            "[{}/{}] {}...",
+            i + 1,
+            queries.len(),
+            &entry.query[..entry.query.len().min(60)]
+        );
+
+        let start = std::time::Instant::now();
+        let query_embedding = embedder.embed(&entry.query)?;
+
+        // Compute similarities
+        let mut scores: Vec<(usize, f32)> = persisted
+            .embeddings
+            .iter()
+            .enumerate()
+            .map(|(idx, emb)| (idx, cosine_similarity(&query_embedding, emb)))
+            .collect();
+
+        scores.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+        scores.truncate(top_k);
+
+        let latency = start.elapsed().as_secs_f64();
+
+        let results: Vec<RetrievedChunk> = scores
+            .iter()
+            .map(|(idx, score)| {
+                let chunk = &persisted.chunks[*idx];
+                RetrievedChunk {
+                    content: chunk.content.clone(),
+                    source: chunk.source.clone(),
+                    score: *score,
+                    title: chunk.title.clone(),
+                    start_secs: chunk.start_secs,
+                    end_secs: chunk.end_secs,
+                }
+            })
+            .collect();
+
+        println!(" {} results ({:.2}s)", results.len(), latency);
+
+        let result_entry = RetrievalResultEntry {
+            query: entry.query.clone(),
+            domain: entry.domain.clone(),
+            course: entry.course.clone(),
+            results,
+            latency_s: latency,
+        };
+
+        serde_json::to_writer(&mut output_file, &result_entry)?;
+        writeln!(output_file)?;
+    }
+
+    println!("\nRetrieval results saved to: {output_path}");
+    Ok(())
+}
+
+#[cfg(feature = "eval")]
+async fn run_eval_judge(
+    retrieval_results_path: &str,
+    output_path: &str,
+    cache_path: &str,
+    top_k: usize,
+    model: &str,
+) -> Result<()> {
+    use trueno_rag::eval::{
+        types::{JudgeCache, RetrievalResultEntry},
+        AnthropicClient, RelevanceJudge,
+    };
+
+    // Load retrieval results
+    let text = fs::read_to_string(retrieval_results_path)
+        .with_context(|| format!("Failed to read {retrieval_results_path}"))?;
+    let results: Vec<RetrievalResultEntry> = text
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(|l| serde_json::from_str(l))
+        .collect::<std::result::Result<_, _>>()
+        .context("Failed to parse retrieval results JSONL")?;
+
+    println!("Loaded {} retrieval results", results.len());
+
+    // Load cache
+    let cache = JudgeCache::load(Path::new(cache_path));
+    println!("Cache: {} entries loaded from {}", cache.entries.len(), cache_path);
+
+    let client = AnthropicClient::from_env()
+        .map_err(|e| anyhow::anyhow!("{e}"))?;
+    let mut judge = RelevanceJudge::new(client, model, cache);
+
+    let eval_output = judge.evaluate(&results, top_k).await
+        .map_err(|e| anyhow::anyhow!("{e}"))?;
+
+    // Save cache
+    judge.cache().save(Path::new(cache_path))
+        .context("Failed to save judge cache")?;
+    println!("Cache saved: {} entries to {}", judge.cache().entries.len(), cache_path);
+
+    // Save results
+    let json = serde_json::to_string_pretty(&eval_output)?;
+    fs::write(output_path, json)?;
+    println!("Results saved to: {output_path}");
+
+    Ok(())
+}
+
+#[cfg(feature = "eval")]
+fn run_eval_compare(baseline_path: &str, candidate_path: &str) -> Result<()> {
+    use trueno_rag::eval::{judge::compare_results, types::EvalOutput};
+
+    let baseline: EvalOutput = serde_json::from_str(
+        &fs::read_to_string(baseline_path)
+            .with_context(|| format!("Failed to read {baseline_path}"))?,
+    )?;
+    let candidate: EvalOutput = serde_json::from_str(
+        &fs::read_to_string(candidate_path)
+            .with_context(|| format!("Failed to read {candidate_path}"))?,
+    )?;
+
+    println!("{}", compare_results(&baseline, &candidate));
+    Ok(())
+}
+
+#[cfg(feature = "eval")]
+fn run_eval_gate(results_path: &str, min_mrr: f64, min_hit5: f64) -> Result<()> {
+    use trueno_rag::eval::{judge::check_gate, types::EvalOutput};
+
+    let output: EvalOutput = serde_json::from_str(
+        &fs::read_to_string(results_path)
+            .with_context(|| format!("Failed to read {results_path}"))?,
+    )?;
+
+    match check_gate(&output, min_mrr, min_hit5) {
+        Ok(()) => {
+            println!("Regression gate PASSED (MRR={:.4}, Hit@5={:.4})",
+                output.aggregate.mrr, output.aggregate.hit_rate_5);
+            Ok(())
+        }
+        Err(msg) => {
+            eprintln!("{msg}");
+            std::process::exit(1);
+        }
     }
 }
 
