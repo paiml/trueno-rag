@@ -1467,9 +1467,12 @@ fn run_query(
     format_query_results(query, &scores, &persisted.chunks, format)
 }
 
-/// Dense retrieval: TF-IDF or semantic cosine similarity.
-fn query_dense(query: &str, persisted: &PersistedIndex, top_k: usize) -> Result<Vec<(usize, f32)>> {
-    let query_embedding = if persisted.embedder_type == "semantic" {
+/// Create the correct embedder for querying based on the index's embedder_type.
+///
+/// If the index was built with semantic embeddings (BGE/MiniLM), returns a
+/// `FastEmbedder`; otherwise returns a `TfIdfEmbedder` fit on the corpus.
+fn create_query_embedder(persisted: &PersistedIndex) -> Result<Box<dyn Embedder>> {
+    if persisted.embedder_type == "semantic" {
         #[cfg(feature = "embeddings")]
         {
             let model_type = match persisted.model_name.as_deref() {
@@ -1477,8 +1480,14 @@ fn query_dense(query: &str, persisted: &PersistedIndex, top_k: usize) -> Result<
                 Some(name) if name.contains("bge-small") => EmbeddingModelType::BgeSmallEnV15,
                 _ => EmbeddingModelType::AllMiniLmL6V2,
             };
-            let emb = FastEmbedder::new(model_type).context("Failed to initialize semantic embedder")?;
-            emb.embed(query)?
+            println!(
+                "Using semantic embedder: {} (dim={})",
+                model_type.model_name(),
+                model_type.dimension()
+            );
+            let emb = FastEmbedder::new(model_type)
+                .context("Failed to initialize semantic embedder")?;
+            Ok(Box::new(emb))
         }
         #[cfg(not(feature = "embeddings"))]
         {
@@ -1489,10 +1498,20 @@ fn query_dense(query: &str, persisted: &PersistedIndex, top_k: usize) -> Result<
         }
     } else {
         let mut emb = TfIdfEmbedder::new(persisted.dimension);
-        let refs: Vec<&str> = persisted.chunks.iter().map(|c| c.content.as_str()).collect();
+        let refs: Vec<&str> = persisted
+            .chunks
+            .iter()
+            .map(|c| c.content.as_str())
+            .collect();
         emb.fit(&refs);
-        emb.embed(query)?
-    };
+        Ok(Box::new(emb))
+    }
+}
+
+/// Dense retrieval: TF-IDF or semantic cosine similarity.
+fn query_dense(query: &str, persisted: &PersistedIndex, top_k: usize) -> Result<Vec<(usize, f32)>> {
+    let embedder = create_query_embedder(persisted)?;
+    let query_embedding = embedder.embed(query)?;
 
     let mut scores: Vec<(usize, f32)> = persisted
         .embeddings
@@ -1525,7 +1544,7 @@ fn query_sparse(query: &str, persisted: &PersistedIndex, top_k: usize) -> Vec<(u
         .collect()
 }
 
-/// Hybrid retrieval: BM25 + TF-IDF with fusion (RRF, Linear, or DBSF).
+/// Hybrid retrieval: BM25 + dense (TF-IDF or semantic) with fusion.
 fn query_hybrid(
     query: &str,
     persisted: &PersistedIndex,
@@ -1540,12 +1559,11 @@ fn query_hybrid(
 
     let fusion_strategy = parse_fusion_strategy(fusion, fusion_k)?;
 
-    let mut embedder = TfIdfEmbedder::new(persisted.dimension);
-    let refs: Vec<&str> = persisted.chunks.iter().map(|c| c.content.as_str()).collect();
-    embedder.fit(&refs);
+    let embedder = create_query_embedder(persisted)?;
+    let dim = embedder.dimension();
 
     let dense_store = VectorStore::new(VectorStoreConfig {
-        dimension: persisted.dimension,
+        dimension: dim,
         ..Default::default()
     });
     let bm25 = BM25Index::new();
@@ -1915,10 +1933,8 @@ fn run_eval_retrieve(
     let persisted: PersistedIndex = serde_json::from_str(&json)?;
     println!("Index: {} chunks, dim={}", persisted.chunks.len(), persisted.dimension);
 
-    // Build TF-IDF embedder (needed for dense and hybrid modes)
-    let mut embedder = TfIdfEmbedder::new(persisted.dimension);
-    let refs: Vec<&str> = persisted.chunks.iter().map(|c| c.content.as_str()).collect();
-    embedder.fit(&refs);
+    // Build embedder (auto-detects semantic vs TF-IDF from index metadata)
+    let embedder = create_query_embedder(&persisted)?;
 
     // Convert PersistedChunks to Chunks with embeddings for hybrid/sparse modes
     let build_chunks = |with_embeddings: bool| -> Vec<Chunk> {
@@ -1942,7 +1958,7 @@ fn run_eval_retrieve(
 
     match mode {
         "dense" => {
-            // Original TF-IDF cosine similarity path
+            // Dense cosine similarity (TF-IDF or semantic, auto-detected)
             for (i, entry) in queries.iter().enumerate() {
                 print!(
                     "[{}/{}] {}...",
@@ -2039,13 +2055,14 @@ fn run_eval_retrieve(
         }
 
         "hybrid" => {
-            // Hybrid retrieval: BM25 + TF-IDF cosine with fusion
+            // Hybrid retrieval: BM25 + dense (TF-IDF or semantic) with fusion
             let fusion_strategy = parse_fusion_strategy(fusion, fusion_k)?;
-            println!("Building hybrid retriever (BM25 + TF-IDF, fusion={fusion})...");
+            let dim = embedder.dimension();
+            println!("Building hybrid retriever (BM25 + dense dim={dim}, fusion={fusion})...");
             let start_build = std::time::Instant::now();
 
             let dense_store = VectorStore::new(VectorStoreConfig {
-                dimension: persisted.dimension,
+                dimension: dim,
                 ..Default::default()
             });
             let bm25 = BM25Index::new();

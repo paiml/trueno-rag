@@ -65,17 +65,20 @@ trueno-rag index --path /data --output index/ \
 
 ### `query`
 
-Query an existing index. Supports dense (TF-IDF), sparse (BM25), and hybrid (BM25 + TF-IDF with fusion) retrieval modes.
+Query an existing index. Supports dense, sparse (BM25), and hybrid (BM25 + dense with fusion) retrieval modes.
+
+Dense and hybrid modes **auto-detect** the index's embedder type: if the index was built with `--embedder semantic`, queries use the same semantic model (BGE-small, BGE-base, or MiniLM via ONNX). Otherwise, TF-IDF is used. No extra flags needed.
 
 ```bash
-# Hybrid retrieval (default — BM25 + TF-IDF with RRF fusion)
-trueno-rag query "how does Kubernetes handle pod scheduling" --index index/
-
-# BM25-only (best for keyword-rich queries)
+# BM25-only (best for keyword-rich queries, default mode)
 trueno-rag query "AWS Lambda function" --index index/ --mode sparse
 
-# Dense cosine similarity only
+# Dense cosine similarity (auto-detects TF-IDF or semantic)
 trueno-rag query "machine learning" --index index/ --mode dense
+
+# Hybrid retrieval (BM25 + dense with RRF fusion)
+trueno-rag query "how does Kubernetes handle pod scheduling" \
+  --index index/ --mode hybrid
 
 # JSON output with custom fusion
 trueno-rag query "AWS Lambda" --index index/ --format json \
@@ -195,8 +198,10 @@ trueno-rag eval generate \
 
 Run retrieval queries from ground truth against an index.
 
+Dense and hybrid modes auto-detect the index's embedder type (semantic or TF-IDF).
+
 ```bash
-# Dense retrieval (TF-IDF cosine similarity)
+# Dense retrieval (auto-detects TF-IDF or semantic embeddings)
 trueno-rag eval retrieve \
   --index /path/to/index \
   --ground-truth ground-truth.jsonl \
@@ -210,7 +215,7 @@ trueno-rag eval retrieve \
   --output retrieval-results-sparse.jsonl \
   --mode sparse
 
-# Hybrid retrieval (BM25 + TF-IDF with RRF fusion)
+# Hybrid retrieval (BM25 + dense with RRF fusion)
 trueno-rag eval retrieve \
   --index /path/to/index \
   --ground-truth ground-truth.jsonl \
