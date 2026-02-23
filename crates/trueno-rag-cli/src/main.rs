@@ -240,7 +240,26 @@ enum Commands {
 #[cfg(feature = "eval")]
 #[derive(Subcommand)]
 enum EvalAction {
-    /// Generate synthetic ground truth from an index via Claude API
+    /// Sample chunks from index for ground truth generation (no API needed)
+    Sample {
+        /// Path to index directory (containing index.json)
+        #[arg(short, long)]
+        index: String,
+
+        /// Output path for sampled-chunks JSONL
+        #[arg(short, long)]
+        output: String,
+
+        /// Number of chunks to sample
+        #[arg(long, default_value = "250")]
+        sample_size: usize,
+
+        /// Random seed for reproducibility
+        #[arg(long, default_value = "42")]
+        seed: u64,
+    },
+
+    /// Generate synthetic ground truth from an index via Claude API (requires ANTHROPIC_API_KEY)
     Generate {
         /// Path to index directory (containing index.json)
         #[arg(short, long)]
@@ -311,6 +330,21 @@ enum EvalAction {
         /// Claude model for judging
         #[arg(long, default_value = "claude-sonnet-4-20250514")]
         model: String,
+    },
+
+    /// Compute IR metrics from pre-judged results (no API needed)
+    Metrics {
+        /// Path to retrieval-results JSONL
+        #[arg(short, long)]
+        retrieval_results: String,
+
+        /// Path to judgments JSONL (produced by Claude Code or external judge)
+        #[arg(short, long)]
+        judgments: String,
+
+        /// Output path for eval results JSON
+        #[arg(short, long)]
+        output: String,
     },
 
     /// Compare two eval result files
@@ -1482,6 +1516,13 @@ fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
 #[cfg(feature = "eval")]
 fn run_eval(action: EvalAction) -> Result<()> {
     match action {
+        EvalAction::Sample {
+            index,
+            output,
+            sample_size,
+            seed,
+        } => run_eval_sample(&index, &output, sample_size, seed),
+
         EvalAction::Generate {
             index,
             output,
@@ -1516,6 +1557,12 @@ fn run_eval(action: EvalAction) -> Result<()> {
             ))
         }
 
+        EvalAction::Metrics {
+            retrieval_results,
+            judgments,
+            output,
+        } => run_eval_metrics(&retrieval_results, &judgments, &output),
+
         EvalAction::Compare {
             baseline,
             candidate,
@@ -1527,6 +1574,80 @@ fn run_eval(action: EvalAction) -> Result<()> {
             min_hit5,
         } => run_eval_gate(&results, min_mrr, min_hit5),
     }
+}
+
+#[cfg(feature = "eval")]
+fn run_eval_sample(
+    index_path: &str,
+    output_path: &str,
+    sample_size: usize,
+    seed: u64,
+) -> Result<()> {
+    use trueno_rag::eval::generate::IndexChunk;
+    use trueno_rag::eval::{AnthropicClient, GroundTruthGenerator};
+
+    let index_file = Path::new(index_path).join("index.json");
+    if !index_file.exists() {
+        anyhow::bail!("Index not found: {}", index_file.display());
+    }
+
+    println!("Loading index from {}...", index_file.display());
+    let json = fs::read_to_string(&index_file)?;
+    let persisted: PersistedIndex = serde_json::from_str(&json)?;
+
+    let chunks: Vec<IndexChunk> = persisted
+        .chunks
+        .iter()
+        .map(|c| IndexChunk {
+            content: c.content.clone(),
+            source: c.source.clone().unwrap_or_default(),
+            title: c.title.clone(),
+            start_secs: c.start_secs,
+            end_secs: c.end_secs,
+        })
+        .collect();
+
+    println!("Loaded {} chunks", chunks.len());
+
+    // Use a dummy client — sample_chunks doesn't call the API
+    let client = AnthropicClient::new("sample-only");
+    let gen = GroundTruthGenerator::new(client, "none", sample_size, seed);
+    let sampled = gen.sample_chunks(&chunks);
+
+    // Write sampled chunks as JSONL
+    let mut file = std::io::BufWriter::new(fs::File::create(output_path)?);
+    use std::io::Write;
+
+    #[derive(serde::Serialize)]
+    struct SampledChunkOutput {
+        content: String,
+        source: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        start_secs: Option<f64>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        end_secs: Option<f64>,
+        course: String,
+        domain: String,
+    }
+
+    for s in &sampled {
+        let entry = SampledChunkOutput {
+            content: s.content.clone(),
+            source: s.source.clone(),
+            start_secs: s.start_secs,
+            end_secs: s.end_secs,
+            course: s.course.clone(),
+            domain: s.domain.clone(),
+        };
+        serde_json::to_writer(&mut file, &entry)?;
+        writeln!(file)?;
+    }
+
+    println!(
+        "\nSampled {} chunks saved to: {output_path}",
+        sampled.len()
+    );
+    Ok(())
 }
 
 #[cfg(feature = "eval")]
@@ -1739,6 +1860,55 @@ async fn run_eval_judge(
     println!("Cache saved: {} entries to {}", judge.cache().entries.len(), cache_path);
 
     // Save results
+    let json = serde_json::to_string_pretty(&eval_output)?;
+    fs::write(output_path, json)?;
+    println!("Results saved to: {output_path}");
+
+    Ok(())
+}
+
+#[cfg(feature = "eval")]
+fn run_eval_metrics(
+    retrieval_results_path: &str,
+    judgments_path: &str,
+    output_path: &str,
+) -> Result<()> {
+    use trueno_rag::eval::metrics::{compute_metrics_from_judgments, format_metrics_summary};
+    use trueno_rag::eval::types::{JudgmentEntry, RetrievalResultEntry};
+
+    // Load retrieval results
+    let text = fs::read_to_string(retrieval_results_path)
+        .with_context(|| format!("Failed to read {retrieval_results_path}"))?;
+    let results: Vec<RetrievalResultEntry> = text
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(|l| serde_json::from_str(l))
+        .collect::<std::result::Result<_, _>>()
+        .context("Failed to parse retrieval results JSONL")?;
+
+    // Load judgments
+    let jtext = fs::read_to_string(judgments_path)
+        .with_context(|| format!("Failed to read {judgments_path}"))?;
+    let judgments: Vec<JudgmentEntry> = jtext
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(|l| serde_json::from_str(l))
+        .collect::<std::result::Result<_, _>>()
+        .context("Failed to parse judgments JSONL")?;
+
+    println!(
+        "Loaded {} retrieval results, {} judgments",
+        results.len(),
+        judgments.len()
+    );
+
+    let eval_output = compute_metrics_from_judgments(&results, &judgments);
+
+    println!(
+        "\n{}",
+        format_metrics_summary(&eval_output.aggregate, &eval_output.by_domain)
+    );
+
     let json = serde_json::to_string_pretty(&eval_output)?;
     fs::write(output_path, json)?;
     println!("Results saved to: {output_path}");

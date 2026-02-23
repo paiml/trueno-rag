@@ -124,8 +124,8 @@ impl RelevanceJudge {
         }
 
         // Compute aggregates
-        let aggregate = compute_aggregate(&per_query);
-        let by_domain = compute_by_domain(&per_query);
+        let aggregate = compute_aggregate_metrics(&per_query);
+        let by_domain = compute_by_domain_metrics(&per_query);
 
         let timestamp = chrono_now();
 
@@ -238,7 +238,8 @@ fn compute_average_precision(judgments: &[ChunkJudgment]) -> f64 {
     }
 }
 
-fn compute_aggregate(queries: &[QueryResult]) -> AggregateMetrics {
+/// Compute aggregate metrics across all queries (public for metrics module)
+pub fn compute_aggregate_metrics(queries: &[QueryResult]) -> AggregateMetrics {
     if queries.is_empty() {
         return AggregateMetrics::default();
     }
@@ -309,7 +310,8 @@ fn compute_aggregate(queries: &[QueryResult]) -> AggregateMetrics {
     }
 }
 
-fn compute_by_domain(queries: &[QueryResult]) -> HashMap<String, AggregateMetrics> {
+/// Compute per-domain metrics (public for metrics module)
+pub fn compute_by_domain_metrics(queries: &[QueryResult]) -> HashMap<String, AggregateMetrics> {
     let mut by_domain: HashMap<String, Vec<&QueryResult>> = HashMap::new();
     for q in queries {
         by_domain.entry(q.domain.clone()).or_default().push(q);
@@ -319,7 +321,7 @@ fn compute_by_domain(queries: &[QueryResult]) -> HashMap<String, AggregateMetric
         .into_iter()
         .map(|(domain, qs)| {
             let owned: Vec<QueryResult> = qs.into_iter().cloned().collect();
-            (domain, compute_aggregate(&owned))
+            (domain, compute_aggregate_metrics(&owned))
         })
         .collect()
 }
@@ -362,7 +364,8 @@ fn round4(v: f64) -> f64 {
     (v * 10000.0).round() / 10000.0
 }
 
-fn chrono_now() -> String {
+/// Simple UTC timestamp without chrono crate (public for metrics module)
+pub fn chrono_now() -> String {
     // Simple UTC timestamp without chrono crate
     let dur = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
