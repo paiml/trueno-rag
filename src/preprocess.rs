@@ -4,7 +4,7 @@
 //! - HyDE (Hypothetical Document Embeddings): Generate hypothetical answers for better matching
 //! - Multi-query expansion: Expand a single query into multiple related queries
 
-use crate::{Error, Result};
+use crate::Result;
 
 /// A query preprocessor that transforms or expands queries before retrieval.
 pub trait QueryPreprocessor: Send + Sync {
@@ -317,7 +317,7 @@ impl QueryExpander for SynonymExpander {
 }
 
 /// Chained preprocessor that applies multiple preprocessors in sequence.
-#[derive(Debug)]
+#[allow(missing_debug_implementations)]
 pub struct ChainedPreprocessor {
     preprocessors: Vec<Box<dyn QueryPreprocessor>>,
     deduplicate: bool,
