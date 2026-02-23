@@ -123,9 +123,10 @@ checksum = "a23eb6b1614318a8071c9b2521f36b424b2c83db5eb3a0fead4a6c0809af6e61"
 
 [[package]]
 name = "aprender"
-version = "0.26.2"
+version = "0.25.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7053416de79df742f9da17a53dea7087830b83761a80f69bc2a91b708aab781c"
 dependencies = [
- "batuta-common",
  "bincode",
  "dirs",
  "getrandom 0.2.16",
@@ -133,19 +134,15 @@ dependencies = [
  "hf-hub",
  "memmap2",
  "minijinja",
- "provable-contracts-macros",
  "rand 0.8.5",
  "rand_chacha 0.3.1",
  "rmp-serde",
- "rustfft",
  "safetensors",
  "serde",
  "serde_json",
- "serde_yaml_ng",
  "sha2",
- "thiserror 2.0.17",
- "trueno 0.15.0",
- "trueno-quant 0.1.0",
+ "trueno 0.14.6",
+ "trueno-quant",
  "ureq 2.12.1",
 ]
 
@@ -1510,6 +1507,19 @@ dependencies = [
  "khronos_api",
  "log",
  "xml-rs",
+]
+
+[[package]]
+name = "globset"
+version = "0.4.18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "52dfc19153a48bde0cbd630453615c8151bce3a5adfac7a0aebfbf0a1e1f57e3"
+dependencies = [
+ "aho-corasick",
+ "bstr",
+ "log",
+ "regex-automata",
+ "regex-syntax",
 ]
 
 [[package]]
@@ -3094,15 +3104,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "provable-contracts-macros"
-version = "0.1.1"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
 name = "pxfm"
 version = "0.1.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3335,8 +3336,8 @@ dependencies = [
  "serde_yaml",
  "smallvec 1.15.1",
  "thiserror 1.0.69",
- "trueno 0.15.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "trueno-quant 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "trueno 0.15.0",
+ "trueno-quant",
  "uuid",
 ]
 
@@ -3762,19 +3763,6 @@ name = "serde_yaml"
 version = "0.9.34+deprecated"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6a8b1a1a2ebf674015cc02edccce75287f1a0130d394307b36743c2f5d504b47"
-dependencies = [
- "indexmap",
- "itoa",
- "ryu",
- "serde",
- "unsafe-libyaml",
-]
-
-[[package]]
-name = "serde_yaml_ng"
-version = "0.10.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7b4db627b98b36d4203a7b458cf3573730f2bb591b28871d916dfa9efabfd41f"
 dependencies = [
  "indexmap",
  "itoa",
@@ -4573,7 +4561,9 @@ dependencies = [
 
 [[package]]
 name = "trueno"
-version = "0.15.0"
+version = "0.14.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "90b0f08c743a6d63e691f80624e67e306e83f9bc532ebc618b2352cd02126e7e"
 dependencies = [
  "anyhow",
  "chrono",
@@ -4583,7 +4573,6 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.17",
  "toml",
- "trueno-quant 0.1.0",
 ]
 
 [[package]]
@@ -4603,7 +4592,7 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.17",
  "toml",
- "trueno-quant 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "trueno-quant",
  "wgpu",
 ]
 
@@ -4631,17 +4620,10 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
- "trueno 0.15.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "trueno 0.15.0",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
-]
-
-[[package]]
-name = "trueno-quant"
-version = "0.1.0"
-dependencies = [
- "half",
 ]
 
 [[package]]
@@ -4671,7 +4653,7 @@ dependencies = [
  "thiserror 2.0.17",
  "tokio",
  "tokio-test",
- "trueno 0.15.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "trueno 0.15.0",
  "trueno-db",
  "uuid",
  "whisper-apr",
@@ -4685,6 +4667,7 @@ dependencies = [
  "anyhow",
  "assert_cmd",
  "clap",
+ "globset",
  "predicates",
  "rayon",
  "serde",
@@ -5215,14 +5198,16 @@ dependencies = [
 [[package]]
 name = "whisper-apr"
 version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "825f5d0ee951f91362294e5827d8d059781249f3faa07be445a2b1a351acb5d1"
 dependencies = [
  "aprender",
  "getrandom 0.2.16",
  "getrandom 0.3.4",
- "half",
+ "rustfft",
  "symphonia",
  "thiserror 2.0.17",
- "trueno 0.15.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "trueno 0.14.6",
 ]
 
 [[package]]

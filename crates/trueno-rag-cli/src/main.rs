@@ -24,6 +24,7 @@
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand, ValueEnum};
+use globset::{Glob, GlobSet, GlobSetBuilder};
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -157,6 +158,10 @@ enum Commands {
         /// Write a JSON manifest of indexed files and chunks
         #[arg(long, default_value = "false")]
         manifest: bool,
+
+        /// Glob patterns to exclude files/directories (repeatable)
+        #[arg(long)]
+        exclude: Vec<String>,
     },
 
     /// Query the RAG pipeline
@@ -214,6 +219,10 @@ enum Commands {
         /// Path to file with hotwords (one per line) to boost during decoding
         #[arg(long)]
         hotwords: Option<String>,
+
+        /// Glob patterns to exclude files/directories (repeatable)
+        #[arg(long)]
+        exclude: Vec<String>,
     },
 
     /// Show pipeline info
@@ -265,6 +274,7 @@ fn main() -> Result<()> {
             chunk_strategy,
             jobs,
             manifest,
+            exclude,
         } => run_index(
             &path,
             &output,
@@ -277,6 +287,7 @@ fn main() -> Result<()> {
             chunk_strategy,
             jobs,
             manifest,
+            &exclude,
         )?,
         Commands::Query {
             query,
@@ -294,6 +305,7 @@ fn main() -> Result<()> {
             dry_run,
             prompt,
             hotwords,
+            exclude,
         } => run_transcribe(
             &path,
             recursive,
@@ -304,6 +316,7 @@ fn main() -> Result<()> {
             dry_run,
             prompt.as_deref(),
             hotwords.as_deref(),
+            &exclude,
         )?,
         Commands::Info => run_info(),
     }
@@ -346,7 +359,11 @@ fn run_info() {
 }
 
 /// Discover media files in a directory.
-fn discover_media_files(root: &Path, recursive: bool) -> Result<Vec<PathBuf>> {
+fn discover_media_files(
+    root: &Path,
+    recursive: bool,
+    exclude: &Option<GlobSet>,
+) -> Result<Vec<PathBuf>> {
     let mut files = Vec::new();
 
     if root.is_file() {
@@ -359,18 +376,27 @@ fn discover_media_files(root: &Path, recursive: bool) -> Result<Vec<PathBuf>> {
     }
 
     let mut dirs_to_visit = vec![root.to_path_buf()];
+    let mut excluded_count = 0usize;
     while let Some(dir) = dirs_to_visit.pop() {
         let entries = fs::read_dir(&dir)
             .with_context(|| format!("Failed to read directory: {}", dir.display()))?;
 
         for entry in entries {
             let path = entry?.path();
+            if is_excluded(&path, exclude) {
+                excluded_count += 1;
+                continue;
+            }
             if path.is_dir() && recursive {
                 dirs_to_visit.push(path);
             } else if path.is_file() && is_media_file(&path) {
                 files.push(path);
             }
         }
+    }
+
+    if excluded_count > 0 {
+        println!("Excluded {} paths by glob pattern", excluded_count);
     }
 
     files.sort();
@@ -428,9 +454,13 @@ impl TranscribeManifest {
 }
 
 /// Discover media files and print a summary of what was found.
-fn discover_and_report_media(root: &Path, recursive: bool) -> Result<Vec<PathBuf>> {
+fn discover_and_report_media(
+    root: &Path,
+    recursive: bool,
+    exclude: &Option<GlobSet>,
+) -> Result<Vec<PathBuf>> {
     println!("Discovering media files...");
-    let media_files = discover_media_files(root, recursive)?;
+    let media_files = discover_media_files(root, recursive, exclude)?;
 
     if media_files.is_empty() {
         println!("No media files found at: {}", root.display());
@@ -533,14 +563,16 @@ fn run_transcribe(
     dry_run: bool,
     prompt: Option<&str>,
     hotwords_file: Option<&str>,
+    exclude_patterns: &[String],
 ) -> Result<()> {
     let root = Path::new(path);
     if !root.exists() {
         anyhow::bail!("Path not found: {}", root.display());
     }
 
+    let exclude = build_exclude_set(exclude_patterns)?;
     let start_time = std::time::Instant::now();
-    let media_files = discover_and_report_media(root, recursive)?;
+    let media_files = discover_and_report_media(root, recursive, &exclude)?;
     if media_files.is_empty() {
         return Ok(());
     }
@@ -766,8 +798,36 @@ fn run_demo(query: &str, top_k: usize) -> Result<()> {
     Ok(())
 }
 
+/// Build a GlobSet from exclude patterns. Returns None if no patterns.
+fn build_exclude_set(patterns: &[String]) -> Result<Option<GlobSet>> {
+    if patterns.is_empty() {
+        return Ok(None);
+    }
+    let mut builder = GlobSetBuilder::new();
+    for pattern in patterns {
+        builder.add(
+            Glob::new(pattern)
+                .with_context(|| format!("Invalid exclude glob: {pattern}"))?,
+        );
+    }
+    Ok(Some(builder.build().context("Failed to build exclude set")?))
+}
+
+/// Check if a path should be excluded by glob patterns.
+fn is_excluded(path: &Path, exclude: &Option<GlobSet>) -> bool {
+    match exclude {
+        Some(set) => set.is_match(path),
+        None => false,
+    }
+}
+
 /// Discover files from a path using the loader registry.
-fn discover_files(root: &Path, recursive: bool, registry: &LoaderRegistry) -> Result<Vec<PathBuf>> {
+fn discover_files(
+    root: &Path,
+    recursive: bool,
+    registry: &LoaderRegistry,
+    exclude: &Option<GlobSet>,
+) -> Result<Vec<PathBuf>> {
     let mut files = Vec::new();
 
     if root.is_file() {
@@ -785,18 +845,27 @@ fn discover_files(root: &Path, recursive: bool, registry: &LoaderRegistry) -> Re
     }
 
     let mut dirs_to_visit = vec![root.to_path_buf()];
+    let mut excluded_count = 0usize;
     while let Some(dir) = dirs_to_visit.pop() {
         let entries = fs::read_dir(&dir)
             .with_context(|| format!("Failed to read directory: {}", dir.display()))?;
 
         for entry in entries {
             let path = entry?.path();
+            if is_excluded(&path, exclude) {
+                excluded_count += 1;
+                continue;
+            }
             if path.is_dir() && recursive {
                 dirs_to_visit.push(path);
             } else if path.is_file() && registry.loader_for(&path).is_some() {
                 files.push(path);
             }
         }
+    }
+
+    if excluded_count > 0 {
+        println!("Excluded {} paths by glob pattern", excluded_count);
     }
 
     // Sort for deterministic ordering
@@ -961,9 +1030,10 @@ fn discover_and_load(
     path: &Path,
     recursive: bool,
     jobs: usize,
+    exclude: &Option<GlobSet>,
 ) -> Result<(Vec<PathBuf>, HashMap<String, usize>, Vec<Document>)> {
     let registry = LoaderRegistry::new();
-    let files = discover_files(path, recursive, &registry)?;
+    let files = discover_files(path, recursive, &registry, exclude)?;
 
     if files.is_empty() {
         let exts = registry.supported_extensions().join(", ");
@@ -1092,13 +1162,15 @@ fn run_index(
     chunk_strategy: ChunkStrategy,
     jobs: usize,
     manifest: bool,
+    exclude_patterns: &[String],
 ) -> Result<()> {
     let path = Path::new(path);
     if !path.exists() {
         anyhow::bail!("Path not found: {}", path.display());
     }
 
-    let (files, classification, documents) = discover_and_load(path, recursive, jobs)?;
+    let exclude = build_exclude_set(exclude_patterns)?;
+    let (files, classification, documents) = discover_and_load(path, recursive, jobs, &exclude)?;
     let (embedder_box, actual_dimension, embedder_name, model_name) =
         create_embedder(embedder_type, dimension, model, &documents)?;
 
@@ -1340,7 +1412,7 @@ mod tests {
         fs::write(&file, "hello").unwrap();
 
         let registry = LoaderRegistry::new();
-        let files = discover_files(&file, false, &registry).unwrap();
+        let files = discover_files(&file, false, &registry, &None).unwrap();
         assert_eq!(files.len(), 1);
         assert_eq!(files[0], file);
 
@@ -1358,7 +1430,7 @@ mod tests {
         fs::write(sub.join("d.txt"), "d").unwrap(); // in subdir
 
         let registry = LoaderRegistry::new();
-        let files = discover_files(&dir, false, &registry).unwrap();
+        let files = discover_files(&dir, false, &registry, &None).unwrap();
         // Only a.txt and b.md in top-level (not c.mp4, not sub/d.txt)
         assert_eq!(files.len(), 2);
 
@@ -1376,7 +1448,7 @@ mod tests {
         fs::write(deep.join("c.md"), "c").unwrap();
 
         let registry = LoaderRegistry::new();
-        let files = discover_files(&dir, true, &registry).unwrap();
+        let files = discover_files(&dir, true, &registry, &None).unwrap();
         assert_eq!(files.len(), 3);
 
         let _ = fs::remove_dir_all(&dir);
@@ -1390,7 +1462,7 @@ mod tests {
         fs::write(&file, "fake").unwrap();
 
         let registry = LoaderRegistry::new();
-        let result = discover_files(&file, false, &registry);
+        let result = discover_files(&file, false, &registry, &None);
         assert!(result.is_err());
 
         let _ = fs::remove_dir_all(&dir);
@@ -1415,5 +1487,86 @@ mod tests {
         // Ensure Auto is the default
         let strategy = ChunkStrategy::default();
         assert!(matches!(strategy, ChunkStrategy::Auto));
+    }
+
+    #[test]
+    fn test_build_exclude_set_empty() {
+        let result = build_exclude_set(&[]).unwrap();
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_build_exclude_set_valid() {
+        let patterns = vec!["*/RAW".to_string(), "*/RAW/*".to_string()];
+        let result = build_exclude_set(&patterns).unwrap();
+        assert!(result.is_some());
+    }
+
+    #[test]
+    fn test_build_exclude_set_invalid() {
+        let patterns = vec!["[invalid".to_string()];
+        let result = build_exclude_set(&patterns);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_is_excluded_matches() {
+        let patterns = vec!["*/RAW".to_string(), "*/RAW/*".to_string()];
+        let exclude = build_exclude_set(&patterns).unwrap();
+        assert!(is_excluded(Path::new("/data/courses/aws/RAW"), &exclude));
+        assert!(is_excluded(
+            Path::new("/data/courses/aws/RAW/video.mp4"),
+            &exclude
+        ));
+        assert!(!is_excluded(
+            Path::new("/data/courses/aws/build/video.srt"),
+            &exclude
+        ));
+    }
+
+    #[test]
+    fn test_is_excluded_none() {
+        assert!(!is_excluded(Path::new("/any/path"), &None));
+    }
+
+    #[test]
+    fn test_discover_files_with_exclude() {
+        let dir = std::env::temp_dir().join("trueno_rag_cli_test_exclude");
+        let raw = dir.join("RAW");
+        let build = dir.join("build");
+        let _ = fs::remove_dir_all(&dir);
+        let _ = fs::create_dir_all(&raw);
+        let _ = fs::create_dir_all(&build);
+        fs::write(dir.join("keep.txt"), "keep").unwrap();
+        fs::write(raw.join("skip.txt"), "skip").unwrap();
+        fs::write(build.join("also_keep.txt"), "keep2").unwrap();
+
+        let registry = LoaderRegistry::new();
+        let exclude = build_exclude_set(&["*/RAW".to_string(), "*/RAW/*".to_string()]).unwrap();
+        let files = discover_files(&dir, true, &registry, &exclude).unwrap();
+
+        // Should have keep.txt and build/also_keep.txt but NOT RAW/skip.txt
+        assert_eq!(files.len(), 2);
+        assert!(files.iter().all(|f| !f.to_string_lossy().contains("RAW")));
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_discover_media_files_with_exclude() {
+        let dir = std::env::temp_dir().join("trueno_rag_cli_test_media_exclude");
+        let raw = dir.join("RAW");
+        let _ = fs::remove_dir_all(&dir);
+        let _ = fs::create_dir_all(&raw);
+        fs::write(dir.join("keep.mp4"), "fake media").unwrap();
+        fs::write(raw.join("skip.mp4"), "fake media").unwrap();
+
+        let exclude = build_exclude_set(&["*/RAW".to_string(), "*/RAW/*".to_string()]).unwrap();
+        let files = discover_media_files(&dir, true, &exclude).unwrap();
+
+        assert_eq!(files.len(), 1);
+        assert!(files[0].to_string_lossy().contains("keep.mp4"));
+
+        let _ = fs::remove_dir_all(&dir);
     }
 }
