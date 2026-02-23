@@ -83,6 +83,10 @@ trueno-rag query "how does Kubernetes handle pod scheduling" \
 # JSON output with custom fusion
 trueno-rag query "AWS Lambda" --index index/ --format json \
   --mode hybrid --fusion rrf --fusion-k 30 --candidates 100
+
+# Hybrid + lexical reranking (fetches 3x candidates, re-orders by term coverage)
+trueno-rag query "how does Kubernetes handle pod scheduling" \
+  --index index/ --mode hybrid --rerank lexical
 ```
 
 | Flag | Default | Description |
@@ -95,6 +99,7 @@ trueno-rag query "AWS Lambda" --index index/ --format json \
 | `--fusion` | rrf | Fusion strategy (hybrid only): `rrf`, `linear`, `dbsf` |
 | `--fusion-k` | (varies) | Fusion parameter: RRF k value or Linear dense_weight |
 | `--candidates` | 50 | Candidates per source (hybrid only) |
+| `--rerank` | none | Reranking strategy: `none`, `lexical` |
 
 ### `transcribe`
 
@@ -221,6 +226,13 @@ trueno-rag eval retrieve \
   --ground-truth ground-truth.jsonl \
   --output retrieval-results-hybrid.jsonl \
   --mode hybrid --fusion rrf --candidates 50
+
+# Hybrid + lexical reranking (fetches 3x candidates, re-orders by term coverage)
+trueno-rag eval retrieve \
+  --index /path/to/index \
+  --ground-truth ground-truth.jsonl \
+  --output retrieval-results-reranked.jsonl \
+  --mode hybrid --fusion rrf --rerank lexical
 ```
 
 | Flag | Default | Description |
@@ -233,6 +245,7 @@ trueno-rag eval retrieve \
 | `--fusion` | rrf | Fusion strategy (hybrid only): `rrf`, `linear`, `dbsf` |
 | `--fusion-k` | (varies) | Fusion parameter: RRF k value or Linear dense_weight |
 | `--candidates` | 50 | Candidates per source (hybrid only) |
+| `--rerank` | none | Reranking strategy: `none`, `lexical` |
 
 ### `eval judge`
 
