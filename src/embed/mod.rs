@@ -93,6 +93,38 @@ pub trait Embedder: Send + Sync {
     }
 }
 
+/// Blanket impl so `HybridRetriever<Box<dyn Embedder>>` works without
+/// requiring the caller to know the concrete embedder type at compile time.
+impl Embedder for Box<dyn Embedder> {
+    fn embed(&self, text: &str) -> Result<Vec<f32>> {
+        (**self).embed(text)
+    }
+
+    fn embed_batch(&self, texts: &[&str]) -> Result<Vec<Vec<f32>>> {
+        (**self).embed_batch(texts)
+    }
+
+    fn dimension(&self) -> usize {
+        (**self).dimension()
+    }
+
+    fn model_id(&self) -> &str {
+        (**self).model_id()
+    }
+
+    fn embed_query(&self, query: &str) -> Result<Vec<f32>> {
+        (**self).embed_query(query)
+    }
+
+    fn embed_document(&self, document: &str) -> Result<Vec<f32>> {
+        (**self).embed_document(document)
+    }
+
+    fn embed_chunks(&self, chunks: &mut [Chunk]) -> Result<()> {
+        (**self).embed_chunks(chunks)
+    }
+}
+
 /// Mock embedder for testing (uses simple hash-based vectors)
 #[derive(Debug, Clone)]
 pub struct MockEmbedder {
