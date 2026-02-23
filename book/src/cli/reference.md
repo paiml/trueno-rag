@@ -87,7 +87,7 @@ trueno-rag query "AWS Lambda" --index index/ --format json \
 | `--index` | (required) | Path to index directory |
 | `--top-k` | 5 | Number of results |
 | `--format` | text | Output format: `text` or `json` |
-| `--mode` | hybrid | Retrieval mode: `dense`, `sparse`, `hybrid` |
+| `--mode` | sparse | Retrieval mode: `dense`, `sparse`, `hybrid` |
 | `--fusion` | rrf | Fusion strategy (hybrid only): `rrf`, `linear`, `dbsf` |
 | `--fusion-k` | (varies) | Fusion parameter: RRF k value or Linear dense_weight |
 | `--candidates` | 50 | Candidates per source (hybrid only) |

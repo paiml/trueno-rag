@@ -182,7 +182,7 @@ enum Commands {
         format: String,
 
         /// Retrieval mode: dense (TF-IDF only), sparse (BM25 only), hybrid (fused)
-        #[arg(long, default_value = "hybrid")]
+        #[arg(long, default_value = "sparse")]
         mode: String,
 
         /// Fusion strategy (hybrid mode only): rrf, linear, dbsf
