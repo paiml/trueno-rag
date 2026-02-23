@@ -201,6 +201,10 @@ enum Commands {
         /// Candidates per source for hybrid retrieval
         #[arg(long, default_value = "50")]
         candidates: usize,
+
+        /// Reranking strategy: none, lexical
+        #[arg(long, default_value = "none")]
+        rerank: String,
     },
 
     /// Batch transcribe media files to .srt sidecars
@@ -340,6 +344,10 @@ enum EvalAction {
         /// Candidates per source for hybrid retrieval
         #[arg(long, default_value = "50")]
         candidates: usize,
+
+        /// Reranking strategy: none, lexical
+        #[arg(long, default_value = "none")]
+        rerank: String,
     },
 
     /// Judge retrieval results for relevance via Claude API and compute metrics
@@ -482,7 +490,8 @@ fn main() -> Result<()> {
             fusion,
             fusion_k,
             candidates,
-        } => run_query(&query, &index, top_k, &format, &mode, &fusion, fusion_k, candidates)?,
+            rerank,
+        } => run_query(&query, &index, top_k, &format, &mode, &fusion, fusion_k, candidates, &rerank)?,
         Commands::Transcribe {
             path,
             recursive,
@@ -1442,6 +1451,7 @@ fn run_query(
     fusion: &str,
     fusion_k: Option<f32>,
     candidates: usize,
+    rerank: &str,
 ) -> Result<()> {
     if !["dense", "sparse", "hybrid"].contains(&mode) {
         anyhow::bail!("Unknown mode: {mode} (expected dense, sparse, hybrid)");
@@ -1457,12 +1467,18 @@ fn run_query(
     let json = fs::read_to_string(&index_file)?;
     let persisted: PersistedIndex = serde_json::from_str(&json)?;
 
+    // Fetch more candidates if reranking (reranker re-orders, so we need a wider pool)
+    let retrieval_k = if rerank == "none" { top_k } else { top_k * 3 };
+
     let scores = match mode {
-        "dense" => query_dense(query, &persisted, top_k)?,
-        "sparse" => query_sparse(query, &persisted, top_k),
-        "hybrid" => query_hybrid(query, &persisted, top_k, fusion, fusion_k, candidates)?,
+        "dense" => query_dense(query, &persisted, retrieval_k)?,
+        "sparse" => query_sparse(query, &persisted, retrieval_k),
+        "hybrid" => query_hybrid(query, &persisted, retrieval_k, fusion, fusion_k, candidates)?,
         _ => unreachable!(),
     };
+
+    // Apply reranking if requested
+    let scores = apply_rerank(rerank, query, &scores, &persisted.chunks, top_k)?;
 
     format_query_results(query, &scores, &persisted.chunks, format)
 }
@@ -1505,6 +1521,129 @@ fn create_query_embedder(persisted: &PersistedIndex) -> Result<Box<dyn Embedder>
             .collect();
         emb.fit(&refs);
         Ok(Box::new(emb))
+    }
+}
+
+/// Apply reranking to scored results.
+///
+/// Takes `(chunk_index, score)` pairs and reranks using the specified strategy.
+/// Returns `(chunk_index, rerank_score)` pairs truncated to `top_k`.
+fn apply_rerank(
+    rerank: &str,
+    query: &str,
+    scores: &[(usize, f32)],
+    chunks: &[PersistedChunk],
+    top_k: usize,
+) -> Result<Vec<(usize, f32)>> {
+    use trueno_rag::rerank::Reranker;
+    use trueno_rag::retrieve::RetrievalResult;
+    use trueno_rag::{Chunk, DocumentId};
+
+    match rerank {
+        "none" => Ok(scores.iter().take(top_k).copied().collect()),
+        "lexical" => {
+            // Convert (index, score) pairs into RetrievalResult for the Reranker trait
+            let candidates: Vec<RetrievalResult> = scores
+                .iter()
+                .map(|(idx, score)| {
+                    let pc = &chunks[*idx];
+                    let mut chunk = Chunk::new(
+                        DocumentId::new(),
+                        pc.content.clone(),
+                        0,
+                        pc.content.len(),
+                    );
+                    // Store original index in metadata for round-tripping
+                    chunk.metadata.custom.insert(
+                        "_idx".to_string(),
+                        serde_json::Value::Number(serde_json::Number::from(*idx)),
+                    );
+                    RetrievalResult {
+                        chunk,
+                        dense_score: Some(*score),
+                        sparse_score: None,
+                        fused_score: None,
+                        rerank_score: None,
+                    }
+                })
+                .collect();
+
+            let reranker = LexicalReranker::new();
+            let reranked = reranker.rerank(query, &candidates, top_k)?;
+
+            Ok(reranked
+                .into_iter()
+                .map(|rr| {
+                    let idx = rr.chunk.metadata.custom.get("_idx")
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(0) as usize;
+                    let score = rr.rerank_score.unwrap_or(rr.best_score());
+                    (idx, score)
+                })
+                .collect())
+        }
+        _ => anyhow::bail!("Unknown rerank strategy: {rerank} (expected none, lexical)"),
+    }
+}
+
+/// Rerank `RetrievedChunk` results (used in eval retrieve path).
+#[cfg(feature = "eval")]
+fn rerank_retrieved_chunks(
+    rerank: &str,
+    query: &str,
+    mut results: Vec<trueno_rag::eval::types::RetrievedChunk>,
+    top_k: usize,
+) -> Result<Vec<trueno_rag::eval::types::RetrievedChunk>> {
+    use trueno_rag::rerank::Reranker;
+    use trueno_rag::retrieve::RetrievalResult;
+    use trueno_rag::{Chunk, DocumentId};
+
+    match rerank {
+        "none" => {
+            results.truncate(top_k);
+            Ok(results)
+        }
+        "lexical" => {
+            let candidates: Vec<RetrievalResult> = results
+                .iter()
+                .enumerate()
+                .map(|(i, rc)| {
+                    let mut chunk = Chunk::new(
+                        DocumentId::new(),
+                        rc.content.clone(),
+                        0,
+                        rc.content.len(),
+                    );
+                    chunk.metadata.custom.insert(
+                        "_idx".to_string(),
+                        serde_json::Value::Number(serde_json::Number::from(i)),
+                    );
+                    RetrievalResult {
+                        chunk,
+                        dense_score: Some(rc.score),
+                        sparse_score: None,
+                        fused_score: None,
+                        rerank_score: None,
+                    }
+                })
+                .collect();
+
+            let reranker = LexicalReranker::new();
+            let reranked = reranker.rerank(query, &candidates, top_k)?;
+
+            Ok(reranked
+                .into_iter()
+                .map(|rr| {
+                    let idx = rr.chunk.metadata.custom.get("_idx")
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(0) as usize;
+                    let mut rc = results[idx].clone();
+                    rc.score = rr.rerank_score.unwrap_or(rr.best_score());
+                    rc
+                })
+                .collect())
+        }
+        _ => anyhow::bail!("Unknown rerank strategy: {rerank} (expected none, lexical)"),
     }
 }
 
@@ -1696,7 +1835,8 @@ fn run_eval(action: EvalAction) -> Result<()> {
             fusion,
             fusion_k,
             candidates,
-        } => run_eval_retrieve(&index, &ground_truth, &output, top_k, &mode, &fusion, fusion_k, candidates),
+            rerank,
+        } => run_eval_retrieve(&index, &ground_truth, &output, top_k, &mode, &fusion, fusion_k, candidates, &rerank),
 
         EvalAction::Judge {
             retrieval_results,
@@ -1898,6 +2038,7 @@ fn run_eval_retrieve(
     fusion: &str,
     fusion_k: Option<f32>,
     candidates: usize,
+    rerank: &str,
 ) -> Result<()> {
     use trueno_rag::eval::types::{GroundTruthEntry, RetrievalResultEntry, RetrievedChunk};
     use trueno_rag::index::{SparseIndex, VectorStoreConfig};
@@ -1925,7 +2066,10 @@ fn run_eval_retrieve(
         .context("Failed to parse ground truth JSONL")?;
 
     println!("Loaded {} queries from {}", queries.len(), ground_truth_path);
-    println!("Mode: {mode} | Fusion: {fusion} | Candidates: {candidates} | Top-k: {top_k}");
+    println!("Mode: {mode} | Fusion: {fusion} | Candidates: {candidates} | Top-k: {top_k} | Rerank: {rerank}");
+
+    // Fetch more candidates when reranking to give the reranker a wider pool
+    let retrieval_k = if rerank == "none" { top_k } else { top_k * 3 };
 
     // Load index
     println!("Loading index from {}...", index_file.display());
@@ -1975,7 +2119,7 @@ fn run_eval_retrieve(
                     .collect();
 
                 scores.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
-                scores.truncate(top_k);
+                scores.truncate(retrieval_k);
                 let latency = start.elapsed().as_secs_f64();
 
                 let results: Vec<RetrievedChunk> = scores.iter().map(|(idx, score)| {
@@ -1989,6 +2133,8 @@ fn run_eval_retrieve(
                         end_secs: chunk.end_secs,
                     }
                 }).collect();
+
+                let results = rerank_retrieved_chunks(rerank, &entry.query, results, top_k)?;
 
                 println!(" {} results ({:.2}s)", results.len(), latency);
                 let result_entry = RetrievalResultEntry {
@@ -2025,7 +2171,7 @@ fn run_eval_retrieve(
                 );
 
                 let start = std::time::Instant::now();
-                let bm25_results = bm25.search(&entry.query, top_k);
+                let bm25_results = bm25.search(&entry.query, retrieval_k);
                 let latency = start.elapsed().as_secs_f64();
 
                 let results: Vec<RetrievedChunk> = bm25_results.iter().map(|(chunk_id, score)| {
@@ -2040,6 +2186,8 @@ fn run_eval_retrieve(
                         end_secs: pc.end_secs,
                     }
                 }).collect();
+
+                let results = rerank_retrieved_chunks(rerank, &entry.query, results, top_k)?;
 
                 println!(" {} results ({:.2}s)", results.len(), latency);
                 let result_entry = RetrievalResultEntry {
@@ -2096,7 +2244,7 @@ fn run_eval_retrieve(
                 );
 
                 let start = std::time::Instant::now();
-                let retrieval_results = retriever.retrieve(&entry.query, top_k)?;
+                let retrieval_results = retriever.retrieve(&entry.query, retrieval_k)?;
                 let latency = start.elapsed().as_secs_f64();
 
                 let results: Vec<RetrievedChunk> = retrieval_results.iter().map(|rr| {
@@ -2123,6 +2271,8 @@ fn run_eval_retrieve(
                         }
                     }
                 }).collect();
+
+                let results = rerank_retrieved_chunks(rerank, &entry.query, results, top_k)?;
 
                 println!(" {} results ({:.2}s)", results.len(), latency);
                 let result_entry = RetrievalResultEntry {

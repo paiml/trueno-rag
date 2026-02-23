@@ -97,6 +97,7 @@ pub mod metrics;
 #[cfg(feature = "multivector")]
 pub mod multivector;
 pub mod pipeline;
+pub mod preprocess;
 pub mod rerank;
 pub mod retrieve;
 #[cfg(feature = "eval")]
