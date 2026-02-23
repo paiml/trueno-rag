@@ -184,3 +184,37 @@ roadmap:
   - media-support
   - testing
   notes: null
+- id: PMAT-010
+  github_issue: null
+  item_type: task
+  title: 'Update book: fix API inaccuracies, add CLI ref, eval pipeline, new examples'
+  status: inprogress
+  priority: medium
+  assigned_to: null
+  created: 2026-02-23T15:46:08Z
+  updated: 2026-02-23T15:46:12.143757918+00:00
+  spec: null
+  acceptance_criteria:
+  - Fix HybridRetrieverConfig fields, add CLI reference page, eval pipeline docs, eval_hybrid example, expand examples table
+  phases: []
+  subtasks: []
+  estimated_effort: null
+  labels: []
+  notes: null
+- id: PMAT-011
+  github_issue: null
+  item_type: task
+  title: Add --dedup flag to index subcommand
+  status: inprogress
+  priority: medium
+  assigned_to: null
+  created: 2026-02-23T18:44:13Z
+  updated: 2026-02-23T18:44:16.948039150+00:00
+  spec: null
+  acceptance_criteria:
+  - Content-hash deduplication for unified index — removes ~28.5% duplicate chunks
+  phases: []
+  subtasks: []
+  estimated_effort: null
+  labels: []
+  notes: null
