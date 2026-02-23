@@ -5,26 +5,30 @@
 //!
 //! # Architecture
 //!
-//! Split pipeline (local-first):
-//! - **Retrieval** runs on the indexing machine (no API keys needed)
-//! - **Generation + Judging** runs locally where `ANTHROPIC_API_KEY` exists
+//! Split pipeline — trueno-rag handles data, Claude Code handles LLM work:
+//! - `eval sample` — Sample chunks from index (no API needed)
+//! - `eval retrieve` — Run queries against index (no API needed)
+//! - `eval metrics` — Compute IR metrics from judgments (no API needed)
+//! - Claude Code `/eval-generate` skill — Generate questions from sampled chunks
+//! - Claude Code `/eval-judge` skill — Judge relevance of retrieved chunks
 //!
-//! # Subcommands
-//!
-//! - `eval generate` — Sample chunks, generate questions via Claude API
-//! - `eval retrieve` — Run queries against index, dump results to JSONL
-//! - `eval judge` — LLM-as-judge relevance scoring + IR metrics
+//! Optional direct API mode (requires `ANTHROPIC_API_KEY`):
+//! - `eval generate` — Sample + generate questions via Claude API
+//! - `eval judge` — Judge + compute metrics via Claude API
 
 pub mod client;
 pub mod domain;
 pub mod generate;
 pub mod judge;
+pub mod metrics;
 pub mod types;
 
 pub use client::AnthropicClient;
 pub use domain::classify_domain;
 pub use generate::GroundTruthGenerator;
 pub use judge::RelevanceJudge;
+pub use metrics::compute_metrics_from_judgments;
 pub use types::{
-    EvalConfig, GroundTruthEntry, JudgeCache, JudgeCacheEntry, JudgeVerdict, RetrievalResultEntry,
+    EvalConfig, GroundTruthEntry, JudgeCache, JudgeCacheEntry, JudgeVerdict,
+    JudgmentEntry, RetrievalResultEntry,
 };

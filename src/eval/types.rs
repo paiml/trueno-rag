@@ -165,6 +165,25 @@ mod hex {
     }
 }
 
+/// A single judgment entry (written by Claude Code or external judge)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct JudgmentEntry {
+    /// The query
+    pub query: String,
+    /// Rank of the chunk being judged (1-indexed)
+    pub rank: usize,
+    /// Whether the chunk is relevant
+    pub relevant: bool,
+    /// Brief reasoning
+    pub reasoning: String,
+    /// Source path (for correlation)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
+    /// Retrieval score (for correlation)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub score: Option<f32>,
+}
+
 /// Eval output with full results
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EvalOutput {
