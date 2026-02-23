@@ -9,8 +9,8 @@ Trueno-RAG uses hybrid retrieval combining dense and sparse search.
 Uses embedding similarity for semantic matching:
 
 ```rust
-let store = VectorStore::with_dimension(384);
-store.add(&chunk);
+let mut store = VectorStore::with_dimension(384);
+store.insert(chunk)?;
 let results = store.search(&query_embedding, 10)?;
 ```
 
@@ -31,10 +31,10 @@ Combines both approaches:
 ```rust
 let retriever = HybridRetriever::new(vector_store, bm25_index, embedder)
     .with_config(HybridRetrieverConfig {
-        dense_weight: 0.7,
-        sparse_weight: 0.3,
+        candidates_per_source: 50,
         fusion: FusionStrategy::RRF { k: 60.0 },
-        ..Default::default()
+        use_dense: true,
+        use_sparse: true,
     });
 
 let results = retriever.retrieve("query", 10)?;

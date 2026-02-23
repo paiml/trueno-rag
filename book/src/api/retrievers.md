@@ -15,7 +15,10 @@ impl<E: Embedder> HybridRetriever<E> {
     ) -> Self;
     pub fn with_config(self, config: HybridRetrieverConfig) -> Self;
     pub fn retrieve(&self, query: &str, k: usize) -> Result<Vec<RetrievalResult>>;
+    pub fn retrieve_dense(&self, query: &str, k: usize) -> Result<Vec<RetrievalResult>>;
+    pub fn retrieve_sparse(&self, query: &str, k: usize) -> Result<Vec<RetrievalResult>>;
     pub fn index(&mut self, chunk: Chunk) -> Result<()>;
+    pub fn index_batch(&mut self, chunks: Vec<Chunk>) -> Result<()>;
     pub fn len(&self) -> usize;
 }
 ```
@@ -24,10 +27,10 @@ impl<E: Embedder> HybridRetriever<E> {
 
 ```rust
 pub struct HybridRetrieverConfig {
-    pub dense_weight: f32,
-    pub sparse_weight: f32,
+    pub candidates_per_source: usize,
     pub fusion: FusionStrategy,
-    pub min_score: f32,
+    pub use_dense: bool,
+    pub use_sparse: bool,
 }
 ```
 
@@ -40,7 +43,7 @@ pub struct VectorStore { ... }
 
 impl VectorStore {
     pub fn with_dimension(dimension: usize) -> Self;
-    pub fn add(&mut self, chunk: &Chunk) -> Result<()>;
+    pub fn insert(&mut self, chunk: Chunk) -> Result<()>;
     pub fn search(&self, query: &[f32], k: usize) -> Result<Vec<(ChunkId, f32)>>;
     pub fn len(&self) -> usize;
 }
