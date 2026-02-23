@@ -1,7 +1,7 @@
 {
-  "tree_hash": "195002b09030477dbc9babdef1f7f032b2556f9c",
-  "pmat_version": "3.3.0",
-  "timestamp": "2026-02-16T21:38:35.198448040Z",
+  "tree_hash": "01bd582fdf3d013cdc2ad2f9d57b94d299fd4ad5",
+  "pmat_version": "3.5.1",
+  "timestamp": "2026-02-23T18:46:03.986236681Z",
   "report": {
     "files_with_dead_code": [
       {
@@ -10,17 +10,17 @@
           {
             "name": "save",
             "kind": "Suppressed",
-            "line": 410,
+            "line": 638,
             "column": 1,
             "message": "fn `save` has #[allow(dead_code)] suppression (explicit dead code admission)"
           }
         ],
-        "file_dead_percentage": 0.30143180105501133
+        "file_dead_percentage": 0.16194331983805668
       }
     ],
     "total_dead_items": 1,
-    "dead_code_percentage": 0.009357162908206233,
-    "total_lines": 21374,
+    "dead_code_percentage": 0.008121827411167513,
+    "total_lines": 24625,
     "dead_lines": 2,
     "dead_by_type": {
       "suppressed": 1
