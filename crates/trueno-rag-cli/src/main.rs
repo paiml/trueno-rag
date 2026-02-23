@@ -303,6 +303,22 @@ enum EvalAction {
         /// Number of results per query
         #[arg(long, default_value = "10")]
         top_k: usize,
+
+        /// Retrieval mode: dense (TF-IDF only), sparse (BM25 only), hybrid (fused)
+        #[arg(long, default_value = "dense")]
+        mode: String,
+
+        /// Fusion strategy (hybrid mode only): rrf, linear, dbsf
+        #[arg(long, default_value = "rrf")]
+        fusion: String,
+
+        /// Fusion parameter: RRF k value or Linear dense_weight
+        #[arg(long)]
+        fusion_k: Option<f32>,
+
+        /// Candidates per source for hybrid retrieval
+        #[arg(long, default_value = "50")]
+        candidates: usize,
     },
 
     /// Judge retrieval results for relevance via Claude API and compute metrics
@@ -1537,7 +1553,11 @@ fn run_eval(action: EvalAction) -> Result<()> {
             ground_truth,
             output,
             top_k,
-        } => run_eval_retrieve(&index, &ground_truth, &output, top_k),
+            mode,
+            fusion,
+            fusion_k,
+            candidates,
+        } => run_eval_retrieve(&index, &ground_truth, &output, top_k, &mode, &fusion, fusion_k, candidates),
 
         EvalAction::Judge {
             retrieval_results,
@@ -1721,13 +1741,35 @@ fn run_eval_generate(
 }
 
 #[cfg(feature = "eval")]
+fn parse_fusion_strategy(fusion: &str, fusion_k: Option<f32>) -> Result<FusionStrategy> {
+    match fusion {
+        "rrf" => Ok(FusionStrategy::RRF { k: fusion_k.unwrap_or(60.0) }),
+        "linear" => Ok(FusionStrategy::Linear { dense_weight: fusion_k.unwrap_or(0.5) }),
+        "dbsf" => Ok(FusionStrategy::DBSF),
+        other => anyhow::bail!("Unknown fusion strategy: {other} (expected rrf, linear, dbsf)"),
+    }
+}
+
+#[cfg(feature = "eval")]
 fn run_eval_retrieve(
     index_path: &str,
     ground_truth_path: &str,
     output_path: &str,
     top_k: usize,
+    mode: &str,
+    fusion: &str,
+    fusion_k: Option<f32>,
+    candidates: usize,
 ) -> Result<()> {
     use trueno_rag::eval::types::{GroundTruthEntry, RetrievalResultEntry, RetrievedChunk};
+    use trueno_rag::index::{SparseIndex, VectorStoreConfig};
+    use trueno_rag::retrieve::HybridRetrieverConfig;
+    use trueno_rag::{BM25Index, DocumentId, HybridRetriever, VectorStore};
+
+    // Validate mode
+    if !["dense", "sparse", "hybrid"].contains(&mode) {
+        anyhow::bail!("Unknown mode: {mode} (expected dense, sparse, hybrid)");
+    }
 
     let index_file = Path::new(index_path).join("index.json");
     if !index_file.exists() {
@@ -1745,6 +1787,7 @@ fn run_eval_retrieve(
         .context("Failed to parse ground truth JSONL")?;
 
     println!("Loaded {} queries from {}", queries.len(), ground_truth_path);
+    println!("Mode: {mode} | Fusion: {fusion} | Candidates: {candidates} | Top-k: {top_k}");
 
     // Load index
     println!("Loading index from {}...", index_file.display());
@@ -1752,66 +1795,212 @@ fn run_eval_retrieve(
     let persisted: PersistedIndex = serde_json::from_str(&json)?;
     println!("Index: {} chunks, dim={}", persisted.chunks.len(), persisted.dimension);
 
-    // Build TF-IDF embedder (same as run_query)
+    // Build TF-IDF embedder (needed for dense and hybrid modes)
     let mut embedder = TfIdfEmbedder::new(persisted.dimension);
     let refs: Vec<&str> = persisted.chunks.iter().map(|c| c.content.as_str()).collect();
     embedder.fit(&refs);
+
+    // Convert PersistedChunks to Chunks with embeddings for hybrid/sparse modes
+    let build_chunks = |with_embeddings: bool| -> Vec<Chunk> {
+        persisted.chunks.iter().enumerate().map(|(i, pc)| {
+            let mut chunk = Chunk::new(DocumentId::new(), pc.content.clone(), 0, pc.content.len());
+            chunk.metadata.title = pc.title.clone();
+            chunk.metadata.custom.insert(
+                "source".to_string(),
+                serde_json::Value::String(pc.source.clone().unwrap_or_default()),
+            );
+            if with_embeddings {
+                chunk.embedding = Some(persisted.embeddings[i].clone());
+            }
+            chunk
+        }).collect()
+    };
 
     // Run queries
     let mut output_file = std::io::BufWriter::new(fs::File::create(output_path)?);
     use std::io::Write;
 
-    for (i, entry) in queries.iter().enumerate() {
-        print!(
-            "[{}/{}] {}...",
-            i + 1,
-            queries.len(),
-            &entry.query[..entry.query.len().min(60)]
-        );
+    match mode {
+        "dense" => {
+            // Original TF-IDF cosine similarity path
+            for (i, entry) in queries.iter().enumerate() {
+                print!(
+                    "[{}/{}] {}...",
+                    i + 1, queries.len(),
+                    &entry.query[..entry.query.len().min(60)]
+                );
 
-        let start = std::time::Instant::now();
-        let query_embedding = embedder.embed(&entry.query)?;
+                let start = std::time::Instant::now();
+                let query_embedding = embedder.embed(&entry.query)?;
 
-        // Compute similarities
-        let mut scores: Vec<(usize, f32)> = persisted
-            .embeddings
-            .iter()
-            .enumerate()
-            .map(|(idx, emb)| (idx, cosine_similarity(&query_embedding, emb)))
-            .collect();
+                let mut scores: Vec<(usize, f32)> = persisted
+                    .embeddings.iter().enumerate()
+                    .map(|(idx, emb)| (idx, cosine_similarity(&query_embedding, emb)))
+                    .collect();
 
-        scores.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
-        scores.truncate(top_k);
+                scores.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+                scores.truncate(top_k);
+                let latency = start.elapsed().as_secs_f64();
 
-        let latency = start.elapsed().as_secs_f64();
+                let results: Vec<RetrievedChunk> = scores.iter().map(|(idx, score)| {
+                    let chunk = &persisted.chunks[*idx];
+                    RetrievedChunk {
+                        content: chunk.content.clone(),
+                        source: chunk.source.clone(),
+                        score: *score,
+                        title: chunk.title.clone(),
+                        start_secs: chunk.start_secs,
+                        end_secs: chunk.end_secs,
+                    }
+                }).collect();
 
-        let results: Vec<RetrievedChunk> = scores
-            .iter()
-            .map(|(idx, score)| {
-                let chunk = &persisted.chunks[*idx];
-                RetrievedChunk {
-                    content: chunk.content.clone(),
-                    source: chunk.source.clone(),
-                    score: *score,
-                    title: chunk.title.clone(),
-                    start_secs: chunk.start_secs,
-                    end_secs: chunk.end_secs,
-                }
-            })
-            .collect();
+                println!(" {} results ({:.2}s)", results.len(), latency);
+                let result_entry = RetrievalResultEntry {
+                    query: entry.query.clone(),
+                    domain: entry.domain.clone(),
+                    course: entry.course.clone(),
+                    results,
+                    latency_s: latency,
+                };
+                serde_json::to_writer(&mut output_file, &result_entry)?;
+                writeln!(output_file)?;
+            }
+        }
 
-        println!(" {} results ({:.2}s)", results.len(), latency);
+        "sparse" => {
+            // BM25-only retrieval
+            println!("Building BM25 index from {} chunks...", persisted.chunks.len());
+            let start_build = std::time::Instant::now();
+            let mut bm25 = BM25Index::new();
+            let chunks = build_chunks(false);
+            // We need a mapping from ChunkId back to index for metadata
+            let mut chunk_map: HashMap<trueno_rag::ChunkId, usize> = HashMap::new();
+            for (i, chunk) in chunks.iter().enumerate() {
+                chunk_map.insert(chunk.id, i);
+                bm25.add(chunk);
+            }
+            println!("BM25 index built in {:.2}s", start_build.elapsed().as_secs_f64());
 
-        let result_entry = RetrievalResultEntry {
-            query: entry.query.clone(),
-            domain: entry.domain.clone(),
-            course: entry.course.clone(),
-            results,
-            latency_s: latency,
-        };
+            for (i, entry) in queries.iter().enumerate() {
+                print!(
+                    "[{}/{}] {}...",
+                    i + 1, queries.len(),
+                    &entry.query[..entry.query.len().min(60)]
+                );
 
-        serde_json::to_writer(&mut output_file, &result_entry)?;
-        writeln!(output_file)?;
+                let start = std::time::Instant::now();
+                let bm25_results = bm25.search(&entry.query, top_k);
+                let latency = start.elapsed().as_secs_f64();
+
+                let results: Vec<RetrievedChunk> = bm25_results.iter().map(|(chunk_id, score)| {
+                    let idx = chunk_map[chunk_id];
+                    let pc = &persisted.chunks[idx];
+                    RetrievedChunk {
+                        content: pc.content.clone(),
+                        source: pc.source.clone(),
+                        score: *score,
+                        title: pc.title.clone(),
+                        start_secs: pc.start_secs,
+                        end_secs: pc.end_secs,
+                    }
+                }).collect();
+
+                println!(" {} results ({:.2}s)", results.len(), latency);
+                let result_entry = RetrievalResultEntry {
+                    query: entry.query.clone(),
+                    domain: entry.domain.clone(),
+                    course: entry.course.clone(),
+                    results,
+                    latency_s: latency,
+                };
+                serde_json::to_writer(&mut output_file, &result_entry)?;
+                writeln!(output_file)?;
+            }
+        }
+
+        "hybrid" => {
+            // Hybrid retrieval: BM25 + TF-IDF cosine with fusion
+            let fusion_strategy = parse_fusion_strategy(fusion, fusion_k)?;
+            println!("Building hybrid retriever (BM25 + TF-IDF, fusion={fusion})...");
+            let start_build = std::time::Instant::now();
+
+            let dense_store = VectorStore::new(VectorStoreConfig {
+                dimension: persisted.dimension,
+                ..Default::default()
+            });
+            let bm25 = BM25Index::new();
+
+            let config = HybridRetrieverConfig {
+                candidates_per_source: candidates,
+                fusion: fusion_strategy,
+                use_dense: true,
+                use_sparse: true,
+            };
+
+            let mut retriever = HybridRetriever::new(dense_store, bm25, embedder)
+                .with_config(config);
+
+            // Index all chunks (populates both BM25 and VectorStore)
+            let chunks = build_chunks(true);
+            let n_chunks = chunks.len();
+            // We need a mapping from ChunkId to persisted index for metadata
+            let mut chunk_meta: HashMap<trueno_rag::ChunkId, usize> = HashMap::new();
+            for (i, chunk) in chunks.into_iter().enumerate() {
+                chunk_meta.insert(chunk.id, i);
+                retriever.index(chunk)?;
+            }
+            println!("Hybrid retriever built: {} chunks in {:.2}s", n_chunks, start_build.elapsed().as_secs_f64());
+
+            for (i, entry) in queries.iter().enumerate() {
+                print!(
+                    "[{}/{}] {}...",
+                    i + 1, queries.len(),
+                    &entry.query[..entry.query.len().min(60)]
+                );
+
+                let start = std::time::Instant::now();
+                let retrieval_results = retriever.retrieve(&entry.query, top_k)?;
+                let latency = start.elapsed().as_secs_f64();
+
+                let results: Vec<RetrievedChunk> = retrieval_results.iter().map(|rr| {
+                    let score = rr.fused_score.unwrap_or(rr.best_score());
+                    // Look up metadata from persisted index via chunk_meta
+                    if let Some(&idx) = chunk_meta.get(&rr.chunk.id) {
+                        let pc = &persisted.chunks[idx];
+                        RetrievedChunk {
+                            content: pc.content.clone(),
+                            source: pc.source.clone(),
+                            score,
+                            title: pc.title.clone(),
+                            start_secs: pc.start_secs,
+                            end_secs: pc.end_secs,
+                        }
+                    } else {
+                        RetrievedChunk {
+                            content: rr.chunk.content.clone(),
+                            source: None,
+                            score,
+                            title: None,
+                            start_secs: None,
+                            end_secs: None,
+                        }
+                    }
+                }).collect();
+
+                println!(" {} results ({:.2}s)", results.len(), latency);
+                let result_entry = RetrievalResultEntry {
+                    query: entry.query.clone(),
+                    domain: entry.domain.clone(),
+                    course: entry.course.clone(),
+                    results,
+                    latency_s: latency,
+                };
+                serde_json::to_writer(&mut output_file, &result_entry)?;
+                writeln!(output_file)?;
+            }
+        }
+
+        _ => unreachable!(),
     }
 
     println!("\nRetrieval results saved to: {output_path}");
