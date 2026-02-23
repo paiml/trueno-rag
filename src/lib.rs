@@ -99,6 +99,8 @@ pub mod multivector;
 pub mod pipeline;
 pub mod rerank;
 pub mod retrieve;
+#[cfg(feature = "eval")]
+pub mod eval;
 #[cfg(feature = "sqlite")]
 #[allow(
     clippy::cast_possible_wrap,
