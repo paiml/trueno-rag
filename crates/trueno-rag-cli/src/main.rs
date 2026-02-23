@@ -180,6 +180,22 @@ enum Commands {
         /// Output format (text, json)
         #[arg(short, long, default_value = "text")]
         format: String,
+
+        /// Retrieval mode: dense (TF-IDF only), sparse (BM25 only), hybrid (fused)
+        #[arg(long, default_value = "hybrid")]
+        mode: String,
+
+        /// Fusion strategy (hybrid mode only): rrf, linear, dbsf
+        #[arg(long, default_value = "rrf")]
+        fusion: String,
+
+        /// Fusion parameter: RRF k value or Linear dense_weight
+        #[arg(long)]
+        fusion_k: Option<f32>,
+
+        /// Candidates per source for hybrid retrieval
+        #[arg(long, default_value = "50")]
+        candidates: usize,
     },
 
     /// Batch transcribe media files to .srt sidecars
@@ -455,7 +471,11 @@ fn main() -> Result<()> {
             index,
             top_k,
             format,
-        } => run_query(&query, &index, top_k, &format)?,
+            mode,
+            fusion,
+            fusion_k,
+            candidates,
+        } => run_query(&query, &index, top_k, &format, &mode, &fusion, fusion_k, candidates)?,
         Commands::Transcribe {
             path,
             recursive,
@@ -1390,7 +1410,20 @@ fn build_index_manifest(
     })
 }
 
-fn run_query(query: &str, index_path: &str, top_k: usize, format: &str) -> Result<()> {
+fn run_query(
+    query: &str,
+    index_path: &str,
+    top_k: usize,
+    format: &str,
+    mode: &str,
+    fusion: &str,
+    fusion_k: Option<f32>,
+    candidates: usize,
+) -> Result<()> {
+    if !["dense", "sparse", "hybrid"].contains(&mode) {
+        anyhow::bail!("Unknown mode: {mode} (expected dense, sparse, hybrid)");
+    }
+
     let index_path = Path::new(index_path);
     let index_file = index_path.join("index.json");
 
@@ -1398,28 +1431,31 @@ fn run_query(query: &str, index_path: &str, top_k: usize, format: &str) -> Resul
         anyhow::bail!("Index not found at: {}", index_file.display());
     }
 
-    // Load index
     let json = fs::read_to_string(&index_file)?;
     let persisted: PersistedIndex = serde_json::from_str(&json)?;
 
-    // Create embedder based on index type
-    let query_embedding: Vec<f32> = if persisted.embedder_type == "semantic" {
+    let scores = match mode {
+        "dense" => query_dense(query, &persisted, top_k)?,
+        "sparse" => query_sparse(query, &persisted, top_k),
+        "hybrid" => query_hybrid(query, &persisted, top_k, fusion, fusion_k, candidates)?,
+        _ => unreachable!(),
+    };
+
+    format_query_results(query, &scores, &persisted.chunks, format)
+}
+
+/// Dense retrieval: TF-IDF or semantic cosine similarity.
+fn query_dense(query: &str, persisted: &PersistedIndex, top_k: usize) -> Result<Vec<(usize, f32)>> {
+    let query_embedding = if persisted.embedder_type == "semantic" {
         #[cfg(feature = "embeddings")]
         {
-            // Determine model from stored name or default
             let model_type = match persisted.model_name.as_deref() {
                 Some(name) if name.contains("bge-base") => EmbeddingModelType::BgeBaseEnV15,
                 Some(name) if name.contains("bge-small") => EmbeddingModelType::BgeSmallEnV15,
-                _ => EmbeddingModelType::AllMiniLmL6V2, // Default
+                _ => EmbeddingModelType::AllMiniLmL6V2,
             };
-            println!(
-                "Using semantic embedder: {} (dimension: {})",
-                model_type.model_name(),
-                model_type.dimension()
-            );
-            let embedder = FastEmbedder::new(model_type)
-                .context("Failed to initialize semantic embedder for query")?;
-            embedder.embed(query)?
+            let emb = FastEmbedder::new(model_type).context("Failed to initialize semantic embedder")?;
+            emb.embed(query)?
         }
         #[cfg(not(feature = "embeddings"))]
         {
@@ -1429,33 +1465,95 @@ fn run_query(query: &str, index_path: &str, top_k: usize, format: &str) -> Resul
             );
         }
     } else {
-        // TF-IDF: rebuild from chunk content
-        let mut embedder = TfIdfEmbedder::new(persisted.dimension);
-        let refs: Vec<&str> = persisted
-            .chunks
-            .iter()
-            .map(|c| c.content.as_str())
-            .collect();
-        embedder.fit(&refs);
-        embedder.embed(query)?
+        let mut emb = TfIdfEmbedder::new(persisted.dimension);
+        let refs: Vec<&str> = persisted.chunks.iter().map(|c| c.content.as_str()).collect();
+        emb.fit(&refs);
+        emb.embed(query)?
     };
 
-    // Compute similarities
     let mut scores: Vec<(usize, f32)> = persisted
         .embeddings
         .iter()
         .enumerate()
-        .map(|(i, emb)| {
-            let sim = cosine_similarity(&query_embedding, emb);
-            (i, sim)
-        })
+        .map(|(i, emb)| (i, cosine_similarity(&query_embedding, emb)))
         .collect();
-
-    // Sort by score descending
     scores.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
     scores.truncate(top_k);
+    Ok(scores)
+}
 
-    format_query_results(query, &scores, &persisted.chunks, format)
+/// Sparse retrieval: BM25 keyword matching.
+fn query_sparse(query: &str, persisted: &PersistedIndex, top_k: usize) -> Vec<(usize, f32)> {
+    use trueno_rag::index::SparseIndex;
+    use trueno_rag::{BM25Index, DocumentId};
+
+    let mut bm25 = BM25Index::new();
+    let mut chunk_map: HashMap<trueno_rag::ChunkId, usize> = HashMap::new();
+    for (i, pc) in persisted.chunks.iter().enumerate() {
+        let chunk = Chunk::new(DocumentId::new(), pc.content.clone(), 0, pc.content.len());
+        chunk_map.insert(chunk.id, i);
+        bm25.add(&chunk);
+    }
+
+    let bm25_results = bm25.search(query, top_k);
+    bm25_results
+        .iter()
+        .map(|(chunk_id, score)| (chunk_map[chunk_id], *score))
+        .collect()
+}
+
+/// Hybrid retrieval: BM25 + TF-IDF with fusion (RRF, Linear, or DBSF).
+fn query_hybrid(
+    query: &str,
+    persisted: &PersistedIndex,
+    top_k: usize,
+    fusion: &str,
+    fusion_k: Option<f32>,
+    candidates: usize,
+) -> Result<Vec<(usize, f32)>> {
+    use trueno_rag::index::VectorStoreConfig;
+    use trueno_rag::retrieve::HybridRetrieverConfig;
+    use trueno_rag::{BM25Index, DocumentId, HybridRetriever, VectorStore};
+
+    let fusion_strategy = parse_fusion_strategy(fusion, fusion_k)?;
+
+    let mut embedder = TfIdfEmbedder::new(persisted.dimension);
+    let refs: Vec<&str> = persisted.chunks.iter().map(|c| c.content.as_str()).collect();
+    embedder.fit(&refs);
+
+    let dense_store = VectorStore::new(VectorStoreConfig {
+        dimension: persisted.dimension,
+        ..Default::default()
+    });
+    let bm25 = BM25Index::new();
+
+    let config = HybridRetrieverConfig {
+        candidates_per_source: candidates,
+        fusion: fusion_strategy,
+        use_dense: true,
+        use_sparse: true,
+    };
+
+    let mut retriever = HybridRetriever::new(dense_store, bm25, embedder).with_config(config);
+
+    let mut chunk_meta: HashMap<trueno_rag::ChunkId, usize> = HashMap::new();
+    for (i, pc) in persisted.chunks.iter().enumerate() {
+        let mut chunk = Chunk::new(DocumentId::new(), pc.content.clone(), 0, pc.content.len());
+        chunk.metadata.title = pc.title.clone();
+        chunk.embedding = Some(persisted.embeddings[i].clone());
+        chunk_meta.insert(chunk.id, i);
+        retriever.index(chunk)?;
+    }
+
+    let results = retriever.retrieve(query, top_k)?;
+    Ok(results
+        .iter()
+        .map(|rr| {
+            let score = rr.fused_score.unwrap_or(rr.best_score());
+            let idx = chunk_meta.get(&rr.chunk.id).copied().unwrap_or(0);
+            (idx, score)
+        })
+        .collect())
 }
 
 /// Format and print query results in text or JSON format.
@@ -1740,7 +1838,6 @@ fn run_eval_generate(
     Ok(())
 }
 
-#[cfg(feature = "eval")]
 fn parse_fusion_strategy(fusion: &str, fusion_k: Option<f32>) -> Result<FusionStrategy> {
     match fusion {
         "rrf" => Ok(FusionStrategy::RRF { k: fusion_k.unwrap_or(60.0) }),

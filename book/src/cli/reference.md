@@ -64,14 +64,21 @@ trueno-rag index --path /data --output index/ \
 
 ### `query`
 
-Query an existing index.
+Query an existing index. Supports dense (TF-IDF), sparse (BM25), and hybrid (BM25 + TF-IDF with fusion) retrieval modes.
 
 ```bash
-# Text output
-trueno-rag query "how does SIMD acceleration work" --index index/ --top-k 5
+# Hybrid retrieval (default — BM25 + TF-IDF with RRF fusion)
+trueno-rag query "how does Kubernetes handle pod scheduling" --index index/
 
-# JSON output
-trueno-rag query "AWS Lambda" --index index/ --top-k 3 --format json
+# BM25-only (best for keyword-rich queries)
+trueno-rag query "AWS Lambda function" --index index/ --mode sparse
+
+# Dense cosine similarity only
+trueno-rag query "machine learning" --index index/ --mode dense
+
+# JSON output with custom fusion
+trueno-rag query "AWS Lambda" --index index/ --format json \
+  --mode hybrid --fusion rrf --fusion-k 30 --candidates 100
 ```
 
 | Flag | Default | Description |
@@ -80,6 +87,10 @@ trueno-rag query "AWS Lambda" --index index/ --top-k 3 --format json
 | `--index` | (required) | Path to index directory |
 | `--top-k` | 5 | Number of results |
 | `--format` | text | Output format: `text` or `json` |
+| `--mode` | hybrid | Retrieval mode: `dense`, `sparse`, `hybrid` |
+| `--fusion` | rrf | Fusion strategy (hybrid only): `rrf`, `linear`, `dbsf` |
+| `--fusion-k` | (varies) | Fusion parameter: RRF k value or Linear dense_weight |
+| `--candidates` | 50 | Candidates per source (hybrid only) |
 
 ### `transcribe`
 
