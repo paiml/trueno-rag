@@ -27,7 +27,8 @@ use clap::{Parser, Subcommand, ValueEnum};
 use globset::{Glob, GlobSet, GlobSetBuilder};
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+use std::hash::{Hash, Hasher};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -162,6 +163,10 @@ enum Commands {
         /// Glob patterns to exclude files/directories (repeatable)
         #[arg(long)]
         exclude: Vec<String>,
+
+        /// Deduplicate chunks with identical content (keeps first occurrence)
+        #[arg(long, default_value = "false")]
+        dedup: bool,
     },
 
     /// Query the RAG pipeline
@@ -452,6 +457,7 @@ fn main() -> Result<()> {
             jobs,
             manifest,
             exclude,
+            dedup,
         } => run_index(
             &path,
             &output,
@@ -465,6 +471,7 @@ fn main() -> Result<()> {
             jobs,
             manifest,
             &exclude,
+            dedup,
         )?,
         Commands::Query {
             query,
@@ -1160,10 +1167,13 @@ fn chunk_and_embed(
     recursive_chunker: &RecursiveChunker,
     timestamp_chunker: &TimestampChunker,
     strategy: ChunkStrategy,
+    dedup: bool,
 ) -> Result<(Vec<PersistedChunk>, Vec<Vec<f32>>)> {
     let mut all_chunks = Vec::new();
     let mut all_embeddings = Vec::new();
 
+    let mut seen: HashSet<u64> = HashSet::new();
+    let mut dedup_count = 0usize;
     let mut skipped_empty = 0usize;
     for doc in documents {
         if doc.content.is_empty() {
@@ -1182,6 +1192,14 @@ fn chunk_and_embed(
         };
 
         for chunk in chunks {
+            if dedup {
+                let mut hasher = std::hash::DefaultHasher::new();
+                chunk.content.hash(&mut hasher);
+                if !seen.insert(hasher.finish()) {
+                    dedup_count += 1;
+                    continue;
+                }
+            }
             all_embeddings.push(embedder.embed(&chunk.content)?);
             all_chunks.push(PersistedChunk {
                 content: chunk.content.clone(),
@@ -1203,6 +1221,9 @@ fn chunk_and_embed(
 
     if skipped_empty > 0 {
         println!("Skipped {} empty documents", skipped_empty);
+    }
+    if dedup && dedup_count > 0 {
+        println!("Deduplicated: removed {} duplicate chunks", dedup_count);
     }
 
     Ok((all_chunks, all_embeddings))
@@ -1346,6 +1367,7 @@ fn run_index(
     jobs: usize,
     manifest: bool,
     exclude_patterns: &[String],
+    dedup: bool,
 ) -> Result<()> {
     let path = Path::new(path);
     if !path.exists() {
@@ -1365,6 +1387,7 @@ fn run_index(
         &recursive_chunker,
         &timestamp_chunker,
         chunk_strategy,
+        dedup,
     )?;
 
     println!(

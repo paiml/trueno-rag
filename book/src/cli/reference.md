@@ -61,6 +61,7 @@ trueno-rag index --path /data --output index/ \
 | `--jobs` | 1 | Parallel loading jobs |
 | `--manifest` | false | Write a JSON manifest of indexed files |
 | `--exclude` | (none) | Glob patterns to exclude (repeatable) |
+| `--dedup` | false | Deduplicate chunks with identical content (keeps first occurrence) |
 
 ### `query`
 
