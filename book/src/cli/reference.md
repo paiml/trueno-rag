@@ -65,12 +65,15 @@ trueno-rag index --path /data --output index/ \
 
 ### `query`
 
-Query an existing index. Supports dense, sparse (BM25), and hybrid (BM25 + dense with fusion) retrieval modes.
+Query an existing index. Default mode is **hybrid** (BM25 + dense with RRF fusion), which combines keyword matching with semantic understanding.
 
 Dense and hybrid modes **auto-detect** the index's embedder type: if the index was built with `--embedder semantic`, queries use the same semantic model (BGE-small, BGE-base, or MiniLM via ONNX). Otherwise, TF-IDF is used. No extra flags needed.
 
 ```bash
-# BM25-only (best for keyword-rich queries, default mode)
+# Hybrid retrieval (default — BM25 + semantic RRF fusion)
+trueno-rag query "how does Kubernetes handle pod scheduling" --index index/
+
+# BM25-only (keyword-rich queries)
 trueno-rag query "AWS Lambda function" --index index/ --mode sparse
 
 # Dense cosine similarity (auto-detects TF-IDF or semantic)
@@ -95,7 +98,7 @@ trueno-rag query "how does Kubernetes handle pod scheduling" \
 | `--index` | (required) | Path to index directory |
 | `--top-k` | 5 | Number of results |
 | `--format` | text | Output format: `text` or `json` |
-| `--mode` | sparse | Retrieval mode: `dense`, `sparse`, `hybrid` |
+| `--mode` | hybrid | Retrieval mode: `dense`, `sparse`, `hybrid` |
 | `--fusion` | rrf | Fusion strategy (hybrid only): `rrf`, `linear`, `dbsf` |
 | `--fusion-k` | (varies) | Fusion parameter: RRF k value or Linear dense_weight |
 | `--candidates` | 50 | Candidates per source (hybrid only) |
