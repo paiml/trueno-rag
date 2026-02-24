@@ -49,3 +49,4 @@
 - [Compressed Index](./examples/compressed-index.md)
 - [Semantic Embeddings](./examples/semantic-embeddings.md)
 - [Nemotron Embeddings](./examples/nemotron-embeddings.md)
+- [SQLite Export](./examples/sqlite-export.md)
