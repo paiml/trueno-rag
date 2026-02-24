@@ -85,11 +85,30 @@ trueno-rag eval retrieve \
 
 ### Retrieval Modes
 
+Dense and hybrid modes **auto-detect** the index's embedder type. If the index was built with `--embedder semantic`, queries use the same model (BGE-small, BGE-base, or MiniLM via ONNX). Otherwise, TF-IDF is used.
+
 | Mode | Method | Best For |
 |------|--------|----------|
-| `dense` | TF-IDF cosine similarity | Semantic matching via statistical embeddings |
+| `dense` | Cosine similarity (auto-detects TF-IDF or semantic) | Semantic matching |
 | `sparse` | BM25 term frequency | Exact keyword matching |
-| `hybrid` | BM25 + TF-IDF with fusion | Combines both approaches (recommended) |
+| `hybrid` | BM25 + dense with fusion (recommended) | Combines keyword + semantic (best MRR) |
+
+### Reranking
+
+Optional post-retrieval reranking fetches 3x candidates and re-orders by the reranker's scoring:
+
+```bash
+trueno-rag eval retrieve \
+  --index /path/to/index \
+  --ground-truth ground-truth.jsonl \
+  --output retrieval-reranked.jsonl \
+  --mode hybrid --fusion rrf --rerank lexical
+```
+
+| Reranker | Description |
+|----------|-------------|
+| `none` | No reranking (default) |
+| `lexical` | Term coverage + exact match reranking |
 
 ### Fusion Strategies
 
@@ -174,12 +193,14 @@ Chunks are automatically classified into domains based on their source directory
 | `cloud` | `going-pro-cloud-computing`, `duke-cloud` |
 | `other` | Everything else |
 
-## Feature Flag
+## Feature Flags
 
-All eval subcommands require the `eval` feature:
+All eval subcommands require the `eval` feature. For semantic embedding support, also enable `embeddings`:
 
 ```bash
+# Eval only (TF-IDF + BM25)
 cargo build --release -p trueno-rag-cli --features eval
-```
 
-This adds `reqwest`, `sha2`, `rand`, and `tokio` dependencies.
+# Eval + semantic embeddings (BGE-small, BGE-base, MiniLM via ONNX)
+cargo build --release -p trueno-rag-cli --features eval,embeddings
+```
