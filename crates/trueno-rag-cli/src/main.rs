@@ -186,8 +186,8 @@ enum Commands {
         #[arg(short, long, default_value = "text")]
         format: String,
 
-        /// Retrieval mode: dense (TF-IDF only), sparse (BM25 only), hybrid (fused)
-        #[arg(long, default_value = "sparse")]
+        /// Retrieval mode: dense, sparse (BM25), hybrid (BM25 + dense RRF)
+        #[arg(long, default_value = "hybrid")]
         mode: String,
 
         /// Fusion strategy (hybrid mode only): rrf, linear, dbsf
