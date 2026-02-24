@@ -167,6 +167,10 @@ enum Commands {
         /// Deduplicate chunks with identical content (keeps first occurrence)
         #[arg(long, default_value = "false")]
         dedup: bool,
+
+        /// Also export a SQLite+FTS5 index (requires sqlite feature)
+        #[arg(long, default_value = "false")]
+        sqlite: bool,
     },
 
     /// Query the RAG pipeline
@@ -466,6 +470,7 @@ fn main() -> Result<()> {
             manifest,
             exclude,
             dedup,
+            sqlite,
         } => run_index(
             &path,
             &output,
@@ -480,6 +485,7 @@ fn main() -> Result<()> {
             manifest,
             &exclude,
             dedup,
+            sqlite,
         )?,
         Commands::Query {
             query,
@@ -1336,13 +1342,14 @@ fn create_embedder(
     }
 }
 
-/// Save a persisted index to disk, optionally writing a manifest.
+/// Save a persisted index to disk, optionally writing a manifest and/or SQLite export.
 fn save_index(
     persisted: &PersistedIndex,
     output: &str,
     manifest: bool,
     files: &[PathBuf],
     classification: &HashMap<String, usize>,
+    sqlite: bool,
 ) -> Result<()> {
     let output_path = Path::new(output);
     fs::create_dir_all(output_path)?;
@@ -1359,7 +1366,76 @@ fn save_index(
         fs::write(&manifest_file, manifest_json)?;
         println!("Manifest saved to: {}", manifest_file.display());
     }
+
+    if sqlite {
+        export_sqlite(persisted, output_path)?;
+    }
+
     Ok(())
+}
+
+/// Export a `PersistedIndex` to a `SqliteIndex` for FTS5 BM25 search.
+#[cfg(feature = "sqlite")]
+fn export_sqlite(persisted: &PersistedIndex, output_path: &Path) -> Result<()> {
+    use std::collections::BTreeMap;
+
+    let db_path = output_path.join("index.sqlite");
+    // Remove stale DB so we get a clean export
+    if db_path.exists() {
+        fs::remove_file(&db_path)?;
+    }
+    let sqlite_index = trueno_rag::SqliteIndex::open(&db_path)
+        .map_err(|e| anyhow::anyhow!("Failed to create SQLite index: {e}"))?;
+
+    // Group chunks by source document
+    let mut doc_chunks: BTreeMap<String, Vec<(String, String)>> = BTreeMap::new();
+    let mut doc_titles: HashMap<String, Option<String>> = HashMap::new();
+    for (i, pc) in persisted.chunks.iter().enumerate() {
+        let doc_id = pc
+            .source
+            .as_deref()
+            .unwrap_or("unknown")
+            .to_string();
+        let chunk_id = format!("{}#{}", doc_id, i);
+        doc_chunks
+            .entry(doc_id.clone())
+            .or_default()
+            .push((chunk_id, pc.content.clone()));
+        doc_titles.entry(doc_id).or_insert_with(|| pc.title.clone());
+    }
+
+    let doc_count = doc_chunks.len();
+    let chunk_count = persisted.chunks.len();
+
+    for (doc_id, chunks) in &doc_chunks {
+        let title = doc_titles.get(doc_id).and_then(|t| t.as_deref());
+        // Concatenate all chunk content as the document-level content
+        let content: String = chunks.iter().map(|(_, c)| c.as_str()).collect::<Vec<_>>().join("\n");
+        sqlite_index
+            .insert_document(doc_id, title, Some(doc_id.as_str()), &content, chunks, None)
+            .map_err(|e| anyhow::anyhow!("Failed to insert document {doc_id}: {e}"))?;
+    }
+
+    sqlite_index
+        .optimize()
+        .map_err(|e| anyhow::anyhow!("Failed to optimize SQLite index: {e}"))?;
+
+    println!(
+        "SQLite index saved to: {} ({} docs, {} chunks)",
+        db_path.display(),
+        doc_count,
+        chunk_count,
+    );
+    Ok(())
+}
+
+/// Stub when sqlite feature is not enabled.
+#[cfg(not(feature = "sqlite"))]
+fn export_sqlite(_persisted: &PersistedIndex, _output_path: &Path) -> Result<()> {
+    anyhow::bail!(
+        "SQLite export requires the 'sqlite' feature.\n\
+         Build with: cargo build --features sqlite"
+    );
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1377,6 +1453,7 @@ fn run_index(
     manifest: bool,
     exclude_patterns: &[String],
     dedup: bool,
+    sqlite: bool,
 ) -> Result<()> {
     let path = Path::new(path);
     if !path.exists() {
@@ -1413,7 +1490,7 @@ fn run_index(
         model_name,
     };
 
-    save_index(&persisted, output, manifest, &files, &classification)
+    save_index(&persisted, output, manifest, &files, &classification, sqlite)
 }
 
 /// Build a JSON manifest of indexed files and chunks.
