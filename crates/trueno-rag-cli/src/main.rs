@@ -171,6 +171,10 @@ enum Commands {
         /// Also export a SQLite+FTS5 index (requires sqlite feature)
         #[arg(long, default_value = "false")]
         sqlite: bool,
+
+        /// Incremental mode: only re-index changed files (requires --sqlite)
+        #[arg(long, default_value = "false")]
+        incremental: bool,
     },
 
     /// Query the RAG pipeline
@@ -483,22 +487,42 @@ fn main() -> Result<()> {
             exclude,
             dedup,
             sqlite,
-        } => run_index(
-            &path,
-            &output,
-            chunk_size,
-            chunk_overlap,
-            dimension,
-            embedder,
-            model,
-            recursive,
-            chunk_strategy,
-            jobs,
-            manifest,
-            &exclude,
-            dedup,
-            sqlite,
-        )?,
+            incremental,
+        } => {
+            if incremental {
+                run_index_incremental(
+                    &path,
+                    &output,
+                    chunk_size,
+                    chunk_overlap,
+                    dimension,
+                    embedder,
+                    model,
+                    recursive,
+                    chunk_strategy,
+                    jobs,
+                    &exclude,
+                    dedup,
+                )?
+            } else {
+                run_index(
+                    &path,
+                    &output,
+                    chunk_size,
+                    chunk_overlap,
+                    dimension,
+                    embedder,
+                    model,
+                    recursive,
+                    chunk_strategy,
+                    jobs,
+                    manifest,
+                    &exclude,
+                    dedup,
+                    sqlite,
+                )?
+            }
+        }
         Commands::Query {
             query,
             index,
@@ -1504,6 +1528,285 @@ fn run_index(
     };
 
     save_index(&persisted, output, manifest, &files, &classification, sqlite)
+}
+
+/// Incremental indexing: only re-process changed/new files, remove deleted files.
+///
+/// Uses SQLite fingerprints table (blake3 hash per source file) to detect changes.
+/// Skips JSON index entirely — SQLite is the sole output for incremental mode.
+#[allow(clippy::too_many_arguments)]
+fn run_index_incremental(
+    path: &str,
+    output: &str,
+    chunk_size: usize,
+    chunk_overlap: usize,
+    dimension: usize,
+    embedder_type: EmbedderType,
+    model: SemanticModel,
+    recursive: bool,
+    chunk_strategy: ChunkStrategy,
+    jobs: usize,
+    exclude_patterns: &[String],
+    dedup: bool,
+) -> Result<()> {
+    run_index_incremental_inner(
+        path,
+        output,
+        chunk_size,
+        chunk_overlap,
+        dimension,
+        embedder_type,
+        model,
+        recursive,
+        chunk_strategy,
+        jobs,
+        exclude_patterns,
+        dedup,
+    )
+}
+
+/// Inner implementation for incremental indexing (extracted for complexity).
+#[cfg(feature = "sqlite")]
+#[allow(clippy::too_many_arguments)]
+fn run_index_incremental_inner(
+    path: &str,
+    output: &str,
+    chunk_size: usize,
+    chunk_overlap: usize,
+    dimension: usize,
+    embedder_type: EmbedderType,
+    #[allow(unused_variables)] model: SemanticModel,
+    recursive: bool,
+    chunk_strategy: ChunkStrategy,
+    jobs: usize,
+    exclude_patterns: &[String],
+    dedup: bool,
+) -> Result<()> {
+    let path = Path::new(path);
+    if !path.exists() {
+        anyhow::bail!("Path not found: {}", path.display());
+    }
+
+    let output_path = Path::new(output);
+    let db_path = output_path.join("index.sqlite");
+    if !db_path.exists() {
+        anyhow::bail!(
+            "No existing SQLite index at {}. Run a full index first (without --incremental).",
+            db_path.display()
+        );
+    }
+
+    let sqlite_index = trueno_rag::SqliteIndex::open(&db_path)
+        .map_err(|e| anyhow::anyhow!("Failed to open SQLite index: {e}"))?;
+
+    // Discover current files
+    let exclude = build_exclude_set(exclude_patterns)?;
+    let registry = LoaderRegistry::new();
+    let files = discover_files(path, recursive, &registry, &exclude)?;
+    println!("Found {} files on disk", files.len());
+
+    // Compute blake3 hashes for all files
+    let file_hashes = compute_file_hashes(&files)?;
+
+    // Compare against stored fingerprints to find changed/new/deleted files
+    let stored_fps = sqlite_index
+        .list_fingerprints()
+        .map_err(|e| anyhow::anyhow!("Failed to list fingerprints: {e}"))?;
+    let stored_map: HashMap<String, Vec<u8>> = stored_fps.into_iter().collect();
+
+    let (changed, deleted) = diff_fingerprints(&file_hashes, &stored_map);
+
+    if changed.is_empty() && deleted.is_empty() {
+        println!("No changes detected — index is up to date.");
+        return Ok(());
+    }
+
+    println!(
+        "{} files changed/new, {} files deleted",
+        changed.len(),
+        deleted.len()
+    );
+
+    // Remove deleted files
+    for del_path in &deleted {
+        let removed = sqlite_index
+            .remove_by_source(del_path)
+            .map_err(|e| anyhow::anyhow!("Failed to remove {del_path}: {e}"))?;
+        if removed > 0 {
+            println!("  Removed: {} ({} docs)", del_path, removed);
+        }
+    }
+
+    if changed.is_empty() {
+        println!("Only deletions — no re-indexing needed.");
+        sqlite_index
+            .optimize()
+            .map_err(|e| anyhow::anyhow!("Failed to optimize: {e}"))?;
+        return Ok(());
+    }
+
+    // Load only changed files
+    let changed_paths: Vec<PathBuf> = changed.iter().map(|(p, _)| p.clone()).collect();
+    let documents = load_documents(&changed_paths, &registry, jobs)?;
+    let documents = finish_load_report(documents, 0)?;
+
+    // Create embedder (still needed for SQLite insert_document fingerprint)
+    let (embedder_box, _actual_dimension, _embedder_name, _model_name) =
+        create_embedder(embedder_type, dimension, model, &documents)?;
+
+    // Chunk and embed
+    let recursive_chunker = RecursiveChunker::new(chunk_size, chunk_overlap);
+    let timestamp_chunker = TimestampChunker::new(60.0);
+    let (all_chunks, _all_embeddings) = chunk_and_embed(
+        &documents,
+        &*embedder_box,
+        &recursive_chunker,
+        &timestamp_chunker,
+        chunk_strategy,
+        dedup,
+    )?;
+
+    // Insert changed documents into SQLite
+    incremental_insert(&sqlite_index, &all_chunks, &changed)?;
+
+    sqlite_index
+        .optimize()
+        .map_err(|e| anyhow::anyhow!("Failed to optimize: {e}"))?;
+
+    let stats = sqlite_index
+        .document_count()
+        .map_err(|e| anyhow::anyhow!("Failed to count docs: {e}"))?;
+    let chunk_count = sqlite_index
+        .chunk_count()
+        .map_err(|e| anyhow::anyhow!("Failed to count chunks: {e}"))?;
+    println!(
+        "Incremental update complete: {} docs, {} chunks total",
+        stats, chunk_count
+    );
+
+    Ok(())
+}
+
+/// Compute blake3 hashes for a list of files.
+fn compute_file_hashes(files: &[PathBuf]) -> Result<Vec<(PathBuf, [u8; 32])>> {
+    let mut results = Vec::with_capacity(files.len());
+    for file in files {
+        let data = fs::read(file).with_context(|| format!("Failed to read {}", file.display()))?;
+        let hash: [u8; 32] = *blake3::hash(&data).as_bytes();
+        results.push((file.clone(), hash));
+    }
+    Ok(results)
+}
+
+/// Diff current file hashes against stored fingerprints.
+///
+/// Returns (changed_or_new, deleted_paths).
+fn diff_fingerprints(
+    current: &[(PathBuf, [u8; 32])],
+    stored: &HashMap<String, Vec<u8>>,
+) -> (Vec<(PathBuf, [u8; 32])>, Vec<String>) {
+    let mut changed = Vec::new();
+    let mut current_paths: HashSet<String> = HashSet::new();
+
+    for (path, hash) in current {
+        let path_str = path.to_string_lossy().to_string();
+        current_paths.insert(path_str.clone());
+
+        match stored.get(&path_str) {
+            Some(stored_hash) if stored_hash.as_slice() == hash.as_slice() => {
+                // Unchanged — skip
+            }
+            _ => {
+                // New or changed
+                changed.push((path.clone(), *hash));
+            }
+        }
+    }
+
+    let deleted: Vec<String> = stored
+        .keys()
+        .filter(|k| !current_paths.contains(k.as_str()))
+        .cloned()
+        .collect();
+
+    (changed, deleted)
+}
+
+/// Insert changed documents into SQLite with fingerprints.
+#[cfg(feature = "sqlite")]
+fn incremental_insert(
+    sqlite_index: &trueno_rag::SqliteIndex,
+    chunks: &[PersistedChunk],
+    changed: &[(PathBuf, [u8; 32])],
+) -> Result<()> {
+    use std::collections::BTreeMap;
+
+    // Build a hash lookup for changed files
+    let hash_map: HashMap<String, [u8; 32]> = changed
+        .iter()
+        .map(|(p, h)| (p.to_string_lossy().to_string(), *h))
+        .collect();
+
+    // Group chunks by source
+    let mut doc_chunks: BTreeMap<String, Vec<(String, String)>> = BTreeMap::new();
+    let mut doc_titles: HashMap<String, Option<String>> = HashMap::new();
+
+    for (i, pc) in chunks.iter().enumerate() {
+        let doc_id = pc
+            .source
+            .as_deref()
+            .unwrap_or("unknown")
+            .to_string();
+        let chunk_id = format!("{}#{}", doc_id, i);
+        doc_chunks
+            .entry(doc_id.clone())
+            .or_default()
+            .push((chunk_id, pc.content.clone()));
+        doc_titles.entry(doc_id).or_insert_with(|| pc.title.clone());
+    }
+
+    for (doc_id, chunk_pairs) in &doc_chunks {
+        let title = doc_titles.get(doc_id).and_then(|t| t.as_deref());
+        let content: String = chunk_pairs
+            .iter()
+            .map(|(_, c)| c.as_str())
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        let fingerprint = hash_map
+            .get(doc_id)
+            .map(|h| (doc_id.as_str(), h));
+
+        sqlite_index
+            .insert_document(doc_id, title, Some(doc_id.as_str()), &content, chunk_pairs, fingerprint)
+            .map_err(|e| anyhow::anyhow!("Failed to insert document {doc_id}: {e}"))?;
+
+        println!("  Updated: {} ({} chunks)", doc_id, chunk_pairs.len());
+    }
+
+    Ok(())
+}
+
+#[cfg(not(feature = "sqlite"))]
+#[allow(clippy::too_many_arguments)]
+fn run_index_incremental_inner(
+    _path: &str,
+    _output: &str,
+    _chunk_size: usize,
+    _chunk_overlap: usize,
+    _dimension: usize,
+    _embedder_type: EmbedderType,
+    _model: SemanticModel,
+    _recursive: bool,
+    _chunk_strategy: ChunkStrategy,
+    _jobs: usize,
+    _exclude_patterns: &[String],
+    _dedup: bool,
+) -> Result<()> {
+    anyhow::bail!(
+        "Incremental indexing requires the 'sqlite' feature.\n\
+         Build with: cargo build --features sqlite"
+    );
 }
 
 /// Build a JSON manifest of indexed files and chunks.
@@ -3457,5 +3760,78 @@ mod tests {
         assert!(files[0].to_string_lossy().contains("keep.mp4"));
 
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    // --- Incremental indexing tests ---
+
+    #[test]
+    fn test_compute_file_hashes() {
+        let dir = std::env::temp_dir().join("trueno_rag_test_hashes");
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+
+        fs::write(dir.join("a.txt"), "hello").unwrap();
+        fs::write(dir.join("b.txt"), "world").unwrap();
+
+        let files = vec![dir.join("a.txt"), dir.join("b.txt")];
+        let hashes = compute_file_hashes(&files).unwrap();
+        assert_eq!(hashes.len(), 2);
+
+        // Same content should produce same hash
+        let hash_a = hashes[0].1;
+        let hashes2 = compute_file_hashes(&[dir.join("a.txt")]).unwrap();
+        assert_eq!(hash_a, hashes2[0].1);
+
+        // Different content should produce different hash
+        assert_ne!(hashes[0].1, hashes[1].1);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_diff_fingerprints_detects_new() {
+        let current = vec![
+            (PathBuf::from("/a.md"), [1u8; 32]),
+            (PathBuf::from("/b.md"), [2u8; 32]),
+        ];
+        let stored: HashMap<String, Vec<u8>> = HashMap::new();
+
+        let (changed, deleted) = diff_fingerprints(&current, &stored);
+        assert_eq!(changed.len(), 2);
+        assert!(deleted.is_empty());
+    }
+
+    #[test]
+    fn test_diff_fingerprints_detects_changed() {
+        let current = vec![(PathBuf::from("/a.md"), [2u8; 32])];
+        let mut stored: HashMap<String, Vec<u8>> = HashMap::new();
+        stored.insert("/a.md".to_string(), vec![1u8; 32]);
+
+        let (changed, deleted) = diff_fingerprints(&current, &stored);
+        assert_eq!(changed.len(), 1);
+        assert!(deleted.is_empty());
+    }
+
+    #[test]
+    fn test_diff_fingerprints_detects_unchanged() {
+        let current = vec![(PathBuf::from("/a.md"), [1u8; 32])];
+        let mut stored: HashMap<String, Vec<u8>> = HashMap::new();
+        stored.insert("/a.md".to_string(), vec![1u8; 32]);
+
+        let (changed, deleted) = diff_fingerprints(&current, &stored);
+        assert!(changed.is_empty());
+        assert!(deleted.is_empty());
+    }
+
+    #[test]
+    fn test_diff_fingerprints_detects_deleted() {
+        let current: Vec<(PathBuf, [u8; 32])> = vec![];
+        let mut stored: HashMap<String, Vec<u8>> = HashMap::new();
+        stored.insert("/a.md".to_string(), vec![1u8; 32]);
+
+        let (changed, deleted) = diff_fingerprints(&current, &stored);
+        assert!(changed.is_empty());
+        assert_eq!(deleted.len(), 1);
+        assert_eq!(deleted[0], "/a.md");
     }
 }
