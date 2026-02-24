@@ -464,6 +464,67 @@ fn test_index_with_manifest() {
 }
 
 #[test]
+#[cfg(feature = "sqlite")]
+fn test_index_with_sqlite_flag() {
+    let tmp = TempDir::new().unwrap();
+    let docs_dir = tmp.path().join("docs");
+    fs::create_dir(&docs_dir).unwrap();
+
+    fs::write(docs_dir.join("doc1.txt"), "First document about Rust programming.").unwrap();
+    fs::write(docs_dir.join("doc2.txt"), "Second document about Python scripting.").unwrap();
+
+    let index_path = tmp.path().join("index");
+
+    cli()
+        .args([
+            "index",
+            "--path",
+            docs_dir.to_str().unwrap(),
+            "--output",
+            index_path.to_str().unwrap(),
+            "--sqlite",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("SQLite index saved to"))
+        .stdout(predicate::str::contains("2 docs"));
+
+    // Verify both index.json and index.sqlite exist
+    assert!(index_path.join("index.json").exists());
+    assert!(index_path.join("index.sqlite").exists());
+}
+
+#[test]
+#[cfg(feature = "sqlite")]
+fn test_index_sqlite_with_dedup() {
+    let tmp = TempDir::new().unwrap();
+    let docs_dir = tmp.path().join("docs");
+    fs::create_dir(&docs_dir).unwrap();
+
+    fs::write(docs_dir.join("a.txt"), "Identical content here.").unwrap();
+    fs::write(docs_dir.join("b.txt"), "Identical content here.").unwrap(); // duplicate
+    fs::write(docs_dir.join("c.txt"), "Unique content about SIMD.").unwrap();
+
+    let index_path = tmp.path().join("index");
+
+    cli()
+        .args([
+            "index",
+            "--path",
+            docs_dir.to_str().unwrap(),
+            "--output",
+            index_path.to_str().unwrap(),
+            "--sqlite",
+            "--dedup",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("SQLite index saved to"));
+
+    assert!(index_path.join("index.sqlite").exists());
+}
+
+#[test]
 fn test_index_parallel_jobs() {
     let tmp = TempDir::new().unwrap();
     let docs_dir = tmp.path().join("docs");

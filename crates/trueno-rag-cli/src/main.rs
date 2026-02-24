@@ -2695,6 +2695,230 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sqlite")]
+    fn test_export_sqlite_creates_db() {
+        let dir = std::env::temp_dir().join("trueno_rag_cli_test_sqlite_export");
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+
+        let persisted = PersistedIndex {
+            chunks: vec![
+                PersistedChunk {
+                    content: "Rust is a systems language.".to_string(),
+                    title: Some("Rust Basics".to_string()),
+                    source: Some("docs/rust.txt".to_string()),
+                    start_secs: None,
+                    end_secs: None,
+                },
+                PersistedChunk {
+                    content: "The borrow checker ensures safety.".to_string(),
+                    title: Some("Rust Basics".to_string()),
+                    source: Some("docs/rust.txt".to_string()),
+                    start_secs: None,
+                    end_secs: None,
+                },
+                PersistedChunk {
+                    content: "Python is interpreted.".to_string(),
+                    title: Some("Python Intro".to_string()),
+                    source: Some("docs/python.txt".to_string()),
+                    start_secs: None,
+                    end_secs: None,
+                },
+            ],
+            embeddings: vec![vec![0.0; 4]; 3],
+            dimension: 4,
+            embedder_type: "tfidf".to_string(),
+            model_name: None,
+        };
+
+        export_sqlite(&persisted, &dir).unwrap();
+
+        let db_path = dir.join("index.sqlite");
+        assert!(db_path.exists(), "index.sqlite should be created");
+
+        // Verify doc and chunk counts via SqliteIndex API
+        let idx = trueno_rag::SqliteIndex::open(&db_path).unwrap();
+        assert_eq!(idx.document_count().unwrap(), 2, "2 unique source docs");
+        assert_eq!(idx.chunk_count().unwrap(), 3, "3 chunks total");
+
+        // Verify FTS5 search works
+        let results = idx.search_fts("borrow checker", 5).unwrap();
+        assert!(!results.is_empty(), "FTS5 should find 'borrow checker'");
+        assert!(
+            results[0].content.contains("borrow checker"),
+            "Top result should contain query terms"
+        );
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    #[cfg(feature = "sqlite")]
+    fn test_export_sqlite_groups_by_source() {
+        let dir = std::env::temp_dir().join("trueno_rag_cli_test_sqlite_grouping");
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+
+        // 4 chunks from 2 docs
+        let persisted = PersistedIndex {
+            chunks: vec![
+                PersistedChunk {
+                    content: "chunk A1".to_string(),
+                    title: Some("Doc A".to_string()),
+                    source: Some("a.txt".to_string()),
+                    start_secs: None,
+                    end_secs: None,
+                },
+                PersistedChunk {
+                    content: "chunk A2".to_string(),
+                    title: Some("Doc A".to_string()),
+                    source: Some("a.txt".to_string()),
+                    start_secs: None,
+                    end_secs: None,
+                },
+                PersistedChunk {
+                    content: "chunk B1".to_string(),
+                    title: None,
+                    source: Some("b.txt".to_string()),
+                    start_secs: None,
+                    end_secs: None,
+                },
+                PersistedChunk {
+                    content: "chunk B2".to_string(),
+                    title: None,
+                    source: Some("b.txt".to_string()),
+                    start_secs: None,
+                    end_secs: None,
+                },
+            ],
+            embeddings: vec![vec![0.0; 4]; 4],
+            dimension: 4,
+            embedder_type: "tfidf".to_string(),
+            model_name: None,
+        };
+
+        export_sqlite(&persisted, &dir).unwrap();
+
+        let idx = trueno_rag::SqliteIndex::open(dir.join("index.sqlite")).unwrap();
+        assert_eq!(idx.document_count().unwrap(), 2);
+        assert_eq!(idx.chunk_count().unwrap(), 4);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    #[cfg(feature = "sqlite")]
+    fn test_export_sqlite_unknown_source() {
+        let dir = std::env::temp_dir().join("trueno_rag_cli_test_sqlite_unknown");
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+
+        let persisted = PersistedIndex {
+            chunks: vec![PersistedChunk {
+                content: "orphan chunk".to_string(),
+                title: None,
+                source: None, // no source
+                start_secs: None,
+                end_secs: None,
+            }],
+            embeddings: vec![vec![0.0; 4]],
+            dimension: 4,
+            embedder_type: "tfidf".to_string(),
+            model_name: None,
+        };
+
+        export_sqlite(&persisted, &dir).unwrap();
+
+        let idx = trueno_rag::SqliteIndex::open(dir.join("index.sqlite")).unwrap();
+        assert_eq!(idx.document_count().unwrap(), 1, "unknown doc grouped");
+        assert_eq!(idx.chunk_count().unwrap(), 1);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    #[cfg(feature = "sqlite")]
+    fn test_export_sqlite_replaces_stale_db() {
+        let dir = std::env::temp_dir().join("trueno_rag_cli_test_sqlite_replace");
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+
+        // Create a stale DB
+        fs::write(dir.join("index.sqlite"), b"stale data").unwrap();
+
+        let persisted = PersistedIndex {
+            chunks: vec![PersistedChunk {
+                content: "fresh content".to_string(),
+                title: None,
+                source: Some("fresh.txt".to_string()),
+                start_secs: None,
+                end_secs: None,
+            }],
+            embeddings: vec![vec![0.0; 4]],
+            dimension: 4,
+            embedder_type: "tfidf".to_string(),
+            model_name: None,
+        };
+
+        export_sqlite(&persisted, &dir).unwrap();
+
+        let idx = trueno_rag::SqliteIndex::open(dir.join("index.sqlite")).unwrap();
+        assert_eq!(idx.document_count().unwrap(), 1);
+        assert_eq!(idx.chunk_count().unwrap(), 1);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    #[cfg(not(feature = "sqlite"))]
+    fn test_export_sqlite_stub_errors() {
+        let dir = std::env::temp_dir().join("trueno_rag_cli_test_sqlite_stub");
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+
+        let persisted = PersistedIndex {
+            chunks: vec![],
+            embeddings: vec![],
+            dimension: 4,
+            embedder_type: "tfidf".to_string(),
+            model_name: None,
+        };
+
+        let result = export_sqlite(&persisted, &dir);
+        assert!(result.is_err());
+        assert!(
+            result.unwrap_err().to_string().contains("sqlite"),
+            "Error should mention sqlite feature"
+        );
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    #[cfg(feature = "sqlite")]
+    fn test_export_sqlite_empty_index() {
+        let dir = std::env::temp_dir().join("trueno_rag_cli_test_sqlite_empty");
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+
+        let persisted = PersistedIndex {
+            chunks: vec![],
+            embeddings: vec![],
+            dimension: 4,
+            embedder_type: "tfidf".to_string(),
+            model_name: None,
+        };
+
+        export_sqlite(&persisted, &dir).unwrap();
+
+        let idx = trueno_rag::SqliteIndex::open(dir.join("index.sqlite")).unwrap();
+        assert_eq!(idx.document_count().unwrap(), 0);
+        assert_eq!(idx.chunk_count().unwrap(), 0);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn test_discover_media_files_with_exclude() {
         let dir = std::env::temp_dir().join("trueno_rag_cli_test_media_exclude");
         let raw = dir.join("RAW");
