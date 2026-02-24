@@ -172,6 +172,59 @@ impl SqliteIndex {
         Ok(())
     }
 
+    /// List all tracked fingerprints (path → blake3 hash).
+    ///
+    /// Used by incremental indexing to detect deleted or changed files.
+    pub fn list_fingerprints(&self) -> Result<Vec<(String, Vec<u8>)>> {
+        let conn = self.conn.lock().map_err(|e| lock_err(&e))?;
+        let mut stmt = conn
+            .prepare("SELECT doc_path, blake3_hash FROM fingerprints")
+            .map_err(|e| crate::Error::Query(format!("Failed to list fingerprints: {e}")))?;
+        let rows = stmt
+            .query_map([], |row| {
+                let path: String = row.get(0)?;
+                let hash: Vec<u8> = row.get(1)?;
+                Ok((path, hash))
+            })
+            .map_err(|e| crate::Error::Query(format!("Failed to query fingerprints: {e}")))?;
+        let mut results = Vec::new();
+        for row in rows {
+            results.push(
+                row.map_err(|e| crate::Error::Query(format!("Failed to read fingerprint: {e}")))?,
+            );
+        }
+        Ok(results)
+    }
+
+    /// Remove all documents (and their chunks) with a given source path.
+    ///
+    /// Used by incremental indexing to remove stale documents before re-inserting.
+    pub fn remove_by_source(&self, source: &str) -> Result<usize> {
+        let conn = self.conn.lock().map_err(|e| lock_err(&e))?;
+        // Find doc IDs with this source
+        let mut stmt = conn
+            .prepare("SELECT id FROM documents WHERE source = ?1")
+            .map_err(|e| crate::Error::Query(format!("Failed to find docs by source: {e}")))?;
+        let ids: Vec<String> = stmt
+            .query_map([source], |row| row.get(0))
+            .map_err(|e| crate::Error::Query(format!("Failed to query docs: {e}")))?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        for doc_id in &ids {
+            conn.execute("DELETE FROM chunks WHERE doc_id = ?1", [doc_id])
+                .map_err(|e| crate::Error::Query(format!("Failed to delete chunks: {e}")))?;
+            conn.execute("DELETE FROM documents WHERE id = ?1", [doc_id])
+                .map_err(|e| crate::Error::Query(format!("Failed to delete document: {e}")))?;
+        }
+
+        // Remove fingerprint
+        conn.execute("DELETE FROM fingerprints WHERE doc_path = ?1", [source])
+            .map_err(|e| crate::Error::Query(format!("Failed to delete fingerprint: {e}")))?;
+
+        Ok(ids.len())
+    }
+
     /// FTS5 BM25 search. Returns results ordered by descending relevance.
     pub fn search_fts(&self, query: &str, k: usize) -> Result<Vec<fts::FtsResult>> {
         let conn = self.conn.lock().map_err(|e| lock_err(&e))?;
@@ -381,6 +434,16 @@ impl SqliteStore {
     /// Check if a document needs reindexing by fingerprint.
     pub fn needs_reindex(&self, path: &str, hash: &[u8; 32]) -> Result<bool> {
         self.index.needs_reindex(path, hash)
+    }
+
+    /// List all tracked fingerprints.
+    pub fn list_fingerprints(&self) -> Result<Vec<(String, Vec<u8>)>> {
+        self.index.list_fingerprints()
+    }
+
+    /// Remove all documents with a given source path.
+    pub fn remove_by_source(&self, source: &str) -> Result<usize> {
+        self.index.remove_by_source(source)
     }
 
     /// Get store statistics.
@@ -737,5 +800,73 @@ mod tests {
                 assert!((a.score - b.score).abs() < f64::EPSILON);
             }
         }
+    }
+
+    // --- Incremental indexing tests ---
+
+    #[test]
+    fn test_list_fingerprints_empty() {
+        let idx = SqliteIndex::open_in_memory().unwrap();
+        let fps = idx.list_fingerprints().unwrap();
+        assert!(fps.is_empty());
+    }
+
+    #[test]
+    fn test_list_fingerprints_populated() {
+        let idx = SqliteIndex::open_in_memory().unwrap();
+        let hash1 = [1u8; 32];
+        let hash2 = [2u8; 32];
+
+        idx.insert_document(
+            "doc1", None, Some("/a.md"), "", &[("c1".into(), "content a".into())],
+            Some(("/a.md", &hash1)),
+        ).unwrap();
+        idx.insert_document(
+            "doc2", None, Some("/b.md"), "", &[("c2".into(), "content b".into())],
+            Some(("/b.md", &hash2)),
+        ).unwrap();
+
+        let fps = idx.list_fingerprints().unwrap();
+        assert_eq!(fps.len(), 2);
+        let paths: Vec<&str> = fps.iter().map(|(p, _)| p.as_str()).collect();
+        assert!(paths.contains(&"/a.md"));
+        assert!(paths.contains(&"/b.md"));
+    }
+
+    #[test]
+    fn test_remove_by_source() {
+        let idx = SqliteIndex::open_in_memory().unwrap();
+        let hash = [1u8; 32];
+
+        idx.insert_document(
+            "doc1", None, Some("/a.md"), "full content",
+            &[("c1".into(), "chunk 1".into()), ("c2".into(), "chunk 2".into())],
+            Some(("/a.md", &hash)),
+        ).unwrap();
+        idx.insert_document(
+            "doc2", None, Some("/b.md"), "other content",
+            &[("c3".into(), "chunk 3".into())],
+            Some(("/b.md", &hash)),
+        ).unwrap();
+
+        assert_eq!(idx.document_count().unwrap(), 2);
+        assert_eq!(idx.chunk_count().unwrap(), 3);
+
+        let removed = idx.remove_by_source("/a.md").unwrap();
+        assert_eq!(removed, 1);
+        assert_eq!(idx.document_count().unwrap(), 1);
+        assert_eq!(idx.chunk_count().unwrap(), 1);
+
+        // Fingerprint should also be removed
+        assert!(idx.needs_reindex("/a.md", &hash).unwrap());
+        // Other doc unaffected
+        assert!(!idx.needs_reindex("/b.md", &hash).unwrap());
+    }
+
+    #[test]
+    fn test_remove_by_source_nonexistent() {
+        let idx = SqliteIndex::open_in_memory().unwrap();
+        let removed = idx.remove_by_source("/nonexistent.md").unwrap();
+        assert_eq!(removed, 0);
     }
 }
