@@ -28,7 +28,7 @@ trueno-rag demo --query "What is machine learning?" --top-k 3
 
 ### `index`
 
-Index documents from a file or directory into a persistent JSON index.
+Index documents from a file or directory into a persistent index.
 
 ```bash
 # Basic indexing
@@ -45,6 +45,10 @@ trueno-rag index --path docs/ --output index/ \
 # Exclude directories
 trueno-rag index --path /data --output index/ \
   --recursive --exclude "*/RAW" --exclude "*/RAW/*"
+
+# Export SQLite+FTS5 index alongside JSON (for BM25 search via batuta oracle)
+trueno-rag index --path /data/courses --output /data/index \
+  --recursive --dedup --sqlite
 ```
 
 | Flag | Default | Description |
@@ -62,6 +66,7 @@ trueno-rag index --path /data --output index/ \
 | `--manifest` | false | Write a JSON manifest of indexed files |
 | `--exclude` | (none) | Glob patterns to exclude (repeatable) |
 | `--dedup` | false | Deduplicate chunks with identical content (keeps first occurrence) |
+| `--sqlite` | false | Also export a SQLite+FTS5 index (`index.sqlite`) for BM25 search |
 
 ### `query`
 
