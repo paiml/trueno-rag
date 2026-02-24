@@ -209,6 +209,12 @@ enum Commands {
         /// Reranking strategy: none, lexical
         #[arg(long, default_value = "none")]
         rerank: String,
+
+        /// Enable HyDE (Hypothetical Document Embeddings) query expansion.
+        /// Generates a hypothetical answer via Claude API and uses it for retrieval.
+        /// Requires ANTHROPIC_API_KEY environment variable and --features eval.
+        #[arg(long, default_value = "false")]
+        hyde: bool,
     },
 
     /// Batch transcribe media files to .srt sidecars
@@ -352,6 +358,12 @@ enum EvalAction {
         /// Reranking strategy: none, lexical
         #[arg(long, default_value = "none")]
         rerank: String,
+
+        /// Enable HyDE (Hypothetical Document Embeddings) query expansion.
+        /// Generates a hypothetical answer via Claude API and uses it for retrieval.
+        /// Requires ANTHROPIC_API_KEY environment variable and --features eval.
+        #[arg(long, default_value = "false")]
+        hyde: bool,
     },
 
     /// Judge retrieval results for relevance via Claude API and compute metrics
@@ -497,7 +509,8 @@ fn main() -> Result<()> {
             fusion_k,
             candidates,
             rerank,
-        } => run_query(&query, &index, top_k, &format, &mode, &fusion, fusion_k, candidates, &rerank)?,
+            hyde,
+        } => run_query(&query, &index, top_k, &format, &mode, &fusion, fusion_k, candidates, &rerank, hyde)?,
         Commands::Transcribe {
             path,
             recursive,
@@ -1529,6 +1542,7 @@ fn run_query(
     fusion_k: Option<f32>,
     candidates: usize,
     rerank: &str,
+    hyde: bool,
 ) -> Result<()> {
     if !["dense", "sparse", "hybrid"].contains(&mode) {
         anyhow::bail!("Unknown mode: {mode} (expected dense, sparse, hybrid)");
@@ -1547,10 +1561,17 @@ fn run_query(
     // Fetch more candidates if reranking (reranker re-orders, so we need a wider pool)
     let retrieval_k = if rerank == "none" { top_k } else { top_k * 3 };
 
+    // HyDE: expand query into hypothetical document
+    let effective_query = if hyde {
+        expand_query_hyde(query)?
+    } else {
+        query.to_string()
+    };
+
     let scores = match mode {
-        "dense" => query_dense(query, &persisted, retrieval_k)?,
-        "sparse" => query_sparse(query, &persisted, retrieval_k),
-        "hybrid" => query_hybrid(query, &persisted, retrieval_k, fusion, fusion_k, candidates)?,
+        "dense" => query_dense(&effective_query, &persisted, retrieval_k)?,
+        "sparse" => query_sparse(&effective_query, &persisted, retrieval_k),
+        "hybrid" => query_hybrid(&effective_query, &persisted, retrieval_k, fusion, fusion_k, candidates)?,
         _ => unreachable!(),
     };
 
@@ -1599,6 +1620,35 @@ fn create_query_embedder(persisted: &PersistedIndex) -> Result<Box<dyn Embedder>
         emb.fit(&refs);
         Ok(Box::new(emb))
     }
+}
+
+/// Expand a query using HyDE (Hypothetical Document Embeddings).
+///
+/// Generates a hypothetical document via Claude API that would answer the query,
+/// then concatenates it with the original query for retrieval. The hypothetical
+/// document uses the same vocabulary as corpus documents, improving embedding
+/// similarity for vocabulary-mismatched queries.
+#[cfg(feature = "eval")]
+fn expand_query_hyde(query: &str) -> Result<String> {
+    use trueno_rag::preprocess::{HypotheticalGenerator, AnthropicHypotheticalGenerator};
+
+    let generator = AnthropicHypotheticalGenerator::from_env()
+        .map_err(|e| anyhow::anyhow!("HyDE requires ANTHROPIC_API_KEY: {e}"))?;
+
+    eprintln!("[HyDE] Generating hypothetical document for: {}", &query[..query.len().min(60)]);
+    let hypothetical = generator.generate(query)
+        .map_err(|e| anyhow::anyhow!("HyDE generation failed: {e}"))?;
+    eprintln!("[HyDE] Generated: {}...", &hypothetical[..hypothetical.len().min(80)]);
+
+    // Concatenate original query + hypothetical for embedding.
+    // The original query preserves keyword signal for BM25,
+    // the hypothetical bridges vocabulary gap for dense retrieval.
+    Ok(format!("{query} {hypothetical}"))
+}
+
+#[cfg(not(feature = "eval"))]
+fn expand_query_hyde(_query: &str) -> Result<String> {
+    anyhow::bail!("HyDE requires --features eval (for Anthropic API client)")
 }
 
 /// Apply reranking to scored results.
@@ -1913,7 +1963,8 @@ fn run_eval(action: EvalAction) -> Result<()> {
             fusion_k,
             candidates,
             rerank,
-        } => run_eval_retrieve(&index, &ground_truth, &output, top_k, &mode, &fusion, fusion_k, candidates, &rerank),
+            hyde,
+        } => run_eval_retrieve(&index, &ground_truth, &output, top_k, &mode, &fusion, fusion_k, candidates, &rerank, hyde),
 
         EvalAction::Judge {
             retrieval_results,
@@ -2116,11 +2167,10 @@ fn run_eval_retrieve(
     fusion_k: Option<f32>,
     candidates: usize,
     rerank: &str,
+    hyde: bool,
 ) -> Result<()> {
-    use trueno_rag::eval::types::{GroundTruthEntry, RetrievalResultEntry, RetrievedChunk};
-    use trueno_rag::index::{SparseIndex, VectorStoreConfig};
-    use trueno_rag::retrieve::HybridRetrieverConfig;
-    use trueno_rag::{BM25Index, DocumentId, HybridRetriever, VectorStore};
+    use trueno_rag::eval::types::GroundTruthEntry;
+    use trueno_rag::DocumentId;
 
     // Validate mode
     if !["dense", "sparse", "hybrid"].contains(&mode) {
@@ -2143,7 +2193,8 @@ fn run_eval_retrieve(
         .context("Failed to parse ground truth JSONL")?;
 
     println!("Loaded {} queries from {}", queries.len(), ground_truth_path);
-    println!("Mode: {mode} | Fusion: {fusion} | Candidates: {candidates} | Top-k: {top_k} | Rerank: {rerank}");
+    let hyde_label = if hyde { " | HyDE: on" } else { "" };
+    println!("Mode: {mode} | Fusion: {fusion} | Candidates: {candidates} | Top-k: {top_k} | Rerank: {rerank}{hyde_label}");
 
     // Fetch more candidates when reranking to give the reranker a wider pool
     let retrieval_k = if rerank == "none" { top_k } else { top_k * 3 };
@@ -2173,201 +2224,226 @@ fn run_eval_retrieve(
         }).collect()
     };
 
-    // Run queries
+    // HyDE: pre-expand all queries if enabled (batches API calls before retrieval loop)
+    let expanded_queries: Option<Vec<String>> = if hyde {
+        println!("HyDE enabled — expanding {} queries via Claude API...", queries.len());
+        let mut expanded = Vec::with_capacity(queries.len());
+        for (i, entry) in queries.iter().enumerate() {
+            eprint!("[HyDE {}/{}] ", i + 1, queries.len());
+            expanded.push(expand_query_hyde(&entry.query)?);
+        }
+        println!("HyDE expansion complete.");
+        Some(expanded)
+    } else {
+        None
+    };
+
+    // Helper: get effective query (HyDE-expanded or original)
+    let effective_query = |i: usize, original: &str| -> String {
+        expanded_queries.as_ref().map_or_else(|| original.to_string(), |eq| eq[i].clone())
+    };
+
+    // Run queries per mode, writing results to output file
     let mut output_file = std::io::BufWriter::new(fs::File::create(output_path)?);
-    use std::io::Write;
 
     match mode {
-        "dense" => {
-            // Dense cosine similarity (TF-IDF or semantic, auto-detected)
-            for (i, entry) in queries.iter().enumerate() {
-                print!(
-                    "[{}/{}] {}...",
-                    i + 1, queries.len(),
-                    &entry.query[..entry.query.len().min(60)]
-                );
-
-                let start = std::time::Instant::now();
-                let query_embedding = embedder.embed(&entry.query)?;
-
-                let mut scores: Vec<(usize, f32)> = persisted
-                    .embeddings.iter().enumerate()
-                    .map(|(idx, emb)| (idx, cosine_similarity(&query_embedding, emb)))
-                    .collect();
-
-                scores.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
-                scores.truncate(retrieval_k);
-                let latency = start.elapsed().as_secs_f64();
-
-                let results: Vec<RetrievedChunk> = scores.iter().map(|(idx, score)| {
-                    let chunk = &persisted.chunks[*idx];
-                    RetrievedChunk {
-                        content: chunk.content.clone(),
-                        source: chunk.source.clone(),
-                        score: *score,
-                        title: chunk.title.clone(),
-                        start_secs: chunk.start_secs,
-                        end_secs: chunk.end_secs,
-                    }
-                }).collect();
-
-                let results = rerank_retrieved_chunks(rerank, &entry.query, results, top_k)?;
-
-                println!(" {} results ({:.2}s)", results.len(), latency);
-                let result_entry = RetrievalResultEntry {
-                    query: entry.query.clone(),
-                    domain: entry.domain.clone(),
-                    course: entry.course.clone(),
-                    results,
-                    latency_s: latency,
-                };
-                serde_json::to_writer(&mut output_file, &result_entry)?;
-                writeln!(output_file)?;
-            }
-        }
-
-        "sparse" => {
-            // BM25-only retrieval
-            println!("Building BM25 index from {} chunks...", persisted.chunks.len());
-            let start_build = std::time::Instant::now();
-            let mut bm25 = BM25Index::new();
-            let chunks = build_chunks(false);
-            // We need a mapping from ChunkId back to index for metadata
-            let mut chunk_map: HashMap<trueno_rag::ChunkId, usize> = HashMap::new();
-            for (i, chunk) in chunks.iter().enumerate() {
-                chunk_map.insert(chunk.id, i);
-                bm25.add(chunk);
-            }
-            println!("BM25 index built in {:.2}s", start_build.elapsed().as_secs_f64());
-
-            for (i, entry) in queries.iter().enumerate() {
-                print!(
-                    "[{}/{}] {}...",
-                    i + 1, queries.len(),
-                    &entry.query[..entry.query.len().min(60)]
-                );
-
-                let start = std::time::Instant::now();
-                let bm25_results = bm25.search(&entry.query, retrieval_k);
-                let latency = start.elapsed().as_secs_f64();
-
-                let results: Vec<RetrievedChunk> = bm25_results.iter().map(|(chunk_id, score)| {
-                    let idx = chunk_map[chunk_id];
-                    let pc = &persisted.chunks[idx];
-                    RetrievedChunk {
-                        content: pc.content.clone(),
-                        source: pc.source.clone(),
-                        score: *score,
-                        title: pc.title.clone(),
-                        start_secs: pc.start_secs,
-                        end_secs: pc.end_secs,
-                    }
-                }).collect();
-
-                let results = rerank_retrieved_chunks(rerank, &entry.query, results, top_k)?;
-
-                println!(" {} results ({:.2}s)", results.len(), latency);
-                let result_entry = RetrievalResultEntry {
-                    query: entry.query.clone(),
-                    domain: entry.domain.clone(),
-                    course: entry.course.clone(),
-                    results,
-                    latency_s: latency,
-                };
-                serde_json::to_writer(&mut output_file, &result_entry)?;
-                writeln!(output_file)?;
-            }
-        }
-
-        "hybrid" => {
-            // Hybrid retrieval: BM25 + dense (TF-IDF or semantic) with fusion
-            let fusion_strategy = parse_fusion_strategy(fusion, fusion_k)?;
-            let dim = embedder.dimension();
-            println!("Building hybrid retriever (BM25 + dense dim={dim}, fusion={fusion})...");
-            let start_build = std::time::Instant::now();
-
-            let dense_store = VectorStore::new(VectorStoreConfig {
-                dimension: dim,
-                ..Default::default()
-            });
-            let bm25 = BM25Index::new();
-
-            let config = HybridRetrieverConfig {
-                candidates_per_source: candidates,
-                fusion: fusion_strategy,
-                use_dense: true,
-                use_sparse: true,
-            };
-
-            let mut retriever = HybridRetriever::new(dense_store, bm25, embedder)
-                .with_config(config);
-
-            // Index all chunks (populates both BM25 and VectorStore)
-            let chunks = build_chunks(true);
-            let n_chunks = chunks.len();
-            // We need a mapping from ChunkId to persisted index for metadata
-            let mut chunk_meta: HashMap<trueno_rag::ChunkId, usize> = HashMap::new();
-            for (i, chunk) in chunks.into_iter().enumerate() {
-                chunk_meta.insert(chunk.id, i);
-                retriever.index(chunk)?;
-            }
-            println!("Hybrid retriever built: {} chunks in {:.2}s", n_chunks, start_build.elapsed().as_secs_f64());
-
-            for (i, entry) in queries.iter().enumerate() {
-                print!(
-                    "[{}/{}] {}...",
-                    i + 1, queries.len(),
-                    &entry.query[..entry.query.len().min(60)]
-                );
-
-                let start = std::time::Instant::now();
-                let retrieval_results = retriever.retrieve(&entry.query, retrieval_k)?;
-                let latency = start.elapsed().as_secs_f64();
-
-                let results: Vec<RetrievedChunk> = retrieval_results.iter().map(|rr| {
-                    let score = rr.fused_score.unwrap_or(rr.best_score());
-                    // Look up metadata from persisted index via chunk_meta
-                    if let Some(&idx) = chunk_meta.get(&rr.chunk.id) {
-                        let pc = &persisted.chunks[idx];
-                        RetrievedChunk {
-                            content: pc.content.clone(),
-                            source: pc.source.clone(),
-                            score,
-                            title: pc.title.clone(),
-                            start_secs: pc.start_secs,
-                            end_secs: pc.end_secs,
-                        }
-                    } else {
-                        RetrievedChunk {
-                            content: rr.chunk.content.clone(),
-                            source: None,
-                            score,
-                            title: None,
-                            start_secs: None,
-                            end_secs: None,
-                        }
-                    }
-                }).collect();
-
-                let results = rerank_retrieved_chunks(rerank, &entry.query, results, top_k)?;
-
-                println!(" {} results ({:.2}s)", results.len(), latency);
-                let result_entry = RetrievalResultEntry {
-                    query: entry.query.clone(),
-                    domain: entry.domain.clone(),
-                    course: entry.course.clone(),
-                    results,
-                    latency_s: latency,
-                };
-                serde_json::to_writer(&mut output_file, &result_entry)?;
-                writeln!(output_file)?;
-            }
-        }
-
+        "dense" => eval_retrieve_dense(
+            &queries, &persisted, &*embedder, &effective_query, retrieval_k, top_k, rerank, &mut output_file,
+        )?,
+        "sparse" => eval_retrieve_sparse(
+            &queries, &persisted, &build_chunks, &effective_query, retrieval_k, top_k, rerank, &mut output_file,
+        )?,
+        "hybrid" => eval_retrieve_hybrid(
+            &queries, &persisted, embedder, &build_chunks, &effective_query,
+            retrieval_k, top_k, rerank, fusion, fusion_k, candidates, &mut output_file,
+        )?,
         _ => unreachable!(),
     }
 
     println!("\nRetrieval results saved to: {output_path}");
+    Ok(())
+}
+
+/// Dense eval retrieval: cosine similarity over embeddings.
+#[cfg(feature = "eval")]
+fn eval_retrieve_dense(
+    queries: &[trueno_rag::eval::types::GroundTruthEntry],
+    persisted: &PersistedIndex,
+    embedder: &dyn Embedder,
+    effective_query: &dyn Fn(usize, &str) -> String,
+    retrieval_k: usize,
+    top_k: usize,
+    rerank: &str,
+    output: &mut impl std::io::Write,
+) -> Result<()> {
+    use trueno_rag::eval::types::{RetrievalResultEntry, RetrievedChunk};
+
+    for (i, entry) in queries.iter().enumerate() {
+        print!("[{}/{}] {}...", i + 1, queries.len(), &entry.query[..entry.query.len().min(60)]);
+
+        let eq = effective_query(i, &entry.query);
+        let start = std::time::Instant::now();
+        let query_embedding = embedder.embed(&eq)?;
+
+        let mut scores: Vec<(usize, f32)> = persisted.embeddings.iter().enumerate()
+            .map(|(idx, emb)| (idx, cosine_similarity(&query_embedding, emb)))
+            .collect();
+        scores.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+        scores.truncate(retrieval_k);
+        let latency = start.elapsed().as_secs_f64();
+
+        let results: Vec<RetrievedChunk> = scores.iter().map(|(idx, score)| {
+            let chunk = &persisted.chunks[*idx];
+            RetrievedChunk {
+                content: chunk.content.clone(), source: chunk.source.clone(),
+                score: *score, title: chunk.title.clone(),
+                start_secs: chunk.start_secs, end_secs: chunk.end_secs,
+            }
+        }).collect();
+        let results = rerank_retrieved_chunks(rerank, &entry.query, results, top_k)?;
+
+        println!(" {} results ({:.2}s)", results.len(), latency);
+        serde_json::to_writer(&mut *output, &RetrievalResultEntry {
+            query: entry.query.clone(), domain: entry.domain.clone(),
+            course: entry.course.clone(), results, latency_s: latency,
+        })?;
+        writeln!(output)?;
+    }
+    Ok(())
+}
+
+/// Sparse eval retrieval: BM25 keyword matching.
+#[cfg(feature = "eval")]
+fn eval_retrieve_sparse(
+    queries: &[trueno_rag::eval::types::GroundTruthEntry],
+    persisted: &PersistedIndex,
+    build_chunks: &dyn Fn(bool) -> Vec<Chunk>,
+    effective_query: &dyn Fn(usize, &str) -> String,
+    retrieval_k: usize,
+    top_k: usize,
+    rerank: &str,
+    output: &mut impl std::io::Write,
+) -> Result<()> {
+    use trueno_rag::eval::types::{RetrievalResultEntry, RetrievedChunk};
+    use trueno_rag::index::SparseIndex;
+    use trueno_rag::BM25Index;
+
+    println!("Building BM25 index from {} chunks...", persisted.chunks.len());
+    let start_build = std::time::Instant::now();
+    let mut bm25 = BM25Index::new();
+    let chunks = build_chunks(false);
+    let mut chunk_map: HashMap<trueno_rag::ChunkId, usize> = HashMap::new();
+    for (i, chunk) in chunks.iter().enumerate() {
+        chunk_map.insert(chunk.id, i);
+        bm25.add(chunk);
+    }
+    println!("BM25 index built in {:.2}s", start_build.elapsed().as_secs_f64());
+
+    for (i, entry) in queries.iter().enumerate() {
+        print!("[{}/{}] {}...", i + 1, queries.len(), &entry.query[..entry.query.len().min(60)]);
+
+        let eq = effective_query(i, &entry.query);
+        let start = std::time::Instant::now();
+        let bm25_results = bm25.search(&eq, retrieval_k);
+        let latency = start.elapsed().as_secs_f64();
+
+        let results: Vec<RetrievedChunk> = bm25_results.iter().map(|(chunk_id, score)| {
+            let idx = chunk_map[chunk_id];
+            let pc = &persisted.chunks[idx];
+            RetrievedChunk {
+                content: pc.content.clone(), source: pc.source.clone(),
+                score: *score, title: pc.title.clone(),
+                start_secs: pc.start_secs, end_secs: pc.end_secs,
+            }
+        }).collect();
+        let results = rerank_retrieved_chunks(rerank, &entry.query, results, top_k)?;
+
+        println!(" {} results ({:.2}s)", results.len(), latency);
+        serde_json::to_writer(&mut *output, &RetrievalResultEntry {
+            query: entry.query.clone(), domain: entry.domain.clone(),
+            course: entry.course.clone(), results, latency_s: latency,
+        })?;
+        writeln!(output)?;
+    }
+    Ok(())
+}
+
+/// Hybrid eval retrieval: BM25 + dense with RRF fusion.
+#[cfg(feature = "eval")]
+fn eval_retrieve_hybrid(
+    queries: &[trueno_rag::eval::types::GroundTruthEntry],
+    persisted: &PersistedIndex,
+    embedder: Box<dyn Embedder>,
+    build_chunks: &dyn Fn(bool) -> Vec<Chunk>,
+    effective_query: &dyn Fn(usize, &str) -> String,
+    retrieval_k: usize,
+    top_k: usize,
+    rerank: &str,
+    fusion: &str,
+    fusion_k: Option<f32>,
+    candidates: usize,
+    output: &mut impl std::io::Write,
+) -> Result<()> {
+    use trueno_rag::eval::types::{RetrievalResultEntry, RetrievedChunk};
+    use trueno_rag::index::VectorStoreConfig;
+    use trueno_rag::retrieve::HybridRetrieverConfig;
+    use trueno_rag::{BM25Index, HybridRetriever, VectorStore};
+
+    let fusion_strategy = parse_fusion_strategy(fusion, fusion_k)?;
+    let dim = embedder.dimension();
+    println!("Building hybrid retriever (BM25 + dense dim={dim}, fusion={fusion})...");
+    let start_build = std::time::Instant::now();
+
+    let dense_store = VectorStore::new(VectorStoreConfig { dimension: dim, ..Default::default() });
+    let bm25 = BM25Index::new();
+    let config = HybridRetrieverConfig {
+        candidates_per_source: candidates, fusion: fusion_strategy,
+        use_dense: true, use_sparse: true,
+    };
+    let mut retriever = HybridRetriever::new(dense_store, bm25, embedder).with_config(config);
+
+    let chunks = build_chunks(true);
+    let n_chunks = chunks.len();
+    let mut chunk_meta: HashMap<trueno_rag::ChunkId, usize> = HashMap::new();
+    for (i, chunk) in chunks.into_iter().enumerate() {
+        chunk_meta.insert(chunk.id, i);
+        retriever.index(chunk)?;
+    }
+    println!("Hybrid retriever built: {} chunks in {:.2}s", n_chunks, start_build.elapsed().as_secs_f64());
+
+    for (i, entry) in queries.iter().enumerate() {
+        print!("[{}/{}] {}...", i + 1, queries.len(), &entry.query[..entry.query.len().min(60)]);
+
+        let eq = effective_query(i, &entry.query);
+        let start = std::time::Instant::now();
+        let retrieval_results = retriever.retrieve(&eq, retrieval_k)?;
+        let latency = start.elapsed().as_secs_f64();
+
+        let results: Vec<RetrievedChunk> = retrieval_results.iter().map(|rr| {
+            let score = rr.fused_score.unwrap_or(rr.best_score());
+            if let Some(&idx) = chunk_meta.get(&rr.chunk.id) {
+                let pc = &persisted.chunks[idx];
+                RetrievedChunk {
+                    content: pc.content.clone(), source: pc.source.clone(),
+                    score, title: pc.title.clone(),
+                    start_secs: pc.start_secs, end_secs: pc.end_secs,
+                }
+            } else {
+                RetrievedChunk {
+                    content: rr.chunk.content.clone(), source: None,
+                    score, title: None, start_secs: None, end_secs: None,
+                }
+            }
+        }).collect();
+        let results = rerank_retrieved_chunks(rerank, &entry.query, results, top_k)?;
+
+        println!(" {} results ({:.2}s)", results.len(), latency);
+        serde_json::to_writer(&mut *output, &RetrievalResultEntry {
+            query: entry.query.clone(), domain: entry.domain.clone(),
+            course: entry.course.clone(), results, latency_s: latency,
+        })?;
+        writeln!(output)?;
+    }
     Ok(())
 }
 

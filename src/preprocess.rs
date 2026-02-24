@@ -79,6 +79,83 @@ impl<G: HypotheticalGenerator> QueryPreprocessor for HydePreprocessor<G> {
     }
 }
 
+/// Anthropic-backed HyDE generator using Claude API.
+///
+/// Generates hypothetical documents by prompting Claude to write a passage
+/// that would answer the given query. Requires `ANTHROPIC_API_KEY` environment
+/// variable and the `eval` feature flag (reuses the eval Anthropic client).
+#[cfg(feature = "eval")]
+pub struct AnthropicHypotheticalGenerator {
+    client: crate::eval::AnthropicClient,
+    runtime: std::sync::Arc<tokio::runtime::Runtime>,
+    model: String,
+    max_tokens: u32,
+}
+
+#[cfg(feature = "eval")]
+impl std::fmt::Debug for AnthropicHypotheticalGenerator {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AnthropicHypotheticalGenerator")
+            .field("client", &"AnthropicClient{..}")
+            .field("runtime", &"Runtime{..}")
+            .field("model", &self.model)
+            .field("max_tokens", &self.max_tokens)
+            .finish()
+    }
+}
+
+#[cfg(feature = "eval")]
+impl AnthropicHypotheticalGenerator {
+    /// Create a new Anthropic HyDE generator from environment.
+    pub fn from_env() -> std::result::Result<Self, String> {
+        let client = crate::eval::AnthropicClient::from_env()?;
+        let runtime = tokio::runtime::Runtime::new()
+            .map_err(|e| format!("Failed to create tokio runtime: {e}"))?;
+        Ok(Self {
+            client,
+            runtime: std::sync::Arc::new(runtime),
+            model: "claude-haiku-4-5-20251001".to_string(),
+            max_tokens: 256,
+        })
+    }
+
+    /// Set the model to use for generation.
+    #[must_use]
+    pub fn with_model(mut self, model: impl Into<String>) -> Self {
+        self.model = model.into();
+        self
+    }
+
+    /// Set maximum tokens for the hypothetical document.
+    #[must_use]
+    pub fn with_max_tokens(mut self, max_tokens: u32) -> Self {
+        self.max_tokens = max_tokens;
+        self
+    }
+}
+
+#[cfg(feature = "eval")]
+impl HypotheticalGenerator for AnthropicHypotheticalGenerator {
+    fn generate(&self, query: &str) -> Result<String> {
+        let system = "You are a technical content generator. Given a user query, write a short \
+            passage (2-4 sentences) that directly answers the query as if it were an excerpt from \
+            a lecture transcript or technical document. Output ONLY the passage text, no preamble \
+            or formatting.";
+
+        let result = self.runtime.block_on(
+            self.client
+                .complete(&self.model, Some(system), query, self.max_tokens),
+        );
+
+        match result {
+            Ok(completion) => Ok(completion.text),
+            Err(e) => Err(crate::Error::InvalidConfig(format!(
+                "HyDE generation failed: {e}"
+            ))),
+        }
+    }
+}
+
 /// Mock HyDE generator for testing that creates a simple hypothetical answer.
 #[derive(Debug, Clone, Default)]
 pub struct MockHypotheticalGenerator {
