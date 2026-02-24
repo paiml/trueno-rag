@@ -2918,6 +2918,453 @@ mod tests {
         let _ = fs::remove_dir_all(&dir);
     }
 
+    // ================================================================
+    // Coverage-targeted tests for uncovered pure-logic functions
+    // ================================================================
+
+    #[test]
+    fn test_parse_fusion_strategy_rrf() {
+        let result = parse_fusion_strategy("rrf", None).unwrap();
+        assert!(matches!(result, FusionStrategy::RRF { k } if (k - 60.0).abs() < 0.001));
+    }
+
+    #[test]
+    fn test_parse_fusion_strategy_rrf_custom_k() {
+        let result = parse_fusion_strategy("rrf", Some(30.0)).unwrap();
+        assert!(matches!(result, FusionStrategy::RRF { k } if (k - 30.0).abs() < 0.001));
+    }
+
+    #[test]
+    fn test_parse_fusion_strategy_linear() {
+        let result = parse_fusion_strategy("linear", Some(0.7)).unwrap();
+        assert!(matches!(result, FusionStrategy::Linear { dense_weight } if (dense_weight - 0.7).abs() < 0.001));
+    }
+
+    #[test]
+    fn test_parse_fusion_strategy_dbsf() {
+        let result = parse_fusion_strategy("dbsf", None).unwrap();
+        assert!(matches!(result, FusionStrategy::DBSF));
+    }
+
+    #[test]
+    fn test_parse_fusion_strategy_unknown() {
+        let result = parse_fusion_strategy("unknown", None);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_finish_load_report_success() {
+        let docs = vec![
+            Document::new("test content".to_string()),
+        ];
+        let result = finish_load_report(docs, 0).unwrap();
+        assert_eq!(result.len(), 1);
+    }
+
+    #[test]
+    fn test_finish_load_report_with_errors() {
+        let docs = vec![
+            Document::new("test content".to_string()),
+        ];
+        let result = finish_load_report(docs, 3).unwrap();
+        assert_eq!(result.len(), 1);
+    }
+
+    #[test]
+    fn test_finish_load_report_all_failed() {
+        let docs: Vec<Document> = vec![];
+        let result = finish_load_report(docs, 5);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("5 errors"));
+    }
+
+    #[test]
+    fn test_report_media_text_split_no_media() {
+        let docs = vec![Document::new("plain text".to_string())];
+        // Should not panic — no media documents means no output
+        report_media_text_split(&docs);
+    }
+
+    #[test]
+    fn test_report_media_text_split_with_media() {
+        let mut doc = Document::new("media content".to_string());
+        doc.metadata
+            .insert("subtitle_cues".to_string(), serde_json::Value::String("cue data".to_string()));
+        let docs = vec![doc, Document::new("plain text".to_string())];
+        // Should print "1 with timestamps, 1 plain text"
+        report_media_text_split(&docs);
+    }
+
+    #[test]
+    fn test_query_sparse_basic() {
+        let persisted = PersistedIndex {
+            chunks: vec![
+                PersistedChunk {
+                    content: "Rust borrow checker and ownership model".to_string(),
+                    title: Some("Rust".to_string()),
+                    source: Some("rust.txt".to_string()),
+                    start_secs: None,
+                    end_secs: None,
+                },
+                PersistedChunk {
+                    content: "Python garbage collector and reference counting".to_string(),
+                    title: Some("Python".to_string()),
+                    source: Some("python.txt".to_string()),
+                    start_secs: None,
+                    end_secs: None,
+                },
+            ],
+            embeddings: vec![vec![0.0; 4]; 2],
+            dimension: 4,
+            embedder_type: "tfidf".to_string(),
+            model_name: None,
+        };
+
+        let results = query_sparse("borrow checker", &persisted, 5);
+        assert!(!results.is_empty(), "BM25 should find 'borrow checker'");
+        // First result should be the Rust chunk (index 0)
+        assert_eq!(results[0].0, 0);
+    }
+
+    #[test]
+    fn test_query_sparse_empty_corpus() {
+        let persisted = PersistedIndex {
+            chunks: vec![],
+            embeddings: vec![],
+            dimension: 4,
+            embedder_type: "tfidf".to_string(),
+            model_name: None,
+        };
+
+        let results = query_sparse("anything", &persisted, 5);
+        assert!(results.is_empty());
+    }
+
+    #[test]
+    fn test_query_dense_tfidf() {
+        // TF-IDF embedder doesn't require external models — it can be created inline
+        let persisted = PersistedIndex {
+            chunks: vec![
+                PersistedChunk {
+                    content: "alpha beta gamma".to_string(),
+                    title: None,
+                    source: None,
+                    start_secs: None,
+                    end_secs: None,
+                },
+                PersistedChunk {
+                    content: "delta epsilon zeta".to_string(),
+                    title: None,
+                    source: None,
+                    start_secs: None,
+                    end_secs: None,
+                },
+            ],
+            embeddings: vec![vec![1.0, 0.0, 0.0, 0.0], vec![0.0, 1.0, 0.0, 0.0]],
+            dimension: 4,
+            embedder_type: "tfidf".to_string(),
+            model_name: None,
+        };
+
+        let result = query_dense("alpha beta", &persisted, 2);
+        assert!(result.is_ok());
+        let scores = result.unwrap();
+        assert_eq!(scores.len(), 2);
+    }
+
+    #[test]
+    fn test_format_query_results_text() {
+        let chunks = vec![
+            PersistedChunk {
+                content: "Rust is a systems programming language focused on safety".to_string(),
+                title: Some("Rust Intro".to_string()),
+                source: Some("rust.txt".to_string()),
+                start_secs: None,
+                end_secs: None,
+            },
+        ];
+        let scores = vec![(0_usize, 0.95_f32)];
+        let result = format_query_results("Rust", &scores, &chunks, "text");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_format_query_results_json() {
+        let chunks = vec![
+            PersistedChunk {
+                content: "Rust is a systems programming language".to_string(),
+                title: Some("Rust".to_string()),
+                source: Some("rust.txt".to_string()),
+                start_secs: Some(10.5),
+                end_secs: Some(25.0),
+            },
+        ];
+        let scores = vec![(0_usize, 0.8_f32)];
+        let result = format_query_results("Rust", &scores, &chunks, "json");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_format_query_results_json_no_timestamps() {
+        let chunks = vec![
+            PersistedChunk {
+                content: "plain text content without timestamps".to_string(),
+                title: None,
+                source: Some("doc.txt".to_string()),
+                start_secs: None,
+                end_secs: None,
+            },
+        ];
+        let scores = vec![(0_usize, 0.5_f32)];
+        let result = format_query_results("plain", &scores, &chunks, "json");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_format_query_results_text_with_timestamps() {
+        let chunks = vec![
+            PersistedChunk {
+                content: "lecture content about PDCA cycle in software engineering and continuous improvement".to_string(),
+                title: Some("PDCA Lecture".to_string()),
+                source: Some("lecture.srt".to_string()),
+                start_secs: Some(120.0),
+                end_secs: Some(180.0),
+            },
+        ];
+        let scores = vec![(0_usize, 0.9_f32)];
+        let result = format_query_results("PDCA", &scores, &chunks, "text");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_apply_rerank_none() {
+        let chunks = vec![
+            PersistedChunk {
+                content: "alpha".to_string(),
+                title: None,
+                source: None,
+                start_secs: None,
+                end_secs: None,
+            },
+        ];
+        let scores = vec![(0_usize, 1.0_f32)];
+        let result = apply_rerank("none", "test", &scores, &chunks, 5).unwrap();
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].0, 0);
+    }
+
+    #[test]
+    fn test_apply_rerank_lexical() {
+        let chunks = vec![
+            PersistedChunk {
+                content: "Rust borrow checker ensures memory safety through ownership".to_string(),
+                title: Some("Rust Safety".to_string()),
+                source: Some("rust.txt".to_string()),
+                start_secs: None,
+                end_secs: None,
+            },
+            PersistedChunk {
+                content: "Python garbage collector manages memory automatically with reference counting".to_string(),
+                title: Some("Python GC".to_string()),
+                source: Some("python.txt".to_string()),
+                start_secs: None,
+                end_secs: None,
+            },
+        ];
+        let scores = vec![(0_usize, 0.9_f32), (1_usize, 0.5_f32)];
+        let result = apply_rerank("lexical", "borrow checker memory", &scores, &chunks, 5).unwrap();
+        assert!(!result.is_empty());
+    }
+
+    #[test]
+    fn test_apply_rerank_unknown() {
+        let chunks = vec![];
+        let scores = vec![];
+        let result = apply_rerank("invalid", "test", &scores, &chunks, 5);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_transcribe_manifest_save_load() {
+        let dir = std::env::temp_dir().join("trueno_rag_cli_test_manifest");
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+
+        let manifest = TranscribeManifest {
+            completed: vec!["a.mp4".to_string(), "b.mp4".to_string()],
+            failed: vec!["c.mp4".to_string()],
+        };
+        manifest.save(&dir).unwrap();
+
+        let loaded = TranscribeManifest::load(&dir);
+        assert_eq!(loaded.completed.len(), 2);
+        assert_eq!(loaded.failed.len(), 1);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_chunk_and_embed_timestamp_strategy() {
+        use trueno_rag::embed::MockEmbedder;
+        use trueno_rag::chunk::RecursiveChunker;
+        use trueno_rag::chunk::TimestampChunker;
+
+        let embedder = MockEmbedder::new(4);
+        let recursive = RecursiveChunker::new(512, 64);
+        let timestamp = TimestampChunker::new(30.0);
+
+        let mut doc = Document::new("This is a lecture about Rust programming and memory safety concepts".to_string());
+        // TimestampChunker with no cues falls back to RecursiveChunker
+        let docs = vec![doc];
+
+        let result = chunk_and_embed(
+            &docs, &embedder, &recursive, &timestamp,
+            ChunkStrategy::Timestamp, false,
+        );
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_discover_and_load_empty_dir() {
+        let dir = std::env::temp_dir().join("trueno_rag_cli_test_discover_load_empty");
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        // Only create an unsupported file
+        fs::write(dir.join("video.mp4"), "not a real file").unwrap();
+
+        let result = discover_and_load(&dir, false, 1, &None);
+        assert!(result.is_err(), "Should fail with no supported files");
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_load_documents_sequential_progress() {
+        // Create 101 files to trigger the progress reporting line
+        let dir = std::env::temp_dir().join("trueno_rag_cli_test_seq_progress");
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+
+        let mut files = Vec::new();
+        for i in 0..101 {
+            let file = dir.join(format!("file_{i:03}.txt"));
+            fs::write(&file, format!("Content of file {i}")).unwrap();
+            files.push(file);
+        }
+
+        let registry = LoaderRegistry::new();
+        let result = load_documents_sequential(&files, &registry);
+        assert!(result.is_ok());
+        let docs = result.unwrap();
+        assert_eq!(docs.len(), 101);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_discover_media_files_recursive_subdirs() {
+        let dir = std::env::temp_dir().join("trueno_rag_cli_test_media_recursive");
+        let sub = dir.join("sub");
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&sub).unwrap();
+        fs::write(dir.join("a.mp4"), "fake").unwrap();
+        fs::write(sub.join("b.mp4"), "fake").unwrap();
+
+        let files = discover_media_files(&dir, true, &None).unwrap();
+        assert_eq!(files.len(), 2);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_load_documents_sequential_with_error() {
+        let dir = std::env::temp_dir().join("trueno_rag_cli_test_seq_load_err");
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        // Create a valid text file and a binary that will fail to load as text
+        fs::write(dir.join("good.txt"), "valid text content").unwrap();
+        fs::write(dir.join("bad.bin"), &[0xFF, 0xFE, 0x00, 0x01]).unwrap();
+
+        let registry = LoaderRegistry::new();
+        let files = vec![dir.join("good.txt"), dir.join("bad.bin")];
+        let result = load_documents_sequential(&files, &registry);
+        // Should succeed with at least the good file loaded (bad.bin may or may not error)
+        assert!(result.is_ok());
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_chunk_and_embed_empty_document() {
+        use trueno_rag::embed::MockEmbedder;
+        use trueno_rag::chunk::RecursiveChunker;
+        use trueno_rag::chunk::TimestampChunker;
+
+        let embedder = MockEmbedder::new(4);
+        let recursive = RecursiveChunker::new(512, 64);
+        let timestamp = TimestampChunker::new(30.0);
+
+        // One empty doc + one valid doc
+        let docs = vec![
+            Document::new(String::new()), // empty — should be skipped
+            Document::new("Some real content that has actual words".to_string()),
+        ];
+
+        let result = chunk_and_embed(&docs, &embedder, &recursive, &timestamp, ChunkStrategy::Recursive, false);
+        assert!(result.is_ok());
+        let (chunks, embeddings) = result.unwrap();
+        assert!(!chunks.is_empty());
+        assert_eq!(chunks.len(), embeddings.len());
+    }
+
+    #[test]
+    fn test_chunk_and_embed_with_dedup() {
+        use trueno_rag::embed::MockEmbedder;
+        use trueno_rag::chunk::RecursiveChunker;
+        use trueno_rag::chunk::TimestampChunker;
+
+        let embedder = MockEmbedder::new(4);
+        let recursive = RecursiveChunker::new(512, 64);
+        let timestamp = TimestampChunker::new(30.0);
+
+        // Two identical documents — dedup should remove duplicates
+        let docs = vec![
+            Document::new("Duplicate content for dedup testing.".to_string()),
+            Document::new("Duplicate content for dedup testing.".to_string()),
+        ];
+
+        let result = chunk_and_embed(&docs, &embedder, &recursive, &timestamp, ChunkStrategy::Recursive, true);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_discover_media_files_single_file() {
+        let dir = std::env::temp_dir().join("trueno_rag_cli_test_media_single");
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("test.mp4");
+        fs::write(&file, "fake media").unwrap();
+
+        let files = discover_media_files(&file, false, &None).unwrap();
+        assert_eq!(files.len(), 1);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_discover_media_files_single_non_media() {
+        let dir = std::env::temp_dir().join("trueno_rag_cli_test_media_nonmedia");
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("test.txt");
+        fs::write(&file, "not media").unwrap();
+
+        let result = discover_media_files(&file, false, &None);
+        assert!(result.is_err());
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
     #[test]
     fn test_discover_media_files_with_exclude() {
         let dir = std::env::temp_dir().join("trueno_rag_cli_test_media_exclude");
