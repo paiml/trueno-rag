@@ -23,11 +23,15 @@
 
 mod subtitle;
 mod text;
+#[cfg(feature = "ocr")]
+mod image;
 #[cfg(feature = "transcription")]
 pub mod transcription;
 
 pub use subtitle::SubtitleLoader;
 pub use text::TextLoader;
+#[cfg(feature = "ocr")]
+pub use image::ImageLoader;
 #[cfg(feature = "transcription")]
 pub use transcription::TranscriptionLoader;
 
@@ -84,6 +88,8 @@ impl LoaderRegistry {
         };
         registry.register(Box::new(TextLoader));
         registry.register(Box::new(SubtitleLoader));
+        #[cfg(feature = "ocr")]
+        registry.register(Box::new(ImageLoader));
         registry
     }
 
