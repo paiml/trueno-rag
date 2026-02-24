@@ -158,6 +158,9 @@ multivector = []
 transcription = ["dep:whisper-apr"]
 # LLM-as-judge evaluation via Anthropic API (PMAT-015)
 eval = ["dep:reqwest", "dep:sha2", "dep:rand"]
+# Image OCR via tesseract CLI (PMAT-023)
+# Requires tesseract-ocr system package installed on $PATH
+ocr = []
 
 [lints]
 workspace = true

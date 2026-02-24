@@ -35,6 +35,8 @@ transcription = ["trueno-rag/transcription"]
 eval = ["trueno-rag/eval"]
 # SQLite+FTS5 index export (PMAT-017)
 sqlite = ["trueno-rag/sqlite"]
+# Image OCR via tesseract CLI (PMAT-023)
+ocr = ["trueno-rag/ocr"]
 
 [dev-dependencies]
 assert_cmd = "2.0"
