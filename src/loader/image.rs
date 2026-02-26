@@ -49,23 +49,18 @@ impl DocumentLoader for ImageLoader {
 
         let content = String::from_utf8_lossy(&output.stdout).trim().to_string();
 
-        let title = path
-            .file_stem()
-            .and_then(|s| s.to_str())
-            .unwrap_or("Untitled")
-            .to_string();
+        let title = path.file_stem().and_then(|s| s.to_str()).unwrap_or("Untitled").to_string();
 
         // Extract frame number from filename if it matches pattern like "frame_00123.png"
-        let mut doc = Document::new(content)
-            .with_title(title)
-            .with_source(path.to_string_lossy());
+        let mut doc = Document::new(content).with_title(title).with_source(path.to_string_lossy());
 
         // If the filename contains timing info (e.g., "frame_00120s.png"), extract it
         if let Some(secs) = extract_timestamp_from_filename(path) {
             doc.metadata.insert(
                 "frame_time_secs".to_string(),
                 serde_json::Value::Number(
-                    serde_json::Number::from_f64(secs).unwrap_or_else(|| serde_json::Number::from(0)),
+                    serde_json::Number::from_f64(secs)
+                        .unwrap_or_else(|| serde_json::Number::from(0)),
                 ),
             );
         }
@@ -112,26 +107,11 @@ mod tests {
 
     #[test]
     fn test_extract_timestamp_from_filename() {
-        assert_eq!(
-            extract_timestamp_from_filename(Path::new("frame_120s.png")),
-            Some(120.0)
-        );
-        assert_eq!(
-            extract_timestamp_from_filename(Path::new("frame_45.5s.png")),
-            Some(45.5)
-        );
-        assert_eq!(
-            extract_timestamp_from_filename(Path::new("frame_0.png")),
-            Some(0.0)
-        );
-        assert_eq!(
-            extract_timestamp_from_filename(Path::new("slide_01.png")),
-            None
-        );
-        assert_eq!(
-            extract_timestamp_from_filename(Path::new("photo.jpg")),
-            None
-        );
+        assert_eq!(extract_timestamp_from_filename(Path::new("frame_120s.png")), Some(120.0));
+        assert_eq!(extract_timestamp_from_filename(Path::new("frame_45.5s.png")), Some(45.5));
+        assert_eq!(extract_timestamp_from_filename(Path::new("frame_0.png")), Some(0.0));
+        assert_eq!(extract_timestamp_from_filename(Path::new("slide_01.png")), None);
+        assert_eq!(extract_timestamp_from_filename(Path::new("photo.jpg")), None);
     }
 
     #[test]

@@ -85,23 +85,14 @@ mod tests {
 
     #[test]
     fn test_error_display_chunk_too_large() {
-        let err = Error::ChunkTooLarge {
-            size: 1000,
-            max: 512,
-        };
+        let err = Error::ChunkTooLarge { size: 1000, max: 512 };
         assert_eq!(err.to_string(), "chunk exceeds maximum size: 1000 > 512");
     }
 
     #[test]
     fn test_error_display_dimension_mismatch() {
-        let err = Error::DimensionMismatch {
-            expected: 384,
-            actual: 768,
-        };
-        assert_eq!(
-            err.to_string(),
-            "embedding dimension mismatch: expected 384, got 768"
-        );
+        let err = Error::DimensionMismatch { expected: 384, actual: 768 };
+        assert_eq!(err.to_string(), "embedding dimension mismatch: expected 384, got 768");
     }
 
     #[test]

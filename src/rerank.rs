@@ -71,10 +71,7 @@ impl LexicalReranker {
         let exact_match = if content.contains(&query) { 1.0 } else { 0.0 };
 
         // Coverage score: what fraction of query terms appear in content
-        let matches = query_terms
-            .iter()
-            .filter(|term| content.contains(*term))
-            .count() as f32;
+        let matches = query_terms.iter().filter(|term| content.contains(*term)).count() as f32;
         let coverage = matches / query_terms.len().max(1) as f32;
 
         // Position score: how early do query terms appear
@@ -132,9 +129,7 @@ impl MockCrossEncoderReranker {
     /// Create a new mock cross-encoder
     #[must_use]
     pub fn new(model_id: impl Into<String>) -> Self {
-        Self {
-            model_id: model_id.into(),
-        }
+        Self { model_id: model_id.into() }
     }
 
     /// Get the model ID
@@ -199,9 +194,7 @@ impl CompositeReranker {
     /// Create a new composite reranker
     #[must_use]
     pub fn new() -> Self {
-        Self {
-            rerankers: Vec::new(),
-        }
+        Self { rerankers: Vec::new() }
     }
 
     /// Add a reranker with a weight
@@ -334,14 +327,10 @@ mod tests {
     #[test]
     fn test_lexical_reranker_coverage() {
         let reranker = LexicalReranker::new();
-        let candidates = vec![
-            create_result("machine learning algorithms"),
-            create_result("machine only here"),
-        ];
+        let candidates =
+            vec![create_result("machine learning algorithms"), create_result("machine only here")];
 
-        let results = reranker
-            .rerank("machine learning neural networks", &candidates, 2)
-            .unwrap();
+        let results = reranker.rerank("machine learning neural networks", &candidates, 2).unwrap();
 
         // First has 2 matches, second has 1
         assert!(results[0].rerank_score.unwrap() >= results[1].rerank_score.unwrap());
@@ -350,9 +339,7 @@ mod tests {
     #[test]
     fn test_lexical_reranker_top_k() {
         let reranker = LexicalReranker::new();
-        let candidates: Vec<_> = (0..10)
-            .map(|i| create_result(&format!("doc {i}")))
-            .collect();
+        let candidates: Vec<_> = (0..10).map(|i| create_result(&format!("doc {i}"))).collect();
 
         let results = reranker.rerank("doc", &candidates, 3).unwrap();
         assert_eq!(results.len(), 3);
@@ -371,10 +358,7 @@ mod tests {
     #[test]
     fn test_lexical_reranker_case_insensitive() {
         let reranker = LexicalReranker::new();
-        let candidates = vec![
-            create_result("MACHINE LEARNING"),
-            create_result("machine learning"),
-        ];
+        let candidates = vec![create_result("MACHINE LEARNING"), create_result("machine learning")];
 
         let results = reranker.rerank("Machine Learning", &candidates, 2).unwrap();
 
@@ -394,10 +378,8 @@ mod tests {
     #[test]
     fn test_mock_cross_encoder_rerank() {
         let reranker = MockCrossEncoderReranker::new("test-model");
-        let candidates = vec![
-            create_result("machine learning algorithms"),
-            create_result("cooking recipes"),
-        ];
+        let candidates =
+            vec![create_result("machine learning algorithms"), create_result("cooking recipes")];
 
         let results = reranker.rerank("machine learning", &candidates, 2).unwrap();
 
@@ -428,10 +410,8 @@ mod tests {
         let lexical = Box::new(LexicalReranker::new());
         let reranker = CompositeReranker::new().with_reranker(lexical, 1.0);
 
-        let candidates = vec![
-            create_result("exact match query here"),
-            create_result("no match at all"),
-        ];
+        let candidates =
+            vec![create_result("exact match query here"), create_result("no match at all")];
 
         let results = reranker.rerank("query", &candidates, 2).unwrap();
         assert_eq!(results.len(), 2);
@@ -443,14 +423,11 @@ mod tests {
         let lexical = Box::new(LexicalReranker::new());
         let cross = Box::new(MockCrossEncoderReranker::new("test"));
 
-        let reranker = CompositeReranker::new()
-            .with_reranker(lexical, 0.5)
-            .with_reranker(cross, 0.5);
+        let reranker =
+            CompositeReranker::new().with_reranker(lexical, 0.5).with_reranker(cross, 0.5);
 
-        let candidates = vec![
-            create_result("machine learning test"),
-            create_result("unrelated content"),
-        ];
+        let candidates =
+            vec![create_result("machine learning test"), create_result("unrelated content")];
 
         let results = reranker.rerank("machine learning", &candidates, 2).unwrap();
         assert_eq!(results.len(), 2);
@@ -461,10 +438,8 @@ mod tests {
     #[test]
     fn test_noop_reranker() {
         let reranker = NoOpReranker::new();
-        let candidates = vec![
-            create_result_with_score("first", 0.9),
-            create_result_with_score("second", 0.8),
-        ];
+        let candidates =
+            vec![create_result_with_score("first", 0.9), create_result_with_score("second", 0.8)];
 
         let results = reranker.rerank("query", &candidates, 10).unwrap();
 
@@ -476,9 +451,7 @@ mod tests {
     #[test]
     fn test_noop_reranker_top_k() {
         let reranker = NoOpReranker::new();
-        let candidates: Vec<_> = (0..10)
-            .map(|i| create_result(&format!("doc {i}")))
-            .collect();
+        let candidates: Vec<_> = (0..10).map(|i| create_result(&format!("doc {i}"))).collect();
 
         let results = reranker.rerank("query", &candidates, 3).unwrap();
         assert_eq!(results.len(), 3);

@@ -229,10 +229,7 @@ impl ScoreMerger {
     /// This is useful when you have per-token scores already grouped by document.
     #[must_use]
     pub fn merge_single_doc(token_max_scores: &[f32]) -> f32 {
-        token_max_scores
-            .iter()
-            .filter(|&&s| s > f32::NEG_INFINITY)
-            .sum()
+        token_max_scores.iter().filter(|&&s| s > f32::NEG_INFINITY).sum()
     }
 }
 
@@ -244,11 +241,7 @@ impl ScoreMerger {
 pub fn exact_maxsim(query: &MultiVectorEmbedding, doc: &MultiVectorEmbedding) -> f32 {
     query
         .tokens()
-        .map(|q| {
-            doc.tokens()
-                .map(|d| dot_product(q, d))
-                .fold(f32::NEG_INFINITY, f32::max)
-        })
+        .map(|q| doc.tokens().map(|d| dot_product(q, d)).fold(f32::NEG_INFINITY, f32::max))
         .filter(|&s| s > f32::NEG_INFINITY)
         .sum()
 }
@@ -294,9 +287,7 @@ mod tests {
             0.0, 0.0, 0.0, 1.0, // centroid 3
         ];
 
-        let config = WarpSearchConfig::with_k(10)
-            .nprobe(2)
-            .centroid_score_threshold(-1.0); // Accept all
+        let config = WarpSearchConfig::with_k(10).nprobe(2).centroid_score_threshold(-1.0); // Accept all
 
         let selected = CentroidSelector::select(&query, &centroids, 4, &config);
 
@@ -315,9 +306,7 @@ mod tests {
             0.0, 0.0, 1.0, 0.0, // centroid 3: score = 0.0
         ];
 
-        let config = WarpSearchConfig::with_k(10)
-            .nprobe(4)
-            .centroid_score_threshold(0.4);
+        let config = WarpSearchConfig::with_k(10).nprobe(4).centroid_score_threshold(0.4);
 
         let selected = CentroidSelector::select(&query, &centroids, 4, &config);
 
@@ -337,9 +326,7 @@ mod tests {
             0.0, 0.0, 1.0, 0.0, // centroid 3
         ];
 
-        let config = WarpSearchConfig::with_k(10)
-            .nprobe(4)
-            .centroid_score_threshold(-1.0);
+        let config = WarpSearchConfig::with_k(10).nprobe(4).centroid_score_threshold(-1.0);
 
         let selected = CentroidSelector::select(&query, &centroids, 4, &config);
 
@@ -405,16 +392,8 @@ mod tests {
     #[test]
     fn test_score_merger_basic() {
         let token_scores = vec![
-            vec![
-                (chunk_id(1), 0, 0.9),
-                (chunk_id(2), 0, 0.8),
-                (chunk_id(1), 1, 0.7),
-            ],
-            vec![
-                (chunk_id(1), 0, 0.6),
-                (chunk_id(2), 0, 0.5),
-                (chunk_id(3), 0, 0.4),
-            ],
+            vec![(chunk_id(1), 0, 0.9), (chunk_id(2), 0, 0.8), (chunk_id(1), 1, 0.7)],
+            vec![(chunk_id(1), 0, 0.6), (chunk_id(2), 0, 0.5), (chunk_id(3), 0, 0.4)],
         ];
 
         let results = ScoreMerger::merge(token_scores, 10);
@@ -451,11 +430,8 @@ mod tests {
 
     #[test]
     fn test_score_merger_sorted_descending() {
-        let token_scores = vec![vec![
-            (chunk_id(1), 0, 0.3),
-            (chunk_id(2), 0, 0.9),
-            (chunk_id(3), 0, 0.6),
-        ]];
+        let token_scores =
+            vec![vec![(chunk_id(1), 0, 0.3), (chunk_id(2), 0, 0.9), (chunk_id(3), 0, 0.6)]];
 
         let results = ScoreMerger::merge(token_scores, 10);
 

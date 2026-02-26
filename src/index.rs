@@ -79,11 +79,7 @@ impl BM25Index {
     /// Create with custom BM25 parameters
     #[must_use]
     pub fn with_params(k1: f32, b: f32) -> Self {
-        Self {
-            k1,
-            b,
-            ..Self::new()
-        }
+        Self { k1, b, ..Self::new() }
     }
 
     /// Set stopwords
@@ -114,13 +110,7 @@ impl BM25Index {
     pub fn tokenize(&self, text: &str) -> Vec<String> {
         text.split(|c: char| !c.is_alphanumeric())
             .filter(|s| !s.is_empty())
-            .map(|s| {
-                if self.lowercase {
-                    s.to_lowercase()
-                } else {
-                    s.to_string()
-                }
-            })
+            .map(|s| if self.lowercase { s.to_lowercase() } else { s.to_string() })
             .filter(|s| !self.stopwords.contains(s))
             .filter(|s| s.len() >= 2) // Filter very short tokens
             .collect()
@@ -193,10 +183,7 @@ impl SparseIndex for BM25Index {
         // Update inverted index and document frequencies
         let mut seen_terms: HashSet<String> = HashSet::new();
         for (term, freq) in term_freqs {
-            self.inverted_index
-                .entry(term.clone())
-                .or_default()
-                .push((chunk.id, freq));
+            self.inverted_index.entry(term.clone()).or_default().push((chunk.id, freq));
 
             if seen_terms.insert(term.clone()) {
                 *self.doc_freqs.entry(term).or_insert(0) += 1;
@@ -230,10 +217,8 @@ impl SparseIndex for BM25Index {
         let mut scores: Vec<(ChunkId, f32)> = candidates
             .into_iter()
             .map(|chunk_id| {
-                let score: f32 = query_terms
-                    .iter()
-                    .map(|term| self.score_term(term, chunk_id))
-                    .sum();
+                let score: f32 =
+                    query_terms.iter().map(|term| self.score_term(term, chunk_id)).sum();
                 (chunk_id, score)
             })
             .filter(|(_, score)| *score > 0.0)
@@ -336,20 +321,13 @@ impl VectorStore {
     /// Create a new vector store
     #[must_use]
     pub fn new(config: VectorStoreConfig) -> Self {
-        Self {
-            config,
-            vectors: HashMap::new(),
-            chunks: HashMap::new(),
-        }
+        Self { config, vectors: HashMap::new(), chunks: HashMap::new() }
     }
 
     /// Create with default configuration
     #[must_use]
     pub fn with_dimension(dimension: usize) -> Self {
-        Self::new(VectorStoreConfig {
-            dimension,
-            ..Default::default()
-        })
+        Self::new(VectorStoreConfig { dimension, ..Default::default() })
     }
 
     /// Get the configuration
@@ -453,11 +431,7 @@ fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
 }
 
 fn euclidean_distance(a: &[f32], b: &[f32]) -> f32 {
-    a.iter()
-        .zip(b.iter())
-        .map(|(x, y)| (x - y).powi(2))
-        .sum::<f32>()
-        .sqrt()
+    a.iter().zip(b.iter()).map(|(x, y)| (x - y).powi(2)).sum::<f32>().sqrt()
 }
 
 fn dot_product(a: &[f32], b: &[f32]) -> f32 {
@@ -641,9 +615,7 @@ mod tests {
         let mut index = BM25Index::new();
 
         index.add(&create_test_chunk("short text")); // ~2 tokens
-        index.add(&create_test_chunk(
-            "this is a longer piece of text about programming",
-        )); // ~5 tokens
+        index.add(&create_test_chunk("this is a longer piece of text about programming")); // ~5 tokens
 
         assert!(index.avg_doc_length > 0.0);
     }
@@ -749,11 +721,7 @@ mod tests {
         let chunk2 = create_test_chunk_with_embedding("east", vec![0.0, 1.0, 0.0]);
         let chunk3 = create_test_chunk_with_embedding(
             "diagonal",
-            vec![
-                std::f32::consts::FRAC_1_SQRT_2,
-                std::f32::consts::FRAC_1_SQRT_2,
-                0.0,
-            ],
+            vec![std::f32::consts::FRAC_1_SQRT_2, std::f32::consts::FRAC_1_SQRT_2, 0.0],
         );
 
         let id1 = chunk1.id;
@@ -781,10 +749,7 @@ mod tests {
         for i in 0..10 {
             let embedding = vec![i as f32, 0.0, 0.0];
             store
-                .insert(create_test_chunk_with_embedding(
-                    &format!("chunk {i}"),
-                    embedding,
-                ))
+                .insert(create_test_chunk_with_embedding(&format!("chunk {i}"), embedding))
                 .unwrap();
         }
 

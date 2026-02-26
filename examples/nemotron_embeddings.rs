@@ -43,10 +43,7 @@ fn main() -> trueno_rag::Result<()> {
         }
     };
 
-    println!(
-        "Loaded Nemotron embedder: {} dimensions",
-        embedder.dimension()
-    );
+    println!("Loaded Nemotron embedder: {} dimensions", embedder.dimension());
 
     // Example documents
     let documents = vec![

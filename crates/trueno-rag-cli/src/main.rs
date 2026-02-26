@@ -28,8 +28,8 @@ use globset::{Glob, GlobSet, GlobSetBuilder};
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
-use std::hash::{Hash, Hasher};
 use std::fs;
+use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use trueno_rag::{
@@ -569,7 +569,9 @@ fn main() -> Result<()> {
             candidates,
             rerank,
             hyde,
-        } => run_query(&query, &index, top_k, &format, &mode, &fusion, fusion_k, candidates, &rerank, hyde)?,
+        } => run_query(
+            &query, &index, top_k, &format, &mode, &fusion, fusion_k, candidates, &rerank, hyde,
+        )?,
         Commands::Transcribe {
             path,
             recursive,
@@ -633,9 +635,7 @@ fn run_extract_frames(
     exclude_patterns: &[String],
 ) -> Result<()> {
     // Verify ffmpeg is available
-    let ffmpeg_check = std::process::Command::new("ffmpeg")
-        .arg("-version")
-        .output();
+    let ffmpeg_check = std::process::Command::new("ffmpeg").arg("-version").output();
     if ffmpeg_check.is_err() || !ffmpeg_check.unwrap().status.success() {
         anyhow::bail!("ffmpeg not found. Install with: apt install ffmpeg");
     }
@@ -659,18 +659,17 @@ fn run_extract_frames(
                 return true;
             }
             let frames_dir = v.with_extension("frames");
-            !frames_dir.exists() || frames_dir.read_dir().map(|mut d| d.next().is_none()).unwrap_or(true)
+            !frames_dir.exists()
+                || frames_dir.read_dir().map(|mut d| d.next().is_none()).unwrap_or(true)
         })
         .collect();
 
-    println!(
-        "Found {} video files ({} need frame extraction)",
-        videos.len(),
-        to_process.len()
-    );
+    println!("Found {} video files ({} need frame extraction)", videos.len(), to_process.len());
 
     if to_process.is_empty() {
-        println!("All videos already have frames extracted. Use --skip-existing false to re-extract.");
+        println!(
+            "All videos already have frames extracted. Use --skip-existing false to re-extract."
+        );
         return Ok(());
     }
 
@@ -730,14 +729,9 @@ fn extract_frames_ffmpeg(video: &Path, threshold: f64, min_interval: f64) -> Res
     fs::create_dir_all(&frames_dir)?;
 
     // Use ffmpeg select filter for scene detection + fps filter for minimum interval
-    let select_filter = format!(
-        "select='gt(scene\\,{threshold})',fps=1/{min_interval}",
-    );
+    let select_filter = format!("select='gt(scene\\,{threshold})',fps=1/{min_interval}",);
 
-    let output_pattern = frames_dir
-        .join("frame_%04d.png")
-        .to_string_lossy()
-        .to_string();
+    let output_pattern = frames_dir.join("frame_%04d.png").to_string_lossy().to_string();
 
     let output = std::process::Command::new("ffmpeg")
         .args([
@@ -750,7 +744,7 @@ fn extract_frames_ffmpeg(video: &Path, threshold: f64, min_interval: f64) -> Res
             "-frame_pts",
             "1",
             &output_pattern,
-            "-y",        // overwrite
+            "-y", // overwrite
             "-loglevel",
             "warning",
         ])
@@ -765,12 +759,7 @@ fn extract_frames_ffmpeg(video: &Path, threshold: f64, min_interval: f64) -> Res
     // Count extracted frames and rename with timestamp info
     let frame_count = fs::read_dir(&frames_dir)?
         .filter_map(|e| e.ok())
-        .filter(|e| {
-            e.path()
-                .extension()
-                .map(|ext| ext == "png")
-                .unwrap_or(false)
-        })
+        .filter(|e| e.path().extension().map(|ext| ext == "png").unwrap_or(false))
         .count();
 
     Ok(frame_count)
@@ -944,20 +933,12 @@ fn filter_files_for_transcription(
     let to_process: Vec<PathBuf> = if skip_existing {
         needs_transcription
             .into_iter()
-            .filter(|f| {
-                !manifest
-                    .completed
-                    .contains(&f.to_string_lossy().to_string())
-            })
+            .filter(|f| !manifest.completed.contains(&f.to_string_lossy().to_string()))
             .collect()
     } else {
         media_files
             .iter()
-            .filter(|f| {
-                !manifest
-                    .completed
-                    .contains(&f.to_string_lossy().to_string())
-            })
+            .filter(|f| !manifest.completed.contains(&f.to_string_lossy().to_string()))
             .cloned()
             .collect()
     };
@@ -968,10 +949,7 @@ fn filter_files_for_transcription(
         to_process.len()
     );
     if previously_completed > 0 {
-        println!(
-            "  {} previously completed (from manifest)",
-            previously_completed
-        );
+        println!("  {} previously completed (from manifest)", previously_completed);
     }
     to_process
 }
@@ -1105,10 +1083,7 @@ fn run_transcription_batch(
     let loader = TranscriptionLoader::new(config);
 
     if loader.has_model() {
-        println!(
-            "\nWhisper model loaded. Transcribing {} files...",
-            files.len()
-        );
+        println!("\nWhisper model loaded. Transcribing {} files...", files.len());
     } else {
         println!(
             "\nNo model specified (use --model <path.apr>). \
@@ -1127,20 +1102,12 @@ fn run_transcription_batch(
         match loader.load(file) {
             Ok(_doc) => {
                 *success.lock().unwrap() += 1;
-                manifest
-                    .lock()
-                    .unwrap()
-                    .completed
-                    .push(file.to_string_lossy().to_string());
+                manifest.lock().unwrap().completed.push(file.to_string_lossy().to_string());
                 println!("  {} ... ok", filename);
             }
             Err(e) => {
                 *errors.lock().unwrap() += 1;
-                manifest
-                    .lock()
-                    .unwrap()
-                    .failed
-                    .push(file.to_string_lossy().to_string());
+                manifest.lock().unwrap().failed.push(file.to_string_lossy().to_string());
                 println!("  {} ... FAILED: {e}", filename);
             }
         }
@@ -1219,11 +1186,7 @@ fn run_demo(query: &str, top_k: usize) -> Result<()> {
 
     // Index
     let chunk_count = pipeline.index_documents(&docs)?;
-    println!(
-        "Indexed {} documents ({} chunks)\n",
-        docs.len(),
-        chunk_count
-    );
+    println!("Indexed {} documents ({} chunks)\n", docs.len(), chunk_count);
 
     // Query
     println!("Query: \"{}\"\n", query);
@@ -1257,10 +1220,8 @@ fn build_exclude_set(patterns: &[String]) -> Result<Option<GlobSet>> {
     }
     let mut builder = GlobSetBuilder::new();
     for pattern in patterns {
-        builder.add(
-            Glob::new(pattern)
-                .with_context(|| format!("Invalid exclude glob: {pattern}"))?,
-        );
+        builder
+            .add(Glob::new(pattern).with_context(|| format!("Invalid exclude glob: {pattern}"))?);
     }
     Ok(Some(builder.build().context("Failed to build exclude set")?))
 }
@@ -1288,9 +1249,7 @@ fn discover_files(
         } else {
             anyhow::bail!(
                 "Unsupported file format: {}",
-                root.extension()
-                    .and_then(|e| e.to_str())
-                    .unwrap_or("(none)")
+                root.extension().and_then(|e| e.to_str()).unwrap_or("(none)")
             );
         }
         return Ok(files);
@@ -1329,11 +1288,7 @@ fn discover_files(
 fn classify_files(files: &[PathBuf]) -> HashMap<String, usize> {
     let mut counts: HashMap<String, usize> = HashMap::new();
     for file in files {
-        let ext = file
-            .extension()
-            .and_then(|e| e.to_str())
-            .unwrap_or("other")
-            .to_lowercase();
+        let ext = file.extension().and_then(|e| e.to_str()).unwrap_or("other").to_lowercase();
         *counts.entry(ext).or_insert(0) += 1;
     }
     counts
@@ -1410,11 +1365,7 @@ fn finish_load_report(documents: Vec<Document>, load_errors: usize) -> Result<Ve
     }
 
     if load_errors > 0 {
-        println!(
-            "Loaded {} documents ({} failed)",
-            documents.len(),
-            load_errors
-        );
+        println!("Loaded {} documents ({} failed)", documents.len(), load_errors);
     } else {
         println!("Loaded {} documents", documents.len());
     }
@@ -1472,11 +1423,7 @@ fn chunk_and_embed(
                     .custom
                     .get("start_secs")
                     .and_then(serde_json::Value::as_f64),
-                end_secs: chunk
-                    .metadata
-                    .custom
-                    .get("end_secs")
-                    .and_then(serde_json::Value::as_f64),
+                end_secs: chunk.metadata.custom.get("end_secs").and_then(serde_json::Value::as_f64),
             });
         }
     }
@@ -1503,11 +1450,7 @@ fn discover_and_load(
 
     if files.is_empty() {
         let exts = registry.supported_extensions().join(", ");
-        anyhow::bail!(
-            "No supported files found at: {} (supported: {})",
-            path.display(),
-            exts
-        );
+        anyhow::bail!("No supported files found at: {} (supported: {})", path.display(), exts);
     }
 
     let classification = classify_files(&files);
@@ -1531,16 +1474,10 @@ fn discover_and_load(
 
 /// Print how many documents have timestamp metadata vs plain text.
 fn report_media_text_split(documents: &[Document]) {
-    let media_count = documents
-        .iter()
-        .filter(|d| d.metadata.contains_key("subtitle_cues"))
-        .count();
+    let media_count = documents.iter().filter(|d| d.metadata.contains_key("subtitle_cues")).count();
     if media_count > 0 {
         let text_count = documents.len() - media_count;
-        println!(
-            "  {} with timestamps, {} plain text",
-            media_count, text_count
-        );
+        println!("  {} with timestamps, {} plain text", media_count, text_count);
     }
 }
 
@@ -1638,16 +1575,9 @@ fn export_sqlite(persisted: &PersistedIndex, output_path: &Path) -> Result<()> {
     let mut doc_chunks: BTreeMap<String, Vec<(String, String)>> = BTreeMap::new();
     let mut doc_titles: HashMap<String, Option<String>> = HashMap::new();
     for (i, pc) in persisted.chunks.iter().enumerate() {
-        let doc_id = pc
-            .source
-            .as_deref()
-            .unwrap_or("unknown")
-            .to_string();
+        let doc_id = pc.source.as_deref().unwrap_or("unknown").to_string();
         let chunk_id = format!("{}#{}", doc_id, i);
-        doc_chunks
-            .entry(doc_id.clone())
-            .or_default()
-            .push((chunk_id, pc.content.clone()));
+        doc_chunks.entry(doc_id.clone()).or_default().push((chunk_id, pc.content.clone()));
         doc_titles.entry(doc_id).or_insert_with(|| pc.title.clone());
     }
 
@@ -1663,9 +1593,7 @@ fn export_sqlite(persisted: &PersistedIndex, output_path: &Path) -> Result<()> {
             .map_err(|e| anyhow::anyhow!("Failed to insert document {doc_id}: {e}"))?;
     }
 
-    sqlite_index
-        .optimize()
-        .map_err(|e| anyhow::anyhow!("Failed to optimize SQLite index: {e}"))?;
+    sqlite_index.optimize().map_err(|e| anyhow::anyhow!("Failed to optimize SQLite index: {e}"))?;
 
     println!(
         "SQLite index saved to: {} ({} docs, {} chunks)",
@@ -1723,11 +1651,7 @@ fn run_index(
         dedup,
     )?;
 
-    println!(
-        "Indexed {} documents ({} chunks)",
-        documents.len(),
-        all_chunks.len()
-    );
+    println!("Indexed {} documents ({} chunks)", documents.len(), all_chunks.len());
 
     let persisted = PersistedIndex {
         chunks: all_chunks,
@@ -1831,11 +1755,7 @@ fn run_index_incremental_inner(
         return Ok(());
     }
 
-    println!(
-        "{} files changed/new, {} files deleted",
-        changed.len(),
-        deleted.len()
-    );
+    println!("{} files changed/new, {} files deleted", changed.len(), deleted.len());
 
     // Remove deleted files
     for del_path in &deleted {
@@ -1849,9 +1769,7 @@ fn run_index_incremental_inner(
 
     if changed.is_empty() {
         println!("Only deletions — no re-indexing needed.");
-        sqlite_index
-            .optimize()
-            .map_err(|e| anyhow::anyhow!("Failed to optimize: {e}"))?;
+        sqlite_index.optimize().map_err(|e| anyhow::anyhow!("Failed to optimize: {e}"))?;
         return Ok(());
     }
 
@@ -1879,20 +1797,13 @@ fn run_index_incremental_inner(
     // Insert changed documents into SQLite
     incremental_insert(&sqlite_index, &all_chunks, &changed)?;
 
-    sqlite_index
-        .optimize()
-        .map_err(|e| anyhow::anyhow!("Failed to optimize: {e}"))?;
+    sqlite_index.optimize().map_err(|e| anyhow::anyhow!("Failed to optimize: {e}"))?;
 
-    let stats = sqlite_index
-        .document_count()
-        .map_err(|e| anyhow::anyhow!("Failed to count docs: {e}"))?;
-    let chunk_count = sqlite_index
-        .chunk_count()
-        .map_err(|e| anyhow::anyhow!("Failed to count chunks: {e}"))?;
-    println!(
-        "Incremental update complete: {} docs, {} chunks total",
-        stats, chunk_count
-    );
+    let stats =
+        sqlite_index.document_count().map_err(|e| anyhow::anyhow!("Failed to count docs: {e}"))?;
+    let chunk_count =
+        sqlite_index.chunk_count().map_err(|e| anyhow::anyhow!("Failed to count chunks: {e}"))?;
+    println!("Incremental update complete: {} docs, {} chunks total", stats, chunk_count);
 
     Ok(())
 }
@@ -1933,11 +1844,8 @@ fn diff_fingerprints(
         }
     }
 
-    let deleted: Vec<String> = stored
-        .keys()
-        .filter(|k| !current_paths.contains(k.as_str()))
-        .cloned()
-        .collect();
+    let deleted: Vec<String> =
+        stored.keys().filter(|k| !current_paths.contains(k.as_str())).cloned().collect();
 
     (changed, deleted)
 }
@@ -1952,43 +1860,36 @@ fn incremental_insert(
     use std::collections::BTreeMap;
 
     // Build a hash lookup for changed files
-    let hash_map: HashMap<String, [u8; 32]> = changed
-        .iter()
-        .map(|(p, h)| (p.to_string_lossy().to_string(), *h))
-        .collect();
+    let hash_map: HashMap<String, [u8; 32]> =
+        changed.iter().map(|(p, h)| (p.to_string_lossy().to_string(), *h)).collect();
 
     // Group chunks by source
     let mut doc_chunks: BTreeMap<String, Vec<(String, String)>> = BTreeMap::new();
     let mut doc_titles: HashMap<String, Option<String>> = HashMap::new();
 
     for (i, pc) in chunks.iter().enumerate() {
-        let doc_id = pc
-            .source
-            .as_deref()
-            .unwrap_or("unknown")
-            .to_string();
+        let doc_id = pc.source.as_deref().unwrap_or("unknown").to_string();
         let chunk_id = format!("{}#{}", doc_id, i);
-        doc_chunks
-            .entry(doc_id.clone())
-            .or_default()
-            .push((chunk_id, pc.content.clone()));
+        doc_chunks.entry(doc_id.clone()).or_default().push((chunk_id, pc.content.clone()));
         doc_titles.entry(doc_id).or_insert_with(|| pc.title.clone());
     }
 
     for (doc_id, chunk_pairs) in &doc_chunks {
         let title = doc_titles.get(doc_id).and_then(|t| t.as_deref());
-        let content: String = chunk_pairs
-            .iter()
-            .map(|(_, c)| c.as_str())
-            .collect::<Vec<_>>()
-            .join("\n");
+        let content: String =
+            chunk_pairs.iter().map(|(_, c)| c.as_str()).collect::<Vec<_>>().join("\n");
 
-        let fingerprint = hash_map
-            .get(doc_id)
-            .map(|h| (doc_id.as_str(), h));
+        let fingerprint = hash_map.get(doc_id).map(|h| (doc_id.as_str(), h));
 
         sqlite_index
-            .insert_document(doc_id, title, Some(doc_id.as_str()), &content, chunk_pairs, fingerprint)
+            .insert_document(
+                doc_id,
+                title,
+                Some(doc_id.as_str()),
+                &content,
+                chunk_pairs,
+                fingerprint,
+            )
             .map_err(|e| anyhow::anyhow!("Failed to insert document {doc_id}: {e}"))?;
 
         println!("  Updated: {} ({} chunks)", doc_id, chunk_pairs.len());
@@ -2075,16 +1976,14 @@ fn run_query(
     let retrieval_k = if rerank == "none" { top_k } else { top_k * 3 };
 
     // HyDE: expand query into hypothetical document
-    let effective_query = if hyde {
-        expand_query_hyde(query)?
-    } else {
-        query.to_string()
-    };
+    let effective_query = if hyde { expand_query_hyde(query)? } else { query.to_string() };
 
     let scores = match mode {
         "dense" => query_dense(&effective_query, &persisted, retrieval_k)?,
         "sparse" => query_sparse(&effective_query, &persisted, retrieval_k),
-        "hybrid" => query_hybrid(&effective_query, &persisted, retrieval_k, fusion, fusion_k, candidates)?,
+        "hybrid" => {
+            query_hybrid(&effective_query, &persisted, retrieval_k, fusion, fusion_k, candidates)?
+        }
         _ => unreachable!(),
     };
 
@@ -2112,8 +2011,8 @@ fn create_query_embedder(persisted: &PersistedIndex) -> Result<Box<dyn Embedder>
                 model_type.model_name(),
                 model_type.dimension()
             );
-            let emb = FastEmbedder::new(model_type)
-                .context("Failed to initialize semantic embedder")?;
+            let emb =
+                FastEmbedder::new(model_type).context("Failed to initialize semantic embedder")?;
             Ok(Box::new(emb))
         }
         #[cfg(not(feature = "embeddings"))]
@@ -2125,11 +2024,7 @@ fn create_query_embedder(persisted: &PersistedIndex) -> Result<Box<dyn Embedder>
         }
     } else {
         let mut emb = TfIdfEmbedder::new(persisted.dimension);
-        let refs: Vec<&str> = persisted
-            .chunks
-            .iter()
-            .map(|c| c.content.as_str())
-            .collect();
+        let refs: Vec<&str> = persisted.chunks.iter().map(|c| c.content.as_str()).collect();
         emb.fit(&refs);
         Ok(Box::new(emb))
     }
@@ -2143,14 +2038,14 @@ fn create_query_embedder(persisted: &PersistedIndex) -> Result<Box<dyn Embedder>
 /// similarity for vocabulary-mismatched queries.
 #[cfg(feature = "eval")]
 fn expand_query_hyde(query: &str) -> Result<String> {
-    use trueno_rag::preprocess::{HypotheticalGenerator, AnthropicHypotheticalGenerator};
+    use trueno_rag::preprocess::{AnthropicHypotheticalGenerator, HypotheticalGenerator};
 
     let generator = AnthropicHypotheticalGenerator::from_env()
         .map_err(|e| anyhow::anyhow!("HyDE requires ANTHROPIC_API_KEY: {e}"))?;
 
     eprintln!("[HyDE] Generating hypothetical document for: {}", &query[..query.len().min(60)]);
-    let hypothetical = generator.generate(query)
-        .map_err(|e| anyhow::anyhow!("HyDE generation failed: {e}"))?;
+    let hypothetical =
+        generator.generate(query).map_err(|e| anyhow::anyhow!("HyDE generation failed: {e}"))?;
     eprintln!("[HyDE] Generated: {}...", &hypothetical[..hypothetical.len().min(80)]);
 
     // Concatenate original query + hypothetical for embedding.
@@ -2187,12 +2082,8 @@ fn apply_rerank(
                 .iter()
                 .map(|(idx, score)| {
                     let pc = &chunks[*idx];
-                    let mut chunk = Chunk::new(
-                        DocumentId::new(),
-                        pc.content.clone(),
-                        0,
-                        pc.content.len(),
-                    );
+                    let mut chunk =
+                        Chunk::new(DocumentId::new(), pc.content.clone(), 0, pc.content.len());
                     // Store original index in metadata for round-tripping
                     chunk.metadata.custom.insert(
                         "_idx".to_string(),
@@ -2214,9 +2105,9 @@ fn apply_rerank(
             Ok(reranked
                 .into_iter()
                 .map(|rr| {
-                    let idx = rr.chunk.metadata.custom.get("_idx")
-                        .and_then(|v| v.as_u64())
-                        .unwrap_or(0) as usize;
+                    let idx =
+                        rr.chunk.metadata.custom.get("_idx").and_then(|v| v.as_u64()).unwrap_or(0)
+                            as usize;
                     let score = rr.rerank_score.unwrap_or(rr.best_score());
                     (idx, score)
                 })
@@ -2248,12 +2139,8 @@ fn rerank_retrieved_chunks(
                 .iter()
                 .enumerate()
                 .map(|(i, rc)| {
-                    let mut chunk = Chunk::new(
-                        DocumentId::new(),
-                        rc.content.clone(),
-                        0,
-                        rc.content.len(),
-                    );
+                    let mut chunk =
+                        Chunk::new(DocumentId::new(), rc.content.clone(), 0, rc.content.len());
                     chunk.metadata.custom.insert(
                         "_idx".to_string(),
                         serde_json::Value::Number(serde_json::Number::from(i)),
@@ -2274,9 +2161,9 @@ fn rerank_retrieved_chunks(
             Ok(reranked
                 .into_iter()
                 .map(|rr| {
-                    let idx = rr.chunk.metadata.custom.get("_idx")
-                        .and_then(|v| v.as_u64())
-                        .unwrap_or(0) as usize;
+                    let idx =
+                        rr.chunk.metadata.custom.get("_idx").and_then(|v| v.as_u64()).unwrap_or(0)
+                            as usize;
                     let mut rc = results[idx].clone();
                     rc.score = rr.rerank_score.unwrap_or(rr.best_score());
                     rc
@@ -2317,10 +2204,7 @@ fn query_sparse(query: &str, persisted: &PersistedIndex, top_k: usize) -> Vec<(u
     }
 
     let bm25_results = bm25.search(query, top_k);
-    bm25_results
-        .iter()
-        .map(|(chunk_id, score)| (chunk_map[chunk_id], *score))
-        .collect()
+    bm25_results.iter().map(|(chunk_id, score)| (chunk_map[chunk_id], *score)).collect()
 }
 
 /// Hybrid retrieval: BM25 + dense (TF-IDF or semantic) with fusion.
@@ -2341,10 +2225,7 @@ fn query_hybrid(
     let embedder = create_query_embedder(persisted)?;
     let dim = embedder.dimension();
 
-    let dense_store = VectorStore::new(VectorStoreConfig {
-        dimension: dim,
-        ..Default::default()
-    });
+    let dense_store = VectorStore::new(VectorStoreConfig { dimension: dim, ..Default::default() });
     let bm25 = BM25Index::new();
 
     let config = HybridRetrieverConfig {
@@ -2450,21 +2331,13 @@ fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
 #[cfg(feature = "eval")]
 fn run_eval(action: EvalAction) -> Result<()> {
     match action {
-        EvalAction::Sample {
-            index,
-            output,
-            sample_size,
-            seed,
-        } => run_eval_sample(&index, &output, sample_size, seed),
+        EvalAction::Sample { index, output, sample_size, seed } => {
+            run_eval_sample(&index, &output, sample_size, seed)
+        }
 
-        EvalAction::Generate {
-            index,
-            output,
-            sample_size,
-            seed,
-            model,
-            dry_run,
-        } => run_eval_generate(&index, &output, sample_size, seed, &model, dry_run),
+        EvalAction::Generate { index, output, sample_size, seed, model, dry_run } => {
+            run_eval_generate(&index, &output, sample_size, seed, &model, dry_run)
+        }
 
         EvalAction::Retrieve {
             index,
@@ -2477,42 +2350,33 @@ fn run_eval(action: EvalAction) -> Result<()> {
             candidates,
             rerank,
             hyde,
-        } => run_eval_retrieve(&index, &ground_truth, &output, top_k, &mode, &fusion, fusion_k, candidates, &rerank, hyde),
-
-        EvalAction::Judge {
-            retrieval_results,
-            ground_truth: _,
-            output,
-            cache,
+        } => run_eval_retrieve(
+            &index,
+            &ground_truth,
+            &output,
             top_k,
-            model,
-        } => {
+            &mode,
+            &fusion,
+            fusion_k,
+            candidates,
+            &rerank,
+            hyde,
+        ),
+
+        EvalAction::Judge { retrieval_results, ground_truth: _, output, cache, top_k, model } => {
             let rt = tokio::runtime::Runtime::new().context("Failed to create tokio runtime")?;
-            rt.block_on(run_eval_judge(
-                &retrieval_results,
-                &output,
-                &cache,
-                top_k,
-                &model,
-            ))
+            rt.block_on(run_eval_judge(&retrieval_results, &output, &cache, top_k, &model))
         }
 
-        EvalAction::Metrics {
-            retrieval_results,
-            judgments,
-            output,
-        } => run_eval_metrics(&retrieval_results, &judgments, &output),
+        EvalAction::Metrics { retrieval_results, judgments, output } => {
+            run_eval_metrics(&retrieval_results, &judgments, &output)
+        }
 
-        EvalAction::Compare {
-            baseline,
-            candidate,
-        } => run_eval_compare(&baseline, &candidate),
+        EvalAction::Compare { baseline, candidate } => run_eval_compare(&baseline, &candidate),
 
-        EvalAction::Gate {
-            results,
-            min_mrr,
-            min_hit5,
-        } => run_eval_gate(&results, min_mrr, min_hit5),
+        EvalAction::Gate { results, min_mrr, min_hit5 } => {
+            run_eval_gate(&results, min_mrr, min_hit5)
+        }
     }
 }
 
@@ -2583,10 +2447,7 @@ fn run_eval_sample(
         writeln!(file)?;
     }
 
-    println!(
-        "\nSampled {} chunks saved to: {output_path}",
-        sampled.len()
-    );
+    println!("\nSampled {} chunks saved to: {output_path}", sampled.len());
     Ok(())
 }
 
@@ -2630,23 +2491,16 @@ fn run_eval_generate(
         let sampled = gen.sample_chunks(&chunks);
         println!("\nDry run: would generate {} questions", sampled.len());
         for s in sampled.iter().take(10) {
-            println!(
-                "  [{}] {}: {}...",
-                s.domain,
-                s.course,
-                &s.content[..s.content.len().min(80)]
-            );
+            println!("  [{}] {}: {}...", s.domain, s.course, &s.content[..s.content.len().min(80)]);
         }
         return Ok(());
     }
 
-    let client = AnthropicClient::from_env()
-        .map_err(|e| anyhow::anyhow!("{e}"))?;
+    let client = AnthropicClient::from_env().map_err(|e| anyhow::anyhow!("{e}"))?;
     let gen = GroundTruthGenerator::new(client, model, sample_size, seed);
 
     let rt = tokio::runtime::Runtime::new().context("Failed to create tokio runtime")?;
-    let results = rt.block_on(gen.generate(&chunks))
-        .map_err(|e| anyhow::anyhow!("{e}"))?;
+    let results = rt.block_on(gen.generate(&chunks)).map_err(|e| anyhow::anyhow!("{e}"))?;
 
     // Write JSONL output
     let mut file = std::io::BufWriter::new(fs::File::create(output_path)?);
@@ -2723,18 +2577,24 @@ fn run_eval_retrieve(
 
     // Convert PersistedChunks to Chunks with embeddings for hybrid/sparse modes
     let build_chunks = |with_embeddings: bool| -> Vec<Chunk> {
-        persisted.chunks.iter().enumerate().map(|(i, pc)| {
-            let mut chunk = Chunk::new(DocumentId::new(), pc.content.clone(), 0, pc.content.len());
-            chunk.metadata.title = pc.title.clone();
-            chunk.metadata.custom.insert(
-                "source".to_string(),
-                serde_json::Value::String(pc.source.clone().unwrap_or_default()),
-            );
-            if with_embeddings {
-                chunk.embedding = Some(persisted.embeddings[i].clone());
-            }
-            chunk
-        }).collect()
+        persisted
+            .chunks
+            .iter()
+            .enumerate()
+            .map(|(i, pc)| {
+                let mut chunk =
+                    Chunk::new(DocumentId::new(), pc.content.clone(), 0, pc.content.len());
+                chunk.metadata.title = pc.title.clone();
+                chunk.metadata.custom.insert(
+                    "source".to_string(),
+                    serde_json::Value::String(pc.source.clone().unwrap_or_default()),
+                );
+                if with_embeddings {
+                    chunk.embedding = Some(persisted.embeddings[i].clone());
+                }
+                chunk
+            })
+            .collect()
     };
 
     // HyDE: pre-expand all queries if enabled (batches API calls before retrieval loop)
@@ -2761,14 +2621,38 @@ fn run_eval_retrieve(
 
     match mode {
         "dense" => eval_retrieve_dense(
-            &queries, &persisted, &*embedder, &effective_query, retrieval_k, top_k, rerank, &mut output_file,
+            &queries,
+            &persisted,
+            &*embedder,
+            &effective_query,
+            retrieval_k,
+            top_k,
+            rerank,
+            &mut output_file,
         )?,
         "sparse" => eval_retrieve_sparse(
-            &queries, &persisted, &build_chunks, &effective_query, retrieval_k, top_k, rerank, &mut output_file,
+            &queries,
+            &persisted,
+            &build_chunks,
+            &effective_query,
+            retrieval_k,
+            top_k,
+            rerank,
+            &mut output_file,
         )?,
         "hybrid" => eval_retrieve_hybrid(
-            &queries, &persisted, embedder, &build_chunks, &effective_query,
-            retrieval_k, top_k, rerank, fusion, fusion_k, candidates, &mut output_file,
+            &queries,
+            &persisted,
+            embedder,
+            &build_chunks,
+            &effective_query,
+            retrieval_k,
+            top_k,
+            rerank,
+            fusion,
+            fusion_k,
+            candidates,
+            &mut output_file,
         )?,
         _ => unreachable!(),
     }
@@ -2798,28 +2682,43 @@ fn eval_retrieve_dense(
         let start = std::time::Instant::now();
         let query_embedding = embedder.embed(&eq)?;
 
-        let mut scores: Vec<(usize, f32)> = persisted.embeddings.iter().enumerate()
+        let mut scores: Vec<(usize, f32)> = persisted
+            .embeddings
+            .iter()
+            .enumerate()
             .map(|(idx, emb)| (idx, cosine_similarity(&query_embedding, emb)))
             .collect();
         scores.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
         scores.truncate(retrieval_k);
         let latency = start.elapsed().as_secs_f64();
 
-        let results: Vec<RetrievedChunk> = scores.iter().map(|(idx, score)| {
-            let chunk = &persisted.chunks[*idx];
-            RetrievedChunk {
-                content: chunk.content.clone(), source: chunk.source.clone(),
-                score: *score, title: chunk.title.clone(),
-                start_secs: chunk.start_secs, end_secs: chunk.end_secs,
-            }
-        }).collect();
+        let results: Vec<RetrievedChunk> = scores
+            .iter()
+            .map(|(idx, score)| {
+                let chunk = &persisted.chunks[*idx];
+                RetrievedChunk {
+                    content: chunk.content.clone(),
+                    source: chunk.source.clone(),
+                    score: *score,
+                    title: chunk.title.clone(),
+                    start_secs: chunk.start_secs,
+                    end_secs: chunk.end_secs,
+                }
+            })
+            .collect();
         let results = rerank_retrieved_chunks(rerank, &entry.query, results, top_k)?;
 
         println!(" {} results ({:.2}s)", results.len(), latency);
-        serde_json::to_writer(&mut *output, &RetrievalResultEntry {
-            query: entry.query.clone(), domain: entry.domain.clone(),
-            course: entry.course.clone(), results, latency_s: latency,
-        })?;
+        serde_json::to_writer(
+            &mut *output,
+            &RetrievalResultEntry {
+                query: entry.query.clone(),
+                domain: entry.domain.clone(),
+                course: entry.course.clone(),
+                results,
+                latency_s: latency,
+            },
+        )?;
         writeln!(output)?;
     }
     Ok(())
@@ -2860,22 +2759,34 @@ fn eval_retrieve_sparse(
         let bm25_results = bm25.search(&eq, retrieval_k);
         let latency = start.elapsed().as_secs_f64();
 
-        let results: Vec<RetrievedChunk> = bm25_results.iter().map(|(chunk_id, score)| {
-            let idx = chunk_map[chunk_id];
-            let pc = &persisted.chunks[idx];
-            RetrievedChunk {
-                content: pc.content.clone(), source: pc.source.clone(),
-                score: *score, title: pc.title.clone(),
-                start_secs: pc.start_secs, end_secs: pc.end_secs,
-            }
-        }).collect();
+        let results: Vec<RetrievedChunk> = bm25_results
+            .iter()
+            .map(|(chunk_id, score)| {
+                let idx = chunk_map[chunk_id];
+                let pc = &persisted.chunks[idx];
+                RetrievedChunk {
+                    content: pc.content.clone(),
+                    source: pc.source.clone(),
+                    score: *score,
+                    title: pc.title.clone(),
+                    start_secs: pc.start_secs,
+                    end_secs: pc.end_secs,
+                }
+            })
+            .collect();
         let results = rerank_retrieved_chunks(rerank, &entry.query, results, top_k)?;
 
         println!(" {} results ({:.2}s)", results.len(), latency);
-        serde_json::to_writer(&mut *output, &RetrievalResultEntry {
-            query: entry.query.clone(), domain: entry.domain.clone(),
-            course: entry.course.clone(), results, latency_s: latency,
-        })?;
+        serde_json::to_writer(
+            &mut *output,
+            &RetrievalResultEntry {
+                query: entry.query.clone(),
+                domain: entry.domain.clone(),
+                course: entry.course.clone(),
+                results,
+                latency_s: latency,
+            },
+        )?;
         writeln!(output)?;
     }
     Ok(())
@@ -2910,8 +2821,10 @@ fn eval_retrieve_hybrid(
     let dense_store = VectorStore::new(VectorStoreConfig { dimension: dim, ..Default::default() });
     let bm25 = BM25Index::new();
     let config = HybridRetrieverConfig {
-        candidates_per_source: candidates, fusion: fusion_strategy,
-        use_dense: true, use_sparse: true,
+        candidates_per_source: candidates,
+        fusion: fusion_strategy,
+        use_dense: true,
+        use_sparse: true,
     };
     let mut retriever = HybridRetriever::new(dense_store, bm25, embedder).with_config(config);
 
@@ -2922,7 +2835,11 @@ fn eval_retrieve_hybrid(
         chunk_meta.insert(chunk.id, i);
         retriever.index(chunk)?;
     }
-    println!("Hybrid retriever built: {} chunks in {:.2}s", n_chunks, start_build.elapsed().as_secs_f64());
+    println!(
+        "Hybrid retriever built: {} chunks in {:.2}s",
+        n_chunks,
+        start_build.elapsed().as_secs_f64()
+    );
 
     for (i, entry) in queries.iter().enumerate() {
         print!("[{}/{}] {}...", i + 1, queries.len(), &entry.query[..entry.query.len().min(60)]);
@@ -2932,29 +2849,45 @@ fn eval_retrieve_hybrid(
         let retrieval_results = retriever.retrieve(&eq, retrieval_k)?;
         let latency = start.elapsed().as_secs_f64();
 
-        let results: Vec<RetrievedChunk> = retrieval_results.iter().map(|rr| {
-            let score = rr.fused_score.unwrap_or(rr.best_score());
-            if let Some(&idx) = chunk_meta.get(&rr.chunk.id) {
-                let pc = &persisted.chunks[idx];
-                RetrievedChunk {
-                    content: pc.content.clone(), source: pc.source.clone(),
-                    score, title: pc.title.clone(),
-                    start_secs: pc.start_secs, end_secs: pc.end_secs,
+        let results: Vec<RetrievedChunk> = retrieval_results
+            .iter()
+            .map(|rr| {
+                let score = rr.fused_score.unwrap_or(rr.best_score());
+                if let Some(&idx) = chunk_meta.get(&rr.chunk.id) {
+                    let pc = &persisted.chunks[idx];
+                    RetrievedChunk {
+                        content: pc.content.clone(),
+                        source: pc.source.clone(),
+                        score,
+                        title: pc.title.clone(),
+                        start_secs: pc.start_secs,
+                        end_secs: pc.end_secs,
+                    }
+                } else {
+                    RetrievedChunk {
+                        content: rr.chunk.content.clone(),
+                        source: None,
+                        score,
+                        title: None,
+                        start_secs: None,
+                        end_secs: None,
+                    }
                 }
-            } else {
-                RetrievedChunk {
-                    content: rr.chunk.content.clone(), source: None,
-                    score, title: None, start_secs: None, end_secs: None,
-                }
-            }
-        }).collect();
+            })
+            .collect();
         let results = rerank_retrieved_chunks(rerank, &entry.query, results, top_k)?;
 
         println!(" {} results ({:.2}s)", results.len(), latency);
-        serde_json::to_writer(&mut *output, &RetrievalResultEntry {
-            query: entry.query.clone(), domain: entry.domain.clone(),
-            course: entry.course.clone(), results, latency_s: latency,
-        })?;
+        serde_json::to_writer(
+            &mut *output,
+            &RetrievalResultEntry {
+                query: entry.query.clone(),
+                domain: entry.domain.clone(),
+                course: entry.course.clone(),
+                results,
+                latency_s: latency,
+            },
+        )?;
         writeln!(output)?;
     }
     Ok(())
@@ -2989,16 +2922,13 @@ async fn run_eval_judge(
     let cache = JudgeCache::load(Path::new(cache_path));
     println!("Cache: {} entries loaded from {}", cache.entries.len(), cache_path);
 
-    let client = AnthropicClient::from_env()
-        .map_err(|e| anyhow::anyhow!("{e}"))?;
+    let client = AnthropicClient::from_env().map_err(|e| anyhow::anyhow!("{e}"))?;
     let mut judge = RelevanceJudge::new(client, model, cache);
 
-    let eval_output = judge.evaluate(&results, top_k).await
-        .map_err(|e| anyhow::anyhow!("{e}"))?;
+    let eval_output = judge.evaluate(&results, top_k).await.map_err(|e| anyhow::anyhow!("{e}"))?;
 
     // Save cache
-    judge.cache().save(Path::new(cache_path))
-        .context("Failed to save judge cache")?;
+    judge.cache().save(Path::new(cache_path)).context("Failed to save judge cache")?;
     println!("Cache saved: {} entries to {}", judge.cache().entries.len(), cache_path);
 
     // Save results
@@ -3038,18 +2968,11 @@ fn run_eval_metrics(
         .collect::<std::result::Result<_, _>>()
         .context("Failed to parse judgments JSONL")?;
 
-    println!(
-        "Loaded {} retrieval results, {} judgments",
-        results.len(),
-        judgments.len()
-    );
+    println!("Loaded {} retrieval results, {} judgments", results.len(), judgments.len());
 
     let eval_output = compute_metrics_from_judgments(&results, &judgments);
 
-    println!(
-        "\n{}",
-        format_metrics_summary(&eval_output.aggregate, &eval_output.by_domain)
-    );
+    println!("\n{}", format_metrics_summary(&eval_output.aggregate, &eval_output.by_domain));
 
     let json = serde_json::to_string_pretty(&eval_output)?;
     fs::write(output_path, json)?;
@@ -3086,8 +3009,10 @@ fn run_eval_gate(results_path: &str, min_mrr: f64, min_hit5: f64) -> Result<()> 
 
     match check_gate(&output, min_mrr, min_hit5) {
         Ok(()) => {
-            println!("Regression gate PASSED (MRR={:.4}, Hit@5={:.4})",
-                output.aggregate.mrr, output.aggregate.hit_rate_5);
+            println!(
+                "Regression gate PASSED (MRR={:.4}, Hit@5={:.4})",
+                output.aggregate.mrr, output.aggregate.hit_rate_5
+            );
             Ok(())
         }
         Err(msg) => {
@@ -3245,14 +3170,8 @@ mod tests {
         let patterns = vec!["*/RAW".to_string(), "*/RAW/*".to_string()];
         let exclude = build_exclude_set(&patterns).unwrap();
         assert!(is_excluded(Path::new("/data/courses/aws/RAW"), &exclude));
-        assert!(is_excluded(
-            Path::new("/data/courses/aws/RAW/video.mp4"),
-            &exclude
-        ));
-        assert!(!is_excluded(
-            Path::new("/data/courses/aws/build/video.srt"),
-            &exclude
-        ));
+        assert!(is_excluded(Path::new("/data/courses/aws/RAW/video.mp4"), &exclude));
+        assert!(!is_excluded(Path::new("/data/courses/aws/build/video.srt"), &exclude));
     }
 
     #[test]
@@ -3526,7 +3445,9 @@ mod tests {
     #[test]
     fn test_parse_fusion_strategy_linear() {
         let result = parse_fusion_strategy("linear", Some(0.7)).unwrap();
-        assert!(matches!(result, FusionStrategy::Linear { dense_weight } if (dense_weight - 0.7).abs() < 0.001));
+        assert!(
+            matches!(result, FusionStrategy::Linear { dense_weight } if (dense_weight - 0.7).abs() < 0.001)
+        );
     }
 
     #[test]
@@ -3543,18 +3464,14 @@ mod tests {
 
     #[test]
     fn test_finish_load_report_success() {
-        let docs = vec![
-            Document::new("test content".to_string()),
-        ];
+        let docs = vec![Document::new("test content".to_string())];
         let result = finish_load_report(docs, 0).unwrap();
         assert_eq!(result.len(), 1);
     }
 
     #[test]
     fn test_finish_load_report_with_errors() {
-        let docs = vec![
-            Document::new("test content".to_string()),
-        ];
+        let docs = vec![Document::new("test content".to_string())];
         let result = finish_load_report(docs, 3).unwrap();
         assert_eq!(result.len(), 1);
     }
@@ -3663,15 +3580,13 @@ mod tests {
 
     #[test]
     fn test_format_query_results_text() {
-        let chunks = vec![
-            PersistedChunk {
-                content: "Rust is a systems programming language focused on safety".to_string(),
-                title: Some("Rust Intro".to_string()),
-                source: Some("rust.txt".to_string()),
-                start_secs: None,
-                end_secs: None,
-            },
-        ];
+        let chunks = vec![PersistedChunk {
+            content: "Rust is a systems programming language focused on safety".to_string(),
+            title: Some("Rust Intro".to_string()),
+            source: Some("rust.txt".to_string()),
+            start_secs: None,
+            end_secs: None,
+        }];
         let scores = vec![(0_usize, 0.95_f32)];
         let result = format_query_results("Rust", &scores, &chunks, "text");
         assert!(result.is_ok());
@@ -3679,15 +3594,13 @@ mod tests {
 
     #[test]
     fn test_format_query_results_json() {
-        let chunks = vec![
-            PersistedChunk {
-                content: "Rust is a systems programming language".to_string(),
-                title: Some("Rust".to_string()),
-                source: Some("rust.txt".to_string()),
-                start_secs: Some(10.5),
-                end_secs: Some(25.0),
-            },
-        ];
+        let chunks = vec![PersistedChunk {
+            content: "Rust is a systems programming language".to_string(),
+            title: Some("Rust".to_string()),
+            source: Some("rust.txt".to_string()),
+            start_secs: Some(10.5),
+            end_secs: Some(25.0),
+        }];
         let scores = vec![(0_usize, 0.8_f32)];
         let result = format_query_results("Rust", &scores, &chunks, "json");
         assert!(result.is_ok());
@@ -3695,15 +3608,13 @@ mod tests {
 
     #[test]
     fn test_format_query_results_json_no_timestamps() {
-        let chunks = vec![
-            PersistedChunk {
-                content: "plain text content without timestamps".to_string(),
-                title: None,
-                source: Some("doc.txt".to_string()),
-                start_secs: None,
-                end_secs: None,
-            },
-        ];
+        let chunks = vec![PersistedChunk {
+            content: "plain text content without timestamps".to_string(),
+            title: None,
+            source: Some("doc.txt".to_string()),
+            start_secs: None,
+            end_secs: None,
+        }];
         let scores = vec![(0_usize, 0.5_f32)];
         let result = format_query_results("plain", &scores, &chunks, "json");
         assert!(result.is_ok());
@@ -3727,15 +3638,13 @@ mod tests {
 
     #[test]
     fn test_apply_rerank_none() {
-        let chunks = vec![
-            PersistedChunk {
-                content: "alpha".to_string(),
-                title: None,
-                source: None,
-                start_secs: None,
-                end_secs: None,
-            },
-        ];
+        let chunks = vec![PersistedChunk {
+            content: "alpha".to_string(),
+            title: None,
+            source: None,
+            start_secs: None,
+            end_secs: None,
+        }];
         let scores = vec![(0_usize, 1.0_f32)];
         let result = apply_rerank("none", "test", &scores, &chunks, 5).unwrap();
         assert_eq!(result.len(), 1);
@@ -3753,7 +3662,9 @@ mod tests {
                 end_secs: None,
             },
             PersistedChunk {
-                content: "Python garbage collector manages memory automatically with reference counting".to_string(),
+                content:
+                    "Python garbage collector manages memory automatically with reference counting"
+                        .to_string(),
                 title: Some("Python GC".to_string()),
                 source: Some("python.txt".to_string()),
                 start_secs: None,
@@ -3794,21 +3705,27 @@ mod tests {
 
     #[test]
     fn test_chunk_and_embed_timestamp_strategy() {
-        use trueno_rag::embed::MockEmbedder;
         use trueno_rag::chunk::RecursiveChunker;
         use trueno_rag::chunk::TimestampChunker;
+        use trueno_rag::embed::MockEmbedder;
 
         let embedder = MockEmbedder::new(4);
         let recursive = RecursiveChunker::new(512, 64);
         let timestamp = TimestampChunker::new(30.0);
 
-        let mut doc = Document::new("This is a lecture about Rust programming and memory safety concepts".to_string());
+        let mut doc = Document::new(
+            "This is a lecture about Rust programming and memory safety concepts".to_string(),
+        );
         // TimestampChunker with no cues falls back to RecursiveChunker
         let docs = vec![doc];
 
         let result = chunk_and_embed(
-            &docs, &embedder, &recursive, &timestamp,
-            ChunkStrategy::Timestamp, false,
+            &docs,
+            &embedder,
+            &recursive,
+            &timestamp,
+            ChunkStrategy::Timestamp,
+            false,
         );
         assert!(result.is_ok());
     }
@@ -3885,9 +3802,9 @@ mod tests {
 
     #[test]
     fn test_chunk_and_embed_empty_document() {
-        use trueno_rag::embed::MockEmbedder;
         use trueno_rag::chunk::RecursiveChunker;
         use trueno_rag::chunk::TimestampChunker;
+        use trueno_rag::embed::MockEmbedder;
 
         let embedder = MockEmbedder::new(4);
         let recursive = RecursiveChunker::new(512, 64);
@@ -3899,7 +3816,14 @@ mod tests {
             Document::new("Some real content that has actual words".to_string()),
         ];
 
-        let result = chunk_and_embed(&docs, &embedder, &recursive, &timestamp, ChunkStrategy::Recursive, false);
+        let result = chunk_and_embed(
+            &docs,
+            &embedder,
+            &recursive,
+            &timestamp,
+            ChunkStrategy::Recursive,
+            false,
+        );
         assert!(result.is_ok());
         let (chunks, embeddings) = result.unwrap();
         assert!(!chunks.is_empty());
@@ -3908,9 +3832,9 @@ mod tests {
 
     #[test]
     fn test_chunk_and_embed_with_dedup() {
-        use trueno_rag::embed::MockEmbedder;
         use trueno_rag::chunk::RecursiveChunker;
         use trueno_rag::chunk::TimestampChunker;
+        use trueno_rag::embed::MockEmbedder;
 
         let embedder = MockEmbedder::new(4);
         let recursive = RecursiveChunker::new(512, 64);
@@ -3922,7 +3846,14 @@ mod tests {
             Document::new("Duplicate content for dedup testing.".to_string()),
         ];
 
-        let result = chunk_and_embed(&docs, &embedder, &recursive, &timestamp, ChunkStrategy::Recursive, true);
+        let result = chunk_and_embed(
+            &docs,
+            &embedder,
+            &recursive,
+            &timestamp,
+            ChunkStrategy::Recursive,
+            true,
+        );
         assert!(result.is_ok());
     }
 
@@ -4000,10 +3931,8 @@ mod tests {
 
     #[test]
     fn test_diff_fingerprints_detects_new() {
-        let current = vec![
-            (PathBuf::from("/a.md"), [1u8; 32]),
-            (PathBuf::from("/b.md"), [2u8; 32]),
-        ];
+        let current =
+            vec![(PathBuf::from("/a.md"), [1u8; 32]), (PathBuf::from("/b.md"), [2u8; 32])];
         let stored: HashMap<String, Vec<u8>> = HashMap::new();
 
         let (changed, deleted) = diff_fingerprints(&current, &stored);

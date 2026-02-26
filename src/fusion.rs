@@ -168,10 +168,7 @@ impl FusionStrategy {
 
         let mut results: Vec<_> = scores.into_iter().collect();
         results.sort_by(|a, b| a.1 .1.cmp(&b.1 .1)); // Sort by rank
-        results
-            .into_iter()
-            .map(|(id, (score, _))| (id, score))
-            .collect()
+        results.into_iter().map(|(id, (score, _))| (id, score)).collect()
     }
 
     /// Intersection fusion: only keep results in both sets
@@ -210,10 +207,7 @@ impl FusionStrategy {
             return results.iter().map(|(id, _)| (*id, 1.0)).collect();
         }
 
-        results
-            .iter()
-            .map(|(id, score)| (*id, (score - min) / range))
-            .collect()
+        results.iter().map(|(id, score)| (*id, (score - min) / range)).collect()
     }
 
     /// Z-score normalization
@@ -232,10 +226,7 @@ impl FusionStrategy {
             return results.iter().map(|(id, _)| (*id, 0.0)).collect();
         }
 
-        results
-            .iter()
-            .map(|(id, score)| (*id, (score - mean) / std_dev))
-            .collect()
+        results.iter().map(|(id, score)| (*id, (score - mean) / std_dev)).collect()
     }
 
     /// Sort results by score descending
@@ -267,12 +258,7 @@ impl FusionStrategy {
         sparse: &[(ChunkId, f32)],
         multivector: &[(ChunkId, f32)],
     ) -> Vec<(ChunkId, f32)> {
-        if let FusionStrategy::ThreeWay {
-            dense_weight,
-            sparse_weight,
-            multivector_weight,
-        } = self
-        {
+        if let FusionStrategy::ThreeWay { dense_weight, sparse_weight, multivector_weight } = self {
             Self::three_way_linear(
                 dense,
                 sparse,
@@ -326,11 +312,7 @@ impl FusionStrategy {
     #[cfg(feature = "multivector")]
     #[must_use]
     pub fn three_way(dense_weight: f32, sparse_weight: f32, multivector_weight: f32) -> Self {
-        Self::ThreeWay {
-            dense_weight,
-            sparse_weight,
-            multivector_weight,
-        }
+        Self::ThreeWay { dense_weight, sparse_weight, multivector_weight }
     }
 }
 
@@ -504,11 +486,7 @@ mod tests {
         let strategy = FusionStrategy::DBSF;
 
         let dense = vec![(chunk_id(1), 10.0), (chunk_id(2), 5.0), (chunk_id(3), 0.0)];
-        let sparse = vec![
-            (chunk_id(1), 100.0),
-            (chunk_id(2), 50.0),
-            (chunk_id(3), 0.0),
-        ];
+        let sparse = vec![(chunk_id(1), 100.0), (chunk_id(2), 50.0), (chunk_id(3), 0.0)];
 
         let results = strategy.fuse(&dense, &sparse);
 

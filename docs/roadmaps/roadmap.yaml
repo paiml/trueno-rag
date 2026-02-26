@@ -218,3 +218,20 @@ roadmap:
   estimated_effort: null
   labels: []
   notes: null
+- id: PMAT-012
+  github_issue: null
+  item_type: task
+  title: Auto-detect semantic indexes in query and eval retrieve
+  status: inprogress
+  priority: medium
+  assigned_to: null
+  created: 2026-02-23T20:43:26Z
+  updated: 2026-02-23T20:43:29.688775646+00:00
+  spec: null
+  acceptance_criteria:
+  - query_dense, query_hybrid, and eval retrieve hard-code TfIdfEmbedder. Extract create_query_embedder helper that checks persisted.embedder_type and creates the matching embedder (FastEmbedder or TfIdfEmbedder). Add impl Embedder for Box<dyn Embedder> for HybridRetriever dynamic dispatch.
+  phases: []
+  subtasks: []
+  estimated_effort: null
+  labels: []
+  notes: null

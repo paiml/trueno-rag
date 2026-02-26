@@ -110,9 +110,7 @@ fn bench_embedding(c: &mut Criterion) {
     let mut group = c.benchmark_group("embedding");
 
     let embedder = MockEmbedder::new(384);
-    let texts: Vec<&str> = (0..100)
-        .map(|_| "This is a test sentence for embedding")
-        .collect();
+    let texts: Vec<&str> = (0..100).map(|_| "This is a test sentence for embedding").collect();
 
     group.bench_function("embed_100_texts", |b| {
         b.iter(|| embedder.embed_batch(black_box(&texts)));

@@ -29,6 +29,6 @@ pub use generate::GroundTruthGenerator;
 pub use judge::RelevanceJudge;
 pub use metrics::compute_metrics_from_judgments;
 pub use types::{
-    EvalConfig, GroundTruthEntry, JudgeCache, JudgeCacheEntry, JudgeVerdict,
-    JudgmentEntry, RetrievalResultEntry,
+    EvalConfig, GroundTruthEntry, JudgeCache, JudgeCacheEntry, JudgeVerdict, JudgmentEntry,
+    RetrievalResultEntry,
 };

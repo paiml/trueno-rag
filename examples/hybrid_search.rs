@@ -23,14 +23,8 @@ fn main() -> trueno_rag::Result<()> {
 
     let strategies = vec![
         ("RRF (k=60)", FusionStrategy::RRF { k: 60.0 }),
-        (
-            "Linear (dense=0.7)",
-            FusionStrategy::Linear { dense_weight: 0.7 },
-        ),
-        (
-            "Linear (dense=0.3)",
-            FusionStrategy::Linear { dense_weight: 0.3 },
-        ),
+        ("Linear (dense=0.7)", FusionStrategy::Linear { dense_weight: 0.7 }),
+        ("Linear (dense=0.3)", FusionStrategy::Linear { dense_weight: 0.3 }),
         ("DBSF", FusionStrategy::DBSF),
         ("Union", FusionStrategy::Union),
     ];

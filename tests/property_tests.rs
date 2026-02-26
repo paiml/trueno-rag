@@ -120,9 +120,7 @@ proptest! {
 
 /// Strategy to generate valid SRT cue text (no empty, no double newlines).
 fn srt_text_strategy() -> impl Strategy<Value = String> {
-    "[a-zA-Z ]{5,60}"
-        .prop_map(|s| s.trim().to_string())
-        .prop_filter("non-empty", |s| !s.is_empty())
+    "[a-zA-Z ]{5,60}".prop_map(|s| s.trim().to_string()).prop_filter("non-empty", |s| !s.is_empty())
 }
 
 /// Strategy to generate a vector of subtitle cues with monotonically increasing timestamps.
@@ -139,12 +137,7 @@ fn subtitle_cues_strategy(
                     let start = time;
                     let end = start + duration;
                     time = end + 0.1; // small gap between cues
-                    SubtitleCue {
-                        index: i,
-                        start_secs: start,
-                        end_secs: end,
-                        text,
-                    }
+                    SubtitleCue { index: i, start_secs: start, end_secs: end, text }
                 })
                 .collect()
         })

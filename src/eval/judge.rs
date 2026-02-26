@@ -24,11 +24,7 @@ pub struct RelevanceJudge {
 impl RelevanceJudge {
     /// Create a new judge
     pub fn new(client: AnthropicClient, model: &str, cache: JudgeCache) -> Self {
-        Self {
-            client,
-            model: model.to_string(),
-            cache,
-        }
+        Self { client, model: model.to_string(), cache }
     }
 
     /// Judge whether a chunk is relevant to a query
@@ -40,16 +36,12 @@ impl RelevanceJudge {
 
         let user_msg = format!("QUERY: {query}\nDOCUMENT:\n---\n{content}\n---");
 
-        let result = self
-            .client
-            .complete(&self.model, Some(JUDGE_SYSTEM), &user_msg, 200)
-            .await?;
+        let result = self.client.complete(&self.model, Some(JUDGE_SYSTEM), &user_msg, 200).await?;
 
         let verdict = parse_verdict(&result.text)?;
 
         // Cache the result
-        self.cache
-            .insert(query, content, verdict.clone(), &self.model);
+        self.cache.insert(query, content, verdict.clone(), &self.model);
 
         Ok(verdict)
     }
@@ -72,12 +64,7 @@ impl RelevanceJudge {
         let _cache_size_before = self.cache.entries.len();
 
         for (i, entry) in results.iter().enumerate() {
-            eprint!(
-                "[{}/{}] {}...",
-                i + 1,
-                total,
-                &entry.query[..entry.query.len().min(60)]
-            );
+            eprint!("[{}/{}] {}...", i + 1, total, &entry.query[..entry.query.len().min(60)]);
 
             let mut judgments = Vec::new();
             let chunks_to_judge = entry.results.len().min(top_k);
@@ -107,9 +94,7 @@ impl RelevanceJudge {
             let hit_5 = judgments.iter().take(5).any(|j| j.relevant);
 
             let status = if hit_5 { "HIT" } else { "MISS" };
-            eprintln!(
-                " [{status}] rel={relevant_count}/{chunks_to_judge} MRR={mrr:.2}"
-            );
+            eprintln!(" [{status}] rel={relevant_count}/{chunks_to_judge} MRR={mrr:.2}");
 
             per_query.push(QueryResult {
                 query: entry.query.clone(),
@@ -175,16 +160,10 @@ fn parse_verdict(text: &str) -> Result<JudgeVerdict, String> {
     // Fallback: check for keywords
     let lower = trimmed.to_lowercase();
     if lower.contains("not relevant") || lower.contains("\"relevant\": false") {
-        return Ok(JudgeVerdict {
-            relevant: false,
-            reasoning: trimmed.to_string(),
-        });
+        return Ok(JudgeVerdict { relevant: false, reasoning: trimmed.to_string() });
     }
     if lower.contains("relevant") || lower.contains("\"relevant\": true") {
-        return Ok(JudgeVerdict {
-            relevant: true,
-            reasoning: trimmed.to_string(),
-        });
+        return Ok(JudgeVerdict { relevant: true, reasoning: trimmed.to_string() });
     }
 
     Err(format!("Could not parse judge response: {trimmed}"))
@@ -208,9 +187,7 @@ fn compute_ndcg(judgments: &[ChunkJudgment], k: usize) -> f64 {
         .sum();
 
     let relevant_count = judgments.iter().take(k).filter(|j| j.relevant).count();
-    let idcg: f64 = (0..relevant_count.min(k))
-        .map(|r| 1.0 / (r as f64 + 2.0).log2())
-        .sum();
+    let idcg: f64 = (0..relevant_count.min(k)).map(|r| 1.0 / (r as f64 + 2.0).log2()).sum();
 
     if idcg == 0.0 {
         0.0
@@ -248,23 +225,13 @@ pub fn compute_aggregate_metrics(queries: &[QueryResult]) -> AggregateMetrics {
     let mrr: f64 = queries.iter().map(|q| q.mrr).sum::<f64>() / n;
     let hit_5: f64 = queries.iter().filter(|q| q.hit_5).count() as f64 / n;
 
-    let hit_10: f64 = queries
-        .iter()
-        .filter(|q| q.judgments.iter().take(10).any(|j| j.relevant))
-        .count() as f64
-        / n;
+    let hit_10: f64 =
+        queries.iter().filter(|q| q.judgments.iter().take(10).any(|j| j.relevant)).count() as f64
+            / n;
 
-    let ndcg_5: f64 = queries
-        .iter()
-        .map(|q| compute_ndcg(&q.judgments, 5))
-        .sum::<f64>()
-        / n;
+    let ndcg_5: f64 = queries.iter().map(|q| compute_ndcg(&q.judgments, 5)).sum::<f64>() / n;
 
-    let ndcg_10: f64 = queries
-        .iter()
-        .map(|q| compute_ndcg(&q.judgments, 10))
-        .sum::<f64>()
-        / n;
+    let ndcg_10: f64 = queries.iter().map(|q| compute_ndcg(&q.judgments, 10)).sum::<f64>() / n;
 
     let recall_5: f64 = queries
         .iter()
@@ -288,11 +255,7 @@ pub fn compute_aggregate_metrics(queries: &[QueryResult]) -> AggregateMetrics {
         .sum::<f64>()
         / n;
 
-    let map: f64 = queries
-        .iter()
-        .map(|q| compute_average_precision(&q.judgments))
-        .sum::<f64>()
-        / n;
+    let map: f64 = queries.iter().map(|q| compute_average_precision(&q.judgments)).sum::<f64>() / n;
 
     let mean_latency: f64 = queries.iter().map(|q| q.latency_s).sum::<f64>() / n;
 
@@ -367,9 +330,8 @@ fn round4(v: f64) -> f64 {
 /// Simple UTC timestamp without chrono crate (public for metrics module)
 pub fn chrono_now() -> String {
     // Simple UTC timestamp without chrono crate
-    let dur = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default();
+    let dur =
+        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default();
     let secs = dur.as_secs();
     // Basic ISO 8601 from epoch
     let days = secs / 86400;
@@ -418,10 +380,7 @@ fn is_leap(year: u64) -> bool {
 }
 
 /// Compare two eval outputs and print deltas
-pub fn compare_results(
-    baseline: &EvalOutput,
-    candidate: &EvalOutput,
-) -> String {
+pub fn compare_results(baseline: &EvalOutput, candidate: &EvalOutput) -> String {
     use std::fmt::Write;
     let b = &baseline.aggregate;
     let c = &candidate.aggregate;
@@ -453,21 +412,14 @@ pub fn compare_results(
         } else {
             "="
         };
-        let _ = writeln!(
-            s,
-            "  {name:14}  {base:.4} \u{2192} {cand:.4}  ({delta:+.4}) {arrow}"
-        );
+        let _ = writeln!(s, "  {name:14}  {base:.4} \u{2192} {cand:.4}  ({delta:+.4}) {arrow}");
     }
 
     s
 }
 
 /// Check if results meet minimum thresholds (regression gate)
-pub fn check_gate(
-    output: &EvalOutput,
-    min_mrr: f64,
-    min_hit5: f64,
-) -> Result<(), String> {
+pub fn check_gate(output: &EvalOutput, min_mrr: f64, min_hit5: f64) -> Result<(), String> {
     let a = &output.aggregate;
     let mut failures = Vec::new();
 

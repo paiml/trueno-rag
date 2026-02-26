@@ -50,10 +50,7 @@ pub trait HypotheticalGenerator: Send + Sync {
 impl<G: HypotheticalGenerator> HydePreprocessor<G> {
     /// Create a new HyDE preprocessor with the given generator.
     pub fn new(generator: G) -> Self {
-        Self {
-            generator,
-            include_original: false,
-        }
+        Self { generator, include_original: false }
     }
 
     /// Include the original query alongside the hypothetical document.
@@ -142,16 +139,16 @@ impl HypotheticalGenerator for AnthropicHypotheticalGenerator {
             a lecture transcript or technical document. Output ONLY the passage text, no preamble \
             or formatting.";
 
-        let result = self.runtime.block_on(
-            self.client
-                .complete(&self.model, Some(system), query, self.max_tokens),
-        );
+        let result = self.runtime.block_on(self.client.complete(
+            &self.model,
+            Some(system),
+            query,
+            self.max_tokens,
+        ));
 
         match result {
             Ok(completion) => Ok(completion.text),
-            Err(e) => Err(crate::Error::InvalidConfig(format!(
-                "HyDE generation failed: {e}"
-            ))),
+            Err(e) => Err(crate::Error::InvalidConfig(format!("HyDE generation failed: {e}"))),
         }
     }
 }
@@ -165,9 +162,7 @@ pub struct MockHypotheticalGenerator {
 impl MockHypotheticalGenerator {
     /// Create a new mock generator.
     pub fn new() -> Self {
-        Self {
-            prefix: "The answer is:".to_string(),
-        }
+        Self { prefix: "The answer is:".to_string() }
     }
 
     /// Set a custom prefix for generated hypotheticals.
@@ -205,11 +200,7 @@ pub trait QueryExpander: Send + Sync {
 impl<E: QueryExpander> MultiQueryPreprocessor<E> {
     /// Create a new multi-query preprocessor.
     pub fn new(expander: E) -> Self {
-        Self {
-            expander,
-            max_queries: 5,
-            include_original: true,
-        }
+        Self { expander, max_queries: 5, include_original: true }
     }
 
     /// Set the maximum number of expanded queries.
@@ -229,20 +220,19 @@ impl<E: QueryExpander> MultiQueryPreprocessor<E> {
 
 impl<E: QueryExpander> QueryPreprocessor for MultiQueryPreprocessor<E> {
     fn preprocess(&self, query: &str) -> Result<Vec<String>> {
-        let mut queries = if self.include_original {
-            vec![query.to_string()]
-        } else {
-            vec![]
-        };
+        let mut queries = if self.include_original { vec![query.to_string()] } else { vec![] };
 
         let expanded = self.expander.expand(query)?;
         for q in expanded {
             if queries.len() >= self.max_queries {
                 break;
             }
-            if !queries.contains(&q) {
-                queries.push(q);
+            // Skip duplicates and, when original is excluded, skip expansions
+            // that are identical to the original query
+            if queries.contains(&q) || (!self.include_original && q == query) {
+                continue;
             }
+            queries.push(q);
         }
 
         Ok(queries)
@@ -265,18 +255,16 @@ impl KeywordExpander {
     /// Create a new keyword expander with default stopwords.
     pub fn new() -> Self {
         let stopwords: std::collections::HashSet<String> = [
-            "a", "an", "the", "is", "are", "was", "were", "be", "been", "being",
-            "have", "has", "had", "do", "does", "did", "will", "would", "could",
-            "should", "may", "might", "must", "shall", "can", "to", "of", "in",
-            "for", "on", "with", "at", "by", "from", "as", "into", "through",
-            "during", "before", "after", "above", "below", "between", "under",
-            "again", "further", "then", "once", "here", "there", "when", "where",
-            "why", "how", "all", "each", "few", "more", "most", "other", "some",
-            "such", "no", "nor", "not", "only", "own", "same", "so", "than",
-            "too", "very", "just", "and", "but", "if", "or", "because", "until",
-            "while", "what", "which", "who", "this", "that", "these", "those",
-            "i", "me", "my", "myself", "we", "our", "you", "your", "he", "him",
-            "she", "her", "it", "its", "they", "them", "their",
+            "a", "an", "the", "is", "are", "was", "were", "be", "been", "being", "have", "has",
+            "had", "do", "does", "did", "will", "would", "could", "should", "may", "might", "must",
+            "shall", "can", "to", "of", "in", "for", "on", "with", "at", "by", "from", "as",
+            "into", "through", "during", "before", "after", "above", "below", "between", "under",
+            "again", "further", "then", "once", "here", "there", "when", "where", "why", "how",
+            "all", "each", "few", "more", "most", "other", "some", "such", "no", "nor", "not",
+            "only", "own", "same", "so", "than", "too", "very", "just", "and", "but", "if", "or",
+            "because", "until", "while", "what", "which", "who", "this", "that", "these", "those",
+            "i", "me", "my", "myself", "we", "our", "you", "your", "he", "him", "she", "her", "it",
+            "its", "they", "them", "their",
         ]
         .iter()
         .map(|s| (*s).to_string())
@@ -335,18 +323,13 @@ impl SynonymExpander {
             "error".to_string(),
             vec!["exception".to_string(), "failure".to_string(), "bug".to_string()],
         );
-        synonyms.insert(
-            "function".to_string(),
-            vec!["method".to_string(), "procedure".to_string()],
-        );
+        synonyms
+            .insert("function".to_string(), vec!["method".to_string(), "procedure".to_string()]);
         synonyms.insert(
             "create".to_string(),
             vec!["make".to_string(), "build".to_string(), "generate".to_string()],
         );
-        synonyms.insert(
-            "delete".to_string(),
-            vec!["remove".to_string(), "destroy".to_string()],
-        );
+        synonyms.insert("delete".to_string(), vec!["remove".to_string(), "destroy".to_string()]);
         synonyms.insert(
             "update".to_string(),
             vec!["modify".to_string(), "change".to_string(), "edit".to_string()],
@@ -359,10 +342,7 @@ impl SynonymExpander {
             "fast".to_string(),
             vec!["quick".to_string(), "rapid".to_string(), "speedy".to_string()],
         );
-        synonyms.insert(
-            "slow".to_string(),
-            vec!["sluggish".to_string(), "delayed".to_string()],
-        );
+        synonyms.insert("slow".to_string(), vec!["sluggish".to_string(), "delayed".to_string()]);
         Self { synonyms }
     }
 }
@@ -404,11 +384,7 @@ pub struct ChainedPreprocessor {
 impl ChainedPreprocessor {
     /// Create a new chained preprocessor.
     pub fn new() -> Self {
-        Self {
-            preprocessors: Vec::new(),
-            deduplicate: true,
-            max_total: 10,
-        }
+        Self { preprocessors: Vec::new(), deduplicate: true, max_total: 10 }
     }
 
     /// Add a preprocessor to the chain.
@@ -562,10 +538,7 @@ impl QueryAnalyzer {
         let mut best_score = 0;
 
         for (intent, keywords) in &self.intent_keywords {
-            let score = keywords
-                .iter()
-                .filter(|kw| lower.contains(kw.as_str()))
-                .count();
+            let score = keywords.iter().filter(|kw| lower.contains(kw.as_str())).count();
             if score > best_score {
                 best_score = score;
                 best_intent = *intent;
@@ -579,19 +552,12 @@ impl QueryAnalyzer {
             .map(String::from)
             .collect();
 
-        let confidence = if best_score == 0 {
-            0.3
-        } else {
-            (0.5 + 0.1 * best_score as f32).min(1.0)
-        };
+        let confidence =
+            if best_score == 0 { 0.3 } else { (0.5 + 0.1 * best_score as f32).min(1.0) };
 
         QueryAnalysis {
             original: query.to_string(),
-            intent: if best_score == 0 {
-                QueryIntent::Unknown
-            } else {
-                best_intent
-            },
+            intent: if best_score == 0 { QueryIntent::Unknown } else { best_intent },
             keywords,
             confidence,
         }

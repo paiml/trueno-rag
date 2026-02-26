@@ -138,10 +138,7 @@ fn test_context_assembler_max_tokens() {
 
 #[test]
 fn test_context_assembler_no_citations() {
-    let config = ContextAssemblerConfig {
-        include_citations: false,
-        ..Default::default()
-    };
+    let config = ContextAssemblerConfig { include_citations: false, ..Default::default() };
     let assembler = ContextAssembler::new(config);
 
     let results = vec![create_result("Content", 0.9)];
@@ -325,9 +322,7 @@ fn test_pipeline_empty_query_result() {
         .build()
         .unwrap();
 
-    pipeline
-        .index_document(&Document::new("Some content here."))
-        .unwrap();
+    pipeline.index_document(&Document::new("Some content here.")).unwrap();
 
     // Query with no matching terms
     let results = pipeline.query("xyz123nonexistent", 5).unwrap();
@@ -343,12 +338,8 @@ fn test_pipeline_reranker_effect() {
         .build()
         .unwrap();
 
-    pipeline
-        .index_document(&Document::new("exact phrase machine learning here"))
-        .unwrap();
-    pipeline
-        .index_document(&Document::new("machine related and learning separate"))
-        .unwrap();
+    pipeline.index_document(&Document::new("exact phrase machine learning here")).unwrap();
+    pipeline.index_document(&Document::new("machine related and learning separate")).unwrap();
 
     let results = pipeline.query("machine learning", 5).unwrap();
     assert!(!results.is_empty());
@@ -376,9 +367,7 @@ fn test_pipeline_fusion_strategies() {
             .build()
             .unwrap();
 
-        pipeline
-            .index_document(&Document::new("Test document for fusion strategies."))
-            .unwrap();
+        pipeline.index_document(&Document::new("Test document for fusion strategies.")).unwrap();
 
         let results = pipeline.query("test document", 5).unwrap();
         // Pipeline should work with all fusion strategies
@@ -419,10 +408,8 @@ fn test_context_assembler_grouped_strategy() {
 
 #[test]
 fn test_context_assembler_interleaved_strategy() {
-    let config = ContextAssemblerConfig {
-        strategy: AssemblyStrategy::Interleaved,
-        ..Default::default()
-    };
+    let config =
+        ContextAssemblerConfig { strategy: AssemblyStrategy::Interleaved, ..Default::default() };
     let assembler = ContextAssembler::new(config);
 
     let results = vec![create_result("Chunk A", 0.9), create_result("Chunk B", 0.8)];
@@ -441,10 +428,7 @@ fn test_context_assembler_grouped_max_tokens() {
     };
     let assembler = ContextAssembler::new(config);
 
-    let results = vec![
-        create_result(&"A".repeat(100), 0.9),
-        create_result(&"B".repeat(100), 0.8),
-    ];
+    let results = vec![create_result(&"A".repeat(100), 0.9), create_result(&"B".repeat(100), 0.8)];
 
     let context = assembler.assemble(&results);
 
@@ -499,11 +483,8 @@ fn test_pipeline_builder_with_sparse_index() {
 fn test_pipeline_builder_function() {
     // Test the simplified pipeline_builder() function
     let builder = pipeline_builder();
-    let pipeline = builder
-        .embedder(MockEmbedder::new(64))
-        .reranker(NoOpReranker::new())
-        .build()
-        .unwrap();
+    let pipeline =
+        builder.embedder(MockEmbedder::new(64)).reranker(NoOpReranker::new()).build().unwrap();
 
     assert_eq!(pipeline.document_count(), 0);
 }
@@ -545,9 +526,7 @@ fn test_pipeline_assemble_context_method() {
         .build()
         .unwrap();
 
-    pipeline
-        .index_document(&Document::new("Test document content."))
-        .unwrap();
+    pipeline.index_document(&Document::new("Test document content.")).unwrap();
 
     let results = pipeline.query("test", 5).unwrap();
 
@@ -583,10 +562,7 @@ fn test_assembled_context_with_page_metadata() {
     context.add_chunk(&result, id);
 
     assert_eq!(context.citations[0].page, Some(5));
-    assert_eq!(
-        context.citations[0].title,
-        Some("Document Title".to_string())
-    );
+    assert_eq!(context.citations[0].title, Some("Document Title".to_string()));
 }
 
 #[test]
@@ -624,10 +600,7 @@ fn test_assembly_strategy_serialization() {
     for strategy in strategies {
         let json = serde_json::to_string(&strategy).unwrap();
         let deserialized: AssemblyStrategy = serde_json::from_str(&json).unwrap();
-        assert_eq!(
-            std::mem::discriminant(&strategy),
-            std::mem::discriminant(&deserialized)
-        );
+        assert_eq!(std::mem::discriminant(&strategy), std::mem::discriminant(&deserialized));
     }
 }
 

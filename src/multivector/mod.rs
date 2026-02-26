@@ -128,10 +128,8 @@ mod tests {
             "gradient descent optimization updates neural network parameters",
         ];
 
-        let training_embeddings: Vec<_> = training_texts
-            .iter()
-            .map(|t| embedder.embed_tokens(t).unwrap())
-            .collect();
+        let training_embeddings: Vec<_> =
+            training_texts.iter().map(|t| embedder.embed_tokens(t).unwrap()).collect();
 
         // 5. Train codec
         index.train(&training_embeddings).unwrap();
@@ -206,9 +204,7 @@ mod tests {
 
         // Create documents with varying relevance
         let query = embedder.embed_tokens("machine learning").unwrap();
-        let doc_relevant = embedder
-            .embed_tokens("machine learning algorithms")
-            .unwrap();
+        let doc_relevant = embedder.embed_tokens("machine learning algorithms").unwrap();
         let doc_partial = embedder.embed_tokens("learning systems").unwrap();
         let doc_irrelevant = embedder.embed_tokens("cooking recipes").unwrap();
 
@@ -236,10 +232,7 @@ mod tests {
 
         // Train and build
         let texts: Vec<String> = (0..50).map(|i| format!("document number {}", i)).collect();
-        let embeddings: Vec<_> = texts
-            .iter()
-            .map(|t| embedder.embed_tokens(t).unwrap())
-            .collect();
+        let embeddings: Vec<_> = texts.iter().map(|t| embedder.embed_tokens(t).unwrap()).collect();
         index.train(&embeddings).unwrap();
 
         for (i, text) in texts.iter().enumerate() {
@@ -255,12 +248,7 @@ mod tests {
             let config = WarpSearchConfig::with_k(5).nprobe(nprobe);
             let results = index.search(&query, &config).unwrap();
 
-            assert!(
-                results.len() <= 5,
-                "nprobe={}: got {} results",
-                nprobe,
-                results.len()
-            );
+            assert!(results.len() <= 5, "nprobe={}: got {} results", nprobe, results.len());
         }
     }
 
@@ -275,16 +263,10 @@ mod tests {
         // Train with more tokens per document (8 centroids * 10 = 80 tokens needed)
         let texts: Vec<String> = (0..50)
             .map(|i| {
-                format!(
-                    "document number {} contains important information about topic {}",
-                    i, i
-                )
+                format!("document number {} contains important information about topic {}", i, i)
             })
             .collect();
-        let embeddings: Vec<_> = texts
-            .iter()
-            .map(|t| embedder.embed_tokens(t).unwrap())
-            .collect();
+        let embeddings: Vec<_> = texts.iter().map(|t| embedder.embed_tokens(t).unwrap()).collect();
         index.train(&embeddings).unwrap();
 
         // Insert

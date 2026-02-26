@@ -21,17 +21,17 @@
 //! assert!(extensions.contains(&"srt"));
 //! ```
 
-mod subtitle;
-mod text;
 #[cfg(feature = "ocr")]
 mod image;
+mod subtitle;
+mod text;
 #[cfg(feature = "transcription")]
 pub mod transcription;
 
-pub use subtitle::SubtitleLoader;
-pub use text::TextLoader;
 #[cfg(feature = "ocr")]
 pub use image::ImageLoader;
+pub use subtitle::SubtitleLoader;
+pub use text::TextLoader;
 #[cfg(feature = "transcription")]
 pub use transcription::TranscriptionLoader;
 
@@ -83,9 +83,7 @@ impl LoaderRegistry {
     /// Create a registry with default loaders (text and subtitle).
     #[must_use]
     pub fn new() -> Self {
-        let mut registry = Self {
-            loaders: Vec::new(),
-        };
+        let mut registry = Self { loaders: Vec::new() };
         registry.register(Box::new(TextLoader));
         registry.register(Box::new(SubtitleLoader));
         #[cfg(feature = "ocr")]
@@ -101,10 +99,7 @@ impl LoaderRegistry {
     /// Find the first loader that can handle the given path.
     #[must_use]
     pub fn loader_for(&self, path: &Path) -> Option<&dyn DocumentLoader> {
-        self.loaders
-            .iter()
-            .find(|l| l.can_load(path))
-            .map(|l| l.as_ref())
+        self.loaders.iter().find(|l| l.can_load(path)).map(|l| l.as_ref())
     }
 
     /// Load a document, selecting the appropriate loader automatically.
@@ -132,10 +127,7 @@ impl LoaderRegistry {
     /// All supported extensions across all registered loaders.
     #[must_use]
     pub fn supported_extensions(&self) -> Vec<&str> {
-        self.loaders
-            .iter()
-            .flat_map(|l| l.supported_extensions())
-            .collect()
+        self.loaders.iter().flat_map(|l| l.supported_extensions()).collect()
     }
 }
 
@@ -287,11 +279,7 @@ mod tests {
         let dir = std::env::temp_dir().join("trueno_rag_test_load_srt");
         let _ = std::fs::create_dir_all(&dir);
         let file = dir.join("test.srt");
-        std::fs::write(
-            &file,
-            "1\n00:00:01,000 --> 00:00:04,500\nHello from subtitle.\n",
-        )
-        .unwrap();
+        std::fs::write(&file, "1\n00:00:01,000 --> 00:00:04,500\nHello from subtitle.\n").unwrap();
 
         let registry = LoaderRegistry::new();
         let doc = registry.load(&file).unwrap();

@@ -104,11 +104,8 @@ mod tests {
 
     fn insert_chunk(conn: &Connection, doc_id: &str, chunk_id: &str, content: &str, pos: i64) {
         // Ensure document exists
-        conn.execute(
-            "INSERT OR IGNORE INTO documents (id, content) VALUES (?1, '')",
-            [doc_id],
-        )
-        .unwrap();
+        conn.execute("INSERT OR IGNORE INTO documents (id, content) VALUES (?1, '')", [doc_id])
+            .unwrap();
         conn.execute(
             "INSERT INTO chunks (id, doc_id, content, position) VALUES (?1, ?2, ?3, ?4)",
             rusqlite::params![chunk_id, doc_id, content, pos],
@@ -119,13 +116,7 @@ mod tests {
     #[test]
     fn test_search_returns_results() {
         let conn = setup();
-        insert_chunk(
-            &conn,
-            "doc1",
-            "c1",
-            "SIMD vector operations for tensor math",
-            0,
-        );
+        insert_chunk(&conn, "doc1", "c1", "SIMD vector operations for tensor math", 0);
         insert_chunk(&conn, "doc1", "c2", "GPU kernel dispatch and scheduling", 1);
 
         let results = search(&conn, "SIMD tensor", 10).unwrap();
@@ -187,10 +178,7 @@ mod tests {
 
         // "tokenize" should match via Porter stemming conflation
         let results = search(&conn, "tokenize", 10).unwrap();
-        assert!(
-            !results.is_empty(),
-            "Porter stemmer should conflate 'tokenize' variants"
-        );
+        assert!(!results.is_empty(), "Porter stemmer should conflate 'tokenize' variants");
     }
 
     #[test]

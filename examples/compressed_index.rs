@@ -91,10 +91,7 @@ fn demo_compression_comparison() -> trueno_rag::Result<()> {
     let zstd_bytes = index.to_compressed_bytes(Compression::Zstd)?;
 
     println!("   Documents: {}", index.len());
-    println!(
-        "   Uncompressed: {:.1} KB",
-        uncompressed.len() as f64 / 1024.0
-    );
+    println!("   Uncompressed: {:.1} KB", uncompressed.len() as f64 / 1024.0);
     println!(
         "   LZ4:  {:.1} KB ({:.1}x ratio)",
         lz4_bytes.len() as f64 / 1024.0,
@@ -123,26 +120,11 @@ fn demo_search_after_restore() -> trueno_rag::Result<()> {
 
     // Index documents about programming languages
     let docs = vec![
-        (
-            "Rust is a systems programming language focused on safety and performance",
-            "rust",
-        ),
-        (
-            "Python is popular for data science and machine learning applications",
-            "python",
-        ),
-        (
-            "JavaScript powers interactive web applications in browsers",
-            "javascript",
-        ),
-        (
-            "Go provides simple concurrency with goroutines and channels",
-            "go",
-        ),
-        (
-            "TypeScript adds static typing to JavaScript for better tooling",
-            "typescript",
-        ),
+        ("Rust is a systems programming language focused on safety and performance", "rust"),
+        ("Python is popular for data science and machine learning applications", "python"),
+        ("JavaScript powers interactive web applications in browsers", "javascript"),
+        ("Go provides simple concurrency with goroutines and channels", "go"),
+        ("TypeScript adds static typing to JavaScript for better tooling", "typescript"),
     ];
 
     for (content, _lang) in &docs {
@@ -169,10 +151,7 @@ fn demo_search_after_restore() -> trueno_rag::Result<()> {
         .zip(restored_results.iter())
         .all(|((_, s1), (_, s2))| (s1 - s2).abs() < 1e-5);
 
-    println!(
-        "   Scores match: {}",
-        if scores_match { "YES" } else { "NO" }
-    );
+    println!("   Scores match: {}", if scores_match { "YES" } else { "NO" });
 
     println!();
     Ok(())

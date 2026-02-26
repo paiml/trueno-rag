@@ -88,21 +88,13 @@ impl MockMultiVectorEmbedder {
     /// * `max_tokens` - Maximum tokens per document
     #[must_use]
     pub fn new(dim: usize, max_tokens: usize) -> Self {
-        Self {
-            dim,
-            max_tokens,
-            seed: 42,
-        }
+        Self { dim, max_tokens, seed: 42 }
     }
 
     /// Create with a custom seed for different random sequences.
     #[must_use]
     pub fn with_seed(dim: usize, max_tokens: usize, seed: u64) -> Self {
-        Self {
-            dim,
-            max_tokens,
-            seed,
-        }
+        Self { dim, max_tokens, seed }
     }
 
     /// Generate a deterministic unit vector from a seed.
@@ -249,9 +241,7 @@ mod tests {
     fn test_mock_embedder_max_tokens() {
         let embedder = MockMultiVectorEmbedder::new(64, 3);
 
-        let emb = embedder
-            .embed_tokens("one two three four five six")
-            .unwrap();
+        let emb = embedder.embed_tokens("one two three four five six").unwrap();
 
         assert_eq!(emb.num_tokens(), 3); // Capped at max_tokens
     }
@@ -284,11 +274,7 @@ mod tests {
         // Each token should be approximately unit length
         for token_emb in emb.tokens() {
             let norm: f32 = token_emb.iter().map(|x| x * x).sum::<f32>().sqrt();
-            assert!(
-                (norm - 1.0).abs() < 0.001,
-                "Token not unit length: norm = {}",
-                norm
-            );
+            assert!((norm - 1.0).abs() < 0.001, "Token not unit length: norm = {}", norm);
         }
     }
 

@@ -89,6 +89,8 @@ pub mod chunk;
 pub mod compressed;
 pub mod embed;
 pub mod error;
+#[cfg(feature = "eval")]
+pub mod eval;
 pub mod fusion;
 pub mod index;
 pub mod loader;
@@ -100,14 +102,8 @@ pub mod pipeline;
 pub mod preprocess;
 pub mod rerank;
 pub mod retrieve;
-#[cfg(feature = "eval")]
-pub mod eval;
 #[cfg(feature = "sqlite")]
-#[allow(
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    clippy::cast_possible_truncation
-)]
+#[allow(clippy::cast_possible_wrap, clippy::cast_sign_loss, clippy::cast_possible_truncation)]
 pub mod sqlite;
 
 pub use chunk::{
@@ -232,9 +228,8 @@ mod tests {
 
     #[test]
     fn test_document_builder() {
-        let doc = Document::new("Content")
-            .with_title("Test Title")
-            .with_source("https://example.com");
+        let doc =
+            Document::new("Content").with_title("Test Title").with_source("https://example.com");
 
         assert_eq!(doc.content, "Content");
         assert_eq!(doc.title, Some("Test Title".to_string()));

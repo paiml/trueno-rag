@@ -144,13 +144,7 @@ impl JudgeCache {
     /// Insert a verdict into the cache
     pub fn insert(&mut self, query: &str, content: &str, verdict: JudgeVerdict, model: &str) {
         let key = Self::cache_key(query, content);
-        self.entries.insert(
-            key,
-            JudgeCacheEntry {
-                verdict,
-                model: model.to_string(),
-            },
-        );
+        self.entries.insert(key, JudgeCacheEntry { verdict, model: model.to_string() });
     }
 }
 

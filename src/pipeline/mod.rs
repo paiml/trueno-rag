@@ -60,11 +60,7 @@ impl AssembledContext {
     /// Create a new empty context
     #[must_use]
     pub fn new() -> Self {
-        Self {
-            chunks: Vec::new(),
-            total_tokens: 0,
-            citations: Vec::new(),
-        }
+        Self { chunks: Vec::new(), total_tokens: 0, citations: Vec::new() }
     }
 
     /// Add a chunk to the context
@@ -111,11 +107,7 @@ impl AssembledContext {
     /// Format context without citations
     #[must_use]
     pub fn format_plain(&self) -> String {
-        self.chunks
-            .iter()
-            .map(|c| c.content.as_str())
-            .collect::<Vec<_>>()
-            .join("\n\n")
+        self.chunks.iter().map(|c| c.content.as_str()).collect::<Vec<_>>().join("\n\n")
     }
 
     /// Generate citation list
@@ -175,11 +167,7 @@ pub struct ContextAssemblerConfig {
 
 impl Default for ContextAssemblerConfig {
     fn default() -> Self {
-        Self {
-            max_tokens: 4096,
-            strategy: AssemblyStrategy::Sequential,
-            include_citations: true,
-        }
+        Self { max_tokens: 4096, strategy: AssemblyStrategy::Sequential, include_citations: true }
     }
 }
 
@@ -199,10 +187,7 @@ impl ContextAssembler {
     /// Create with default configuration
     #[must_use]
     pub fn with_max_tokens(max_tokens: usize) -> Self {
-        Self::new(ContextAssemblerConfig {
-            max_tokens,
-            ..Default::default()
-        })
+        Self::new(ContextAssemblerConfig { max_tokens, ..Default::default() })
     }
 
     /// Assemble context from retrieval results
@@ -227,11 +212,8 @@ impl ContextAssembler {
                 break;
             }
 
-            let citation_id = if self.config.include_citations {
-                context.add_citation(result)
-            } else {
-                0
-            };
+            let citation_id =
+                if self.config.include_citations { context.add_citation(result) } else { 0 };
 
             context.add_chunk(result, citation_id);
             remaining_tokens = remaining_tokens.saturating_sub(chunk_tokens);
@@ -244,10 +226,7 @@ impl ContextAssembler {
         // Group by document
         let mut by_doc: HashMap<DocumentId, Vec<&RetrievalResult>> = HashMap::new();
         for result in results {
-            by_doc
-                .entry(result.chunk.document_id)
-                .or_default()
-                .push(result);
+            by_doc.entry(result.chunk.document_id).or_default().push(result);
         }
 
         // Flatten while respecting order within documents
@@ -262,11 +241,8 @@ impl ContextAssembler {
                     break;
                 }
 
-                let citation_id = if self.config.include_citations {
-                    context.add_citation(result)
-                } else {
-                    0
-                };
+                let citation_id =
+                    if self.config.include_citations { context.add_citation(result) } else { 0 };
 
                 context.add_chunk(result, citation_id);
                 remaining_tokens = remaining_tokens.saturating_sub(chunk_tokens);
@@ -495,42 +471,27 @@ impl<E: Embedder + Clone, R: Reranker> RagPipelineBuilder<E, R> {
 
     /// Build the pipeline
     pub fn build(self) -> Result<RagPipeline<E, R>> {
-        let embedder = self
-            .embedder
-            .ok_or_else(|| Error::InvalidConfig("embedder required".to_string()))?;
+        let embedder =
+            self.embedder.ok_or_else(|| Error::InvalidConfig("embedder required".to_string()))?;
 
-        let reranker = self
-            .reranker
-            .ok_or_else(|| Error::InvalidConfig("reranker required".to_string()))?;
+        let reranker =
+            self.reranker.ok_or_else(|| Error::InvalidConfig("reranker required".to_string()))?;
 
-        let chunker = self
-            .chunker
-            .unwrap_or_else(|| Box::new(RecursiveChunker::new(512, 50)));
+        let chunker = self.chunker.unwrap_or_else(|| Box::new(RecursiveChunker::new(512, 50)));
 
-        let vector_store = self
-            .vector_store
-            .unwrap_or_else(|| VectorStore::with_dimension(embedder.dimension()));
+        let vector_store =
+            self.vector_store.unwrap_or_else(|| VectorStore::with_dimension(embedder.dimension()));
 
         let sparse_index = self.sparse_index.unwrap_or_default();
 
-        let retrieval_config = HybridRetrieverConfig {
-            fusion: self.fusion,
-            ..Default::default()
-        };
+        let retrieval_config = HybridRetrieverConfig { fusion: self.fusion, ..Default::default() };
 
         let retriever = HybridRetriever::new(vector_store, sparse_index, embedder.clone())
             .with_config(retrieval_config);
 
         let assembler = ContextAssembler::new(self.assembler_config);
 
-        Ok(RagPipeline {
-            chunker,
-            embedder,
-            retriever,
-            reranker,
-            assembler,
-            document_count: 0,
-        })
+        Ok(RagPipeline { chunker, embedder, retriever, reranker, assembler, document_count: 0 })
     }
 }
 

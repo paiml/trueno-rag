@@ -245,11 +245,7 @@ impl TfIdfEmbedder {
     /// Create a new TF-IDF embedder (untrained)
     #[must_use]
     pub fn new(dimension: usize) -> Self {
-        Self {
-            dimension,
-            vocabulary: std::collections::HashMap::new(),
-            idf: Vec::new(),
-        }
+        Self { dimension, vocabulary: std::collections::HashMap::new(), idf: Vec::new() }
     }
 
     /// Train the embedder on a corpus
@@ -273,11 +269,7 @@ impl TfIdfEmbedder {
         terms.sort_by_key(|t| std::cmp::Reverse(doc_freq.get(t).copied().unwrap_or(0)));
         terms.truncate(self.dimension);
 
-        self.vocabulary = terms
-            .iter()
-            .enumerate()
-            .map(|(i, t)| (t.clone(), i))
-            .collect();
+        self.vocabulary = terms.iter().enumerate().map(|(i, t)| (t.clone(), i)).collect();
 
         // Compute IDF
         let n = documents.len() as f32;
@@ -377,11 +369,7 @@ pub fn dot_product(a: &[f32], b: &[f32]) -> f32 {
 /// Compute euclidean distance between two vectors
 #[must_use]
 pub fn euclidean_distance(a: &[f32], b: &[f32]) -> f32 {
-    a.iter()
-        .zip(b.iter())
-        .map(|(x, y)| (x - y).powi(2))
-        .sum::<f32>()
-        .sqrt()
+    a.iter().zip(b.iter()).map(|(x, y)| (x - y).powi(2)).sum::<f32>().sqrt()
 }
 
 // ============================================================================
@@ -492,10 +480,7 @@ impl FastEmbedder {
             Error::InvalidConfig(format!("Failed to initialize embedding model: {e}"))
         })?;
 
-        Ok(Self {
-            model: std::sync::Arc::new(std::sync::Mutex::new(model)),
-            model_type,
-        })
+        Ok(Self { model: std::sync::Arc::new(std::sync::Mutex::new(model)), model_type })
     }
 
     /// Create with default model (all-MiniLM-L6-v2)
@@ -520,10 +505,8 @@ impl Embedder for FastEmbedder {
             return Err(Error::EmptyDocument("empty text for embedding".to_string()));
         }
 
-        let mut model = self
-            .model
-            .lock()
-            .map_err(|e| Error::Embedding(format!("lock failed: {e}")))?;
+        let mut model =
+            self.model.lock().map_err(|e| Error::Embedding(format!("lock failed: {e}")))?;
 
         let embeddings = model
             .embed(vec![text], None)
@@ -546,10 +529,8 @@ impl Embedder for FastEmbedder {
             return Err(Error::EmptyDocument("all texts are empty".to_string()));
         }
 
-        let mut model = self
-            .model
-            .lock()
-            .map_err(|e| Error::Embedding(format!("lock failed: {e}")))?;
+        let mut model =
+            self.model.lock().map_err(|e| Error::Embedding(format!("lock failed: {e}")))?;
 
         model
             .embed(non_empty, None)
