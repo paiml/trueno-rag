@@ -5,9 +5,9 @@
 ## Table of Contents
 
 - [Installation](#installation)
-- [Usage](#quick-start)
+- [Usage](#usage)
 - [Architecture](#architecture)
-- [API Reference](#optional-features)
+- [API Reference](#api-reference)
 - [Examples](#examples)
 - [Testing](#testing)
 - [Contributing](#contributing)
@@ -45,7 +45,7 @@ SIMD-accelerated RAG pipeline built on [Trueno](https://crates.io/crates/trueno)
 trueno-rag = "0.1.8"
 ```
 
-## Quick Start
+## Usage
 
 ```rust
 use trueno_rag::{
@@ -89,7 +89,7 @@ cargo run --example compressed_index --features compression
 NEMOTRON_MODEL_PATH=/path/to/model.gguf cargo run --example nemotron_embeddings --features nemotron
 ```
 
-## Optional Features
+## API Reference
 
 ### Semantic Embeddings (FastEmbed)
 

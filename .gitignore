@@ -27,8 +27,8 @@ coverage/
 # PMAT
 .pmat/backup/
 .pmat-qa/
-
-# PMAT
+.pmat-work/
+.pmat-tickets/
 .pmat/context.idx/
 .pmat/workspace.idx/
 .pmat/deps-cache.json
