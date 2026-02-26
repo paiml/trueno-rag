@@ -51,8 +51,7 @@ fn test_chunk_metadata_serialization() {
         page: Some(42),
         ..Default::default()
     };
-    meta.custom
-        .insert("key".to_string(), serde_json::json!("value"));
+    meta.custom.insert("key".to_string(), serde_json::json!("value"));
 
     let json = serde_json::to_string(&meta).unwrap();
     let deserialized: ChunkMetadata = serde_json::from_str(&json).unwrap();
@@ -109,11 +108,7 @@ fn test_chunk_set_embedding() {
 fn test_chunking_strategy_default() {
     let strategy = ChunkingStrategy::default();
     match strategy {
-        ChunkingStrategy::Recursive {
-            chunk_size,
-            overlap,
-            separators,
-        } => {
+        ChunkingStrategy::Recursive { chunk_size, overlap, separators } => {
             assert_eq!(chunk_size, 512);
             assert_eq!(overlap, 50);
             assert!(!separators.is_empty());
@@ -124,18 +119,12 @@ fn test_chunking_strategy_default() {
 
 #[test]
 fn test_chunking_strategy_serialization() {
-    let strategy = ChunkingStrategy::FixedSize {
-        chunk_size: 256,
-        overlap: 32,
-    };
+    let strategy = ChunkingStrategy::FixedSize { chunk_size: 256, overlap: 32 };
     let json = serde_json::to_string(&strategy).unwrap();
     let deserialized: ChunkingStrategy = serde_json::from_str(&json).unwrap();
 
     match deserialized {
-        ChunkingStrategy::FixedSize {
-            chunk_size,
-            overlap,
-        } => {
+        ChunkingStrategy::FixedSize { chunk_size, overlap } => {
             assert_eq!(chunk_size, 256);
             assert_eq!(overlap, 32);
         }
@@ -513,10 +502,7 @@ fn test_structural_chunker_header_in_metadata() {
     let chunks = chunker.chunk(&doc).unwrap();
     assert!(!chunks.is_empty());
     assert!(
-        chunks[0]
-            .metadata
-            .headers
-            .contains(&"My Section".to_string())
+        chunks[0].metadata.headers.contains(&"My Section".to_string())
             || chunks[0].content.contains("My Section")
     );
 }
@@ -564,10 +550,7 @@ fn test_paragraph_chunker_single_paragraph() {
 
     let chunks = chunker.chunk(&doc).unwrap();
     assert_eq!(chunks.len(), 1);
-    assert_eq!(
-        chunks[0].content.trim(),
-        "This is a single paragraph without line breaks."
-    );
+    assert_eq!(chunks[0].content.trim(), "This is a single paragraph without line breaks.");
 }
 
 #[test]

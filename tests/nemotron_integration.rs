@@ -55,19 +55,14 @@ fn test_nemotron_embed_query() {
         return;
     };
 
-    let embedding = embedder
-        .embed_query("What is machine learning?")
-        .expect("Failed to embed query");
+    let embedding =
+        embedder.embed_query("What is machine learning?").expect("Failed to embed query");
 
     assert_eq!(embedding.len(), embedder.dimension());
 
     // Check normalization (should be unit length)
     let norm: f32 = embedding.iter().map(|x| x * x).sum::<f32>().sqrt();
-    assert!(
-        (norm - 1.0).abs() < 1e-4,
-        "Expected unit norm, got {}",
-        norm
-    );
+    assert!((norm - 1.0).abs() < 1e-4, "Expected unit norm, got {}", norm);
 }
 
 #[test]
@@ -95,12 +90,10 @@ fn test_nemotron_asymmetric_retrieval() {
 
     // Query and passage for the same text should produce different embeddings
     // due to asymmetric prefixes (if the model supports it)
-    let query_emb = embedder
-        .embed_query("What is machine learning?")
-        .expect("Failed to embed query");
-    let doc_emb = embedder
-        .embed_document("What is machine learning?")
-        .expect("Failed to embed document");
+    let query_emb =
+        embedder.embed_query("What is machine learning?").expect("Failed to embed query");
+    let doc_emb =
+        embedder.embed_document("What is machine learning?").expect("Failed to embed document");
 
     // At minimum, embeddings should be valid
     assert_eq!(query_emb.len(), embedder.dimension());
@@ -121,16 +114,10 @@ fn test_nemotron_semantic_similarity() {
     };
 
     // Semantically similar sentences
-    let emb1 = embedder
-        .embed_document("The cat sat on the mat.")
-        .expect("embed1");
-    let emb2 = embedder
-        .embed_document("A feline rested on the rug.")
-        .expect("embed2");
+    let emb1 = embedder.embed_document("The cat sat on the mat.").expect("embed1");
+    let emb2 = embedder.embed_document("A feline rested on the rug.").expect("embed2");
     // Unrelated sentence
-    let emb3 = embedder
-        .embed_document("Stock prices fell sharply today.")
-        .expect("embed3");
+    let emb3 = embedder.embed_document("Stock prices fell sharply today.").expect("embed3");
 
     let sim_12 = cosine_similarity(&emb1, &emb2);
     let sim_13 = cosine_similarity(&emb1, &emb3);
@@ -204,16 +191,11 @@ fn test_nemotron_embed_chunks() {
         Chunk::new(doc_id, "Second chunk content.".to_string(), 21, 43),
     ];
 
-    embedder
-        .embed_chunks(&mut chunks)
-        .expect("Failed to embed chunks");
+    embedder.embed_chunks(&mut chunks).expect("Failed to embed chunks");
 
     for chunk in &chunks {
         assert!(chunk.embedding.is_some());
-        assert_eq!(
-            chunk.embedding.as_ref().unwrap().len(),
-            embedder.dimension()
-        );
+        assert_eq!(chunk.embedding.as_ref().unwrap().len(), embedder.dimension());
     }
 }
 

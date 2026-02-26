@@ -52,11 +52,7 @@ fn main() -> trueno_rag::Result<()> {
 
     // 3. Index documents
     let chunk_count = pipeline.index_documents(&documents)?;
-    println!(
-        "Indexed {} documents with {} chunks\n",
-        pipeline.document_count(),
-        chunk_count
-    );
+    println!("Indexed {} documents with {} chunks\n", pipeline.document_count(), chunk_count);
 
     // 4. Query the pipeline
     let queries = vec![
@@ -73,12 +69,7 @@ fn main() -> trueno_rag::Result<()> {
         println!("Top Results:");
         for (i, result) in results.iter().enumerate() {
             let preview = &result.chunk.content[..60.min(result.chunk.content.len())];
-            println!(
-                "  {}. [Score: {:.3}] {}...",
-                i + 1,
-                result.best_score(),
-                preview
-            );
+            println!("  {}. [Score: {:.3}] {}...", i + 1, result.best_score(), preview);
         }
 
         println!("\nAssembled Context:");

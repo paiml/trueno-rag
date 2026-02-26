@@ -127,10 +127,8 @@ fn test_mock_embedder_different_texts() {
 
 #[test]
 fn test_mock_embedder_query_prefix() {
-    let config = EmbeddingConfig {
-        query_prefix: Some("query: ".to_string()),
-        ..Default::default()
-    };
+    let config =
+        EmbeddingConfig { query_prefix: Some("query: ".to_string()), ..Default::default() };
     let embedder = MockEmbedder::new(128).with_config(config);
 
     let query_emb = embedder.embed_query("test").unwrap();
@@ -161,10 +159,7 @@ fn test_mock_embedder_embed_chunks() {
 
 #[test]
 fn test_mock_embedder_no_normalize() {
-    let config = EmbeddingConfig {
-        normalize: false,
-        ..Default::default()
-    };
+    let config = EmbeddingConfig { normalize: false, ..Default::default() };
     let embedder = MockEmbedder::new(128).with_config(config);
     let emb = embedder.embed("test").unwrap();
     assert_eq!(emb.len(), 128);
@@ -176,10 +171,8 @@ fn test_mock_embedder_no_normalize() {
 
 #[test]
 fn test_mock_embedder_with_document_prefix() {
-    let config = EmbeddingConfig {
-        document_prefix: Some("doc: ".to_string()),
-        ..Default::default()
-    };
+    let config =
+        EmbeddingConfig { document_prefix: Some("doc: ".to_string()), ..Default::default() };
     let embedder = MockEmbedder::new(64).with_config(config);
 
     let emb1 = embedder.embed("test").unwrap();
@@ -340,11 +333,7 @@ fn test_tfidf_embedder_fit() {
 #[test]
 fn test_tfidf_embedder_embed() {
     let mut embedder = TfIdfEmbedder::new(50);
-    let corpus = vec![
-        "the quick brown fox",
-        "the lazy dog sleeps",
-        "quick brown lazy fox",
-    ];
+    let corpus = vec!["the quick brown fox", "the lazy dog sleeps", "quick brown lazy fox"];
     embedder.fit(&corpus);
 
     let embedding = embedder.embed("quick fox").unwrap();
@@ -506,10 +495,7 @@ mod fastembed_tests {
 
     #[test]
     fn test_embedding_model_type_default() {
-        assert_eq!(
-            EmbeddingModelType::default(),
-            EmbeddingModelType::AllMiniLmL6V2
-        );
+        assert_eq!(EmbeddingModelType::default(), EmbeddingModelType::AllMiniLmL6V2);
     }
 
     #[test]
@@ -543,14 +529,8 @@ mod fastembed_tests {
 
     #[test]
     fn test_embedding_model_type_model_name_bge() {
-        assert_eq!(
-            EmbeddingModelType::BgeSmallEnV15.model_name(),
-            "BAAI/bge-small-en-v1.5"
-        );
-        assert_eq!(
-            EmbeddingModelType::BgeBaseEnV15.model_name(),
-            "BAAI/bge-base-en-v1.5"
-        );
+        assert_eq!(EmbeddingModelType::BgeSmallEnV15.model_name(), "BAAI/bge-small-en-v1.5");
+        assert_eq!(EmbeddingModelType::BgeBaseEnV15.model_name(), "BAAI/bge-base-en-v1.5");
     }
 
     #[test]
@@ -596,10 +576,7 @@ mod fastembed_tests {
             .expect("Failed to create embedder");
         assert_eq!(embedder.dimension(), 384);
         assert_eq!(embedder.model_type(), EmbeddingModelType::AllMiniLmL6V2);
-        assert_eq!(
-            embedder.model_id(),
-            "sentence-transformers/all-MiniLM-L6-v2"
-        );
+        assert_eq!(embedder.model_id(), "sentence-transformers/all-MiniLM-L6-v2");
     }
 
     #[test]
@@ -632,9 +609,7 @@ mod fastembed_tests {
     fn test_fastembedder_embed_batch() {
         let embedder = FastEmbedder::new(EmbeddingModelType::AllMiniLmL6V2)
             .expect("Failed to create embedder");
-        let embeddings = embedder
-            .embed_batch(&["Hello", "World"])
-            .expect("Failed to batch embed");
+        let embeddings = embedder.embed_batch(&["Hello", "World"]).expect("Failed to batch embed");
         assert_eq!(embeddings.len(), 2);
         for emb in &embeddings {
             assert_eq!(emb.len(), 384);
@@ -664,12 +639,9 @@ mod fastembed_tests {
     fn test_fastembedder_query_and_document() {
         let embedder = FastEmbedder::new(EmbeddingModelType::AllMiniLmL6V2)
             .expect("Failed to create embedder");
-        let query_emb = embedder
-            .embed_query("What is AI?")
-            .expect("Failed to embed query");
-        let doc_emb = embedder
-            .embed_document("AI is artificial intelligence")
-            .expect("Failed to embed doc");
+        let query_emb = embedder.embed_query("What is AI?").expect("Failed to embed query");
+        let doc_emb =
+            embedder.embed_document("AI is artificial intelligence").expect("Failed to embed doc");
         assert_eq!(query_emb.len(), 384);
         assert_eq!(doc_emb.len(), 384);
     }

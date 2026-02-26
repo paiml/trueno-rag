@@ -56,22 +56,14 @@ impl MultiVectorEmbedding {
             dim,
             embeddings.len()
         );
-        Self {
-            embeddings,
-            num_tokens,
-            dim,
-        }
+        Self { embeddings, num_tokens, dim }
     }
 
     /// Create from a vector of token embeddings.
     #[must_use]
     pub fn from_tokens(tokens: &[Vec<f32>]) -> Self {
         if tokens.is_empty() {
-            return Self {
-                embeddings: Vec::new(),
-                num_tokens: 0,
-                dim: 0,
-            };
+            return Self { embeddings: Vec::new(), num_tokens: 0, dim: 0 };
         }
 
         let dim = tokens[0].len();
@@ -83,11 +75,7 @@ impl MultiVectorEmbedding {
             embeddings.extend_from_slice(token);
         }
 
-        Self {
-            embeddings,
-            num_tokens,
-            dim,
-        }
+        Self { embeddings, num_tokens, dim }
     }
 
     /// Get the number of token embeddings.
@@ -199,12 +187,7 @@ impl WarpIndexConfig {
     /// Create a new configuration with the specified parameters.
     #[must_use]
     pub fn new(nbits: u8, num_centroids: usize, token_dim: usize) -> Self {
-        Self {
-            nbits,
-            num_centroids,
-            token_dim,
-            ..Default::default()
-        }
+        Self { nbits, num_centroids, token_dim, ..Default::default() }
     }
 
     /// Set the minimum training samples.
@@ -286,13 +269,7 @@ pub struct WarpSearchConfig {
 
 impl Default for WarpSearchConfig {
     fn default() -> Self {
-        Self {
-            k: 10,
-            nprobe: 4,
-            bound: 128,
-            t_prime: None,
-            centroid_score_threshold: 0.4,
-        }
+        Self { k: 10, nprobe: 4, bound: 128, t_prime: None, centroid_score_threshold: 0.4 }
     }
 }
 
@@ -300,10 +277,7 @@ impl WarpSearchConfig {
     /// Create a search config with the specified k.
     #[must_use]
     pub fn with_k(k: usize) -> Self {
-        Self {
-            k,
-            ..Default::default()
-        }
+        Self { k, ..Default::default() }
     }
 
     /// Set nprobe (centroids per token).
@@ -471,16 +445,10 @@ mod tests {
         let config = WarpIndexConfig::default();
         assert!(config.validate().is_ok());
 
-        let bad_nbits = WarpIndexConfig {
-            nbits: 3,
-            ..Default::default()
-        };
+        let bad_nbits = WarpIndexConfig { nbits: 3, ..Default::default() };
         assert!(bad_nbits.validate().is_err());
 
-        let bad_centroids = WarpIndexConfig {
-            num_centroids: 0,
-            ..Default::default()
-        };
+        let bad_centroids = WarpIndexConfig { num_centroids: 0, ..Default::default() };
         assert!(bad_centroids.validate().is_err());
     }
 

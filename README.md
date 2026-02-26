@@ -2,6 +2,17 @@
 
 <img src=".github/trueno-rag-hero.svg" alt="trueno-rag" width="600">
 
+## Table of Contents
+
+- [Installation](#installation)
+- [Usage](#quick-start)
+- [Architecture](#architecture)
+- [API Reference](#optional-features)
+- [Examples](#examples)
+- [Testing](#testing)
+- [Contributing](#contributing)
+- [License](#license)
+
 **Pure-Rust Retrieval-Augmented Generation Pipeline**
 
 [![Crates.io](https://img.shields.io/crates/v/trueno-rag.svg)](https://crates.io/crates/trueno-rag)
@@ -139,6 +150,44 @@ let bytes = index.to_compressed_bytes(Compression::Zstd)?;
 // 4-6x compression ratio
 ```
 
+## Architecture
+
+```
+┌─────────────────────────────────────────────┐
+│            RAG Pipeline API                  │
+│      (RagPipelineBuilder, query)             │
+├──────────┬──────────┬───────────────────────┤
+│ Chunking │ Embedding│  Retrieval            │
+│ (6 modes)│ (ONNX/   │  (Dense + BM25)       │
+│          │  GGUF)   │                       │
+├──────────┴──────────┴───────────────────────┤
+│          Fusion & Reranking                  │
+│  (RRF, Linear, DBSF, Lexical, Cross-Enc)    │
+├─────────────────────────────────────────────┤
+│        Storage & Indexing                    │
+│  (BM25 inverted index, vector store, SQLite) │
+├─────────────────────────────────────────────┤
+│     Trueno SIMD Compute Primitives           │
+└─────────────────────────────────────────────┘
+```
+
+- **Chunking Layer**: Recursive, Fixed, Sentence, Paragraph, Semantic, and Structural chunkers
+- **Embedding Layer**: Mock (testing), FastEmbed (ONNX), Nemotron (GGUF) embedders
+- **Retrieval Layer**: Dense vector similarity + BM25 sparse retrieval with hybrid fusion
+- **Fusion/Reranking**: RRF, Linear, DBSF, Convex combination; lexical and cross-encoder rerankers
+- **Storage**: In-memory BM25 index with optional LZ4/ZSTD persistence and SQLite backend
+
+## Testing
+
+```bash
+cargo test --lib          # Unit tests
+cargo test                # All tests including integration
+make coverage             # Coverage report (target: >=95%)
+make lint                 # Clippy lints
+```
+
+Property-based tests cover chunking boundary conditions, BM25 scoring invariants, and fusion correctness.
+
 ## Stack Dependencies
 
 trueno-rag is part of the Sovereign AI Stack:
@@ -163,6 +212,15 @@ make book       # Build documentation book
 
 - [API Documentation](https://docs.rs/trueno-rag)
 - [User Guide](https://paiml.github.io/trueno-rag/)
+
+## Contributing
+
+Contributions are welcome! Please see the [CONTRIBUTING.md](CONTRIBUTING.md) guide for details.
+
+
+## MSRV
+
+Minimum Supported Rust Version: **1.75**
 
 ## License
 

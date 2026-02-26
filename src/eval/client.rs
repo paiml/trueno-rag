@@ -59,10 +59,7 @@ pub struct CompletionResult {
 impl AnthropicClient {
     /// Create a new client from an API key
     pub fn new(api_key: impl Into<String>) -> Self {
-        Self {
-            api_key: api_key.into(),
-            client: reqwest::Client::new(),
-        }
+        Self { api_key: api_key.into(), client: reqwest::Client::new() }
     }
 
     /// Create a new client from the `ANTHROPIC_API_KEY` environment variable
@@ -84,10 +81,7 @@ impl AnthropicClient {
             model: model.to_string(),
             max_tokens,
             system: system.map(String::from),
-            messages: vec![Message {
-                role: "user".to_string(),
-                content: user_message.to_string(),
-            }],
+            messages: vec![Message { role: "user".to_string(), content: user_message.to_string() }],
         };
 
         let response = self
@@ -103,27 +97,15 @@ impl AnthropicClient {
 
         let status = response.status();
         if !status.is_success() {
-            let body = response
-                .text()
-                .await
-                .unwrap_or_else(|_| "unable to read body".to_string());
+            let body = response.text().await.unwrap_or_else(|_| "unable to read body".to_string());
             return Err(format!("API error {status}: {body}"));
         }
 
-        let resp: MessagesResponse = response
-            .json()
-            .await
-            .map_err(|e| format!("Failed to parse response: {e}"))?;
+        let resp: MessagesResponse =
+            response.json().await.map_err(|e| format!("Failed to parse response: {e}"))?;
 
-        let text = resp
-            .content
-            .first()
-            .map(|b| b.text.clone())
-            .unwrap_or_default();
+        let text = resp.content.first().map(|b| b.text.clone()).unwrap_or_default();
 
-        Ok(CompletionResult {
-            text,
-            usage: resp.usage,
-        })
+        Ok(CompletionResult { text, usage: resp.usage })
     }
 }

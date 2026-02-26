@@ -69,20 +69,13 @@ impl SubtitleTrack {
     /// Concatenate all cue text into a plain transcript.
     #[must_use]
     pub fn to_plain_text(&self) -> String {
-        self.cues
-            .iter()
-            .map(|c| c.text.as_str())
-            .collect::<Vec<_>>()
-            .join(" ")
+        self.cues.iter().map(|c| c.text.as_str()).collect::<Vec<_>>().join(" ")
     }
 
     /// Get cues that overlap a time range.
     #[must_use]
     pub fn cues_in_range(&self, start: f64, end: f64) -> Vec<&SubtitleCue> {
-        self.cues
-            .iter()
-            .filter(|c| c.end_secs > start && c.start_secs < end)
-            .collect()
+        self.cues.iter().filter(|c| c.end_secs > start && c.start_secs < end).collect()
     }
 
     /// Serialize to SRT format string.
@@ -157,11 +150,7 @@ fn strip_bom(s: &str) -> &str {
 /// Normalize line endings to `\n` and split into non-empty blocks.
 fn normalize_and_split(input: &str) -> Vec<String> {
     let normalized = input.replace("\r\n", "\n").replace('\r', "\n");
-    normalized
-        .split("\n\n")
-        .filter(|b| !b.trim().is_empty())
-        .map(String::from)
-        .collect()
+    normalized.split("\n\n").filter(|b| !b.trim().is_empty()).map(String::from).collect()
 }
 
 /// Find the index of the timestamp line (containing "-->") in a set of lines.
@@ -193,12 +182,7 @@ fn build_srt_cue(index: usize, start: f64, end: f64, text: String) -> Option<Sub
     if text.is_empty() {
         return None;
     }
-    Some(SubtitleCue {
-        index: index.saturating_sub(1),
-        start_secs: start,
-        end_secs: end,
-        text,
-    })
+    Some(SubtitleCue { index: index.saturating_sub(1), start_secs: start, end_secs: end, text })
 }
 
 /// Parse a single SRT block into a cue, returning `None` for invalid/empty blocks.
@@ -238,10 +222,7 @@ fn parse_srt(input: &str) -> Result<SubtitleTrack> {
 
     reindex_cues(&mut cues);
 
-    Ok(SubtitleTrack {
-        format: SubtitleFormat::Srt,
-        cues,
-    })
+    Ok(SubtitleTrack { format: SubtitleFormat::Srt, cues })
 }
 
 // ── VTT helpers ─────────────────────────────────────────────────
@@ -253,9 +234,7 @@ fn vtt_body(normalized: &str) -> &str {
 
 /// Extract and clean VTT cue text from lines after the timestamp.
 fn extract_vtt_cue_text(lines: &[&str], ts_idx: usize) -> String {
-    strip_vtt_tags(&lines[ts_idx + 1..].join("\n"))
-        .trim()
-        .to_string()
+    strip_vtt_tags(&lines[ts_idx + 1..].join("\n")).trim().to_string()
 }
 
 /// Build a `SubtitleCue` from parsed VTT components, returning `None` if text is empty.
@@ -263,12 +242,7 @@ fn build_vtt_cue(index: usize, start: f64, end: f64, text: String) -> Option<Sub
     if text.is_empty() {
         return None;
     }
-    Some(SubtitleCue {
-        index,
-        start_secs: start,
-        end_secs: end,
-        text,
-    })
+    Some(SubtitleCue { index, start_secs: start, end_secs: end, text })
 }
 
 /// Parse a single VTT block into a cue, returning `None` for invalid/empty blocks.
@@ -299,10 +273,7 @@ fn parse_vtt(input: &str) -> Result<SubtitleTrack> {
         return Err(Error::InvalidInput("No valid VTT cues found".into()));
     }
 
-    Ok(SubtitleTrack {
-        format: SubtitleFormat::Vtt,
-        cues,
-    })
+    Ok(SubtitleTrack { format: SubtitleFormat::Vtt, cues })
 }
 
 // ── Timestamp parsing helpers ───────────────────────────────────
@@ -328,9 +299,7 @@ fn parse_timestamp_line(line: &str, ms_sep: char) -> Result<(f64, f64)> {
 
 /// Parse one numeric field from a timestamp string, producing a contextual error.
 fn parse_ts_field(field: &str, label: &str, raw: &str) -> Result<f64> {
-    field
-        .parse()
-        .map_err(|e| Error::InvalidInput(format!("Bad timestamp {label} '{raw}': {e}")))
+    field.parse().map_err(|e| Error::InvalidInput(format!("Bad timestamp {label} '{raw}': {e}")))
 }
 
 /// Compute seconds from `MM:SS.mmm` parts.
@@ -381,9 +350,7 @@ fn vtt_tag_filter(ch: char, in_tag: &mut bool) -> bool {
 /// Strip VTT formatting tags like `<b>`, `<i>`, `<c.classname>`, etc.
 fn strip_vtt_tags(s: &str) -> String {
     let mut in_tag = false;
-    s.chars()
-        .filter(|&ch| vtt_tag_filter(ch, &mut in_tag))
-        .collect()
+    s.chars().filter(|&ch| vtt_tag_filter(ch, &mut in_tag)).collect()
 }
 
 #[cfg(test)]
@@ -423,10 +390,7 @@ and line two of the cue.
 ";
         let track = parse_subtitles(srt).unwrap();
         assert_eq!(track.cues.len(), 1);
-        assert_eq!(
-            track.cues[0].text,
-            "Line one of the cue\nand line two of the cue."
-        );
+        assert_eq!(track.cues[0].text, "Line one of the cue\nand line two of the cue.");
     }
 
     #[test]
@@ -560,18 +524,8 @@ Positioned text.
         let track = SubtitleTrack {
             format: SubtitleFormat::Srt,
             cues: vec![
-                SubtitleCue {
-                    index: 0,
-                    start_secs: 0.0,
-                    end_secs: 5.0,
-                    text: "A".into(),
-                },
-                SubtitleCue {
-                    index: 1,
-                    start_secs: 5.0,
-                    end_secs: 120.5,
-                    text: "B".into(),
-                },
+                SubtitleCue { index: 0, start_secs: 0.0, end_secs: 5.0, text: "A".into() },
+                SubtitleCue { index: 1, start_secs: 5.0, end_secs: 120.5, text: "B".into() },
             ],
         };
         assert!((track.duration_secs() - 120.5).abs() < 0.01);
@@ -579,10 +533,7 @@ Positioned text.
 
     #[test]
     fn test_track_duration_empty() {
-        let track = SubtitleTrack {
-            format: SubtitleFormat::Srt,
-            cues: vec![],
-        };
+        let track = SubtitleTrack { format: SubtitleFormat::Srt, cues: vec![] };
         assert!((track.duration_secs()).abs() < 0.01);
     }
 
@@ -591,18 +542,8 @@ Positioned text.
         let track = SubtitleTrack {
             format: SubtitleFormat::Srt,
             cues: vec![
-                SubtitleCue {
-                    index: 0,
-                    start_secs: 0.0,
-                    end_secs: 3.0,
-                    text: "Hello".into(),
-                },
-                SubtitleCue {
-                    index: 1,
-                    start_secs: 3.0,
-                    end_secs: 6.0,
-                    text: "world".into(),
-                },
+                SubtitleCue { index: 0, start_secs: 0.0, end_secs: 3.0, text: "Hello".into() },
+                SubtitleCue { index: 1, start_secs: 3.0, end_secs: 6.0, text: "world".into() },
             ],
         };
         assert_eq!(track.to_plain_text(), "Hello world");
@@ -613,24 +554,9 @@ Positioned text.
         let track = SubtitleTrack {
             format: SubtitleFormat::Srt,
             cues: vec![
-                SubtitleCue {
-                    index: 0,
-                    start_secs: 0.0,
-                    end_secs: 5.0,
-                    text: "A".into(),
-                },
-                SubtitleCue {
-                    index: 1,
-                    start_secs: 5.0,
-                    end_secs: 10.0,
-                    text: "B".into(),
-                },
-                SubtitleCue {
-                    index: 2,
-                    start_secs: 10.0,
-                    end_secs: 15.0,
-                    text: "C".into(),
-                },
+                SubtitleCue { index: 0, start_secs: 0.0, end_secs: 5.0, text: "A".into() },
+                SubtitleCue { index: 1, start_secs: 5.0, end_secs: 10.0, text: "B".into() },
+                SubtitleCue { index: 2, start_secs: 10.0, end_secs: 15.0, text: "C".into() },
             ],
         };
         // Range 4.0-11.0 overlaps A (ends at 5.0 > 4.0), B, and C (starts at 10.0 < 11.0)

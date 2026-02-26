@@ -63,10 +63,8 @@ fn demo_similarity() -> trueno_rag::Result<()> {
         "The stock market crashed today.",
     ];
 
-    let embeddings: Vec<Vec<f32>> = texts
-        .iter()
-        .map(|t| embedder.embed(t))
-        .collect::<Result<_, _>>()?;
+    let embeddings: Vec<Vec<f32>> =
+        texts.iter().map(|t| embedder.embed(t)).collect::<Result<_, _>>()?;
 
     println!("Cosine similarities:");
     println!(
@@ -89,11 +87,7 @@ fn demo_similarity() -> trueno_rag::Result<()> {
 fn demo_retrieval() -> trueno_rag::Result<()> {
     println!("Loading embedding model (first run downloads ~90MB)...");
     let embedder = FastEmbedder::new(EmbeddingModelType::AllMiniLmL6V2)?;
-    println!(
-        "Model: {} (dimension: {})\n",
-        embedder.model_id(),
-        embedder.dimension()
-    );
+    println!("Model: {} (dimension: {})\n", embedder.model_id(), embedder.dimension());
 
     let mut pipeline = RagPipelineBuilder::new()
         .chunker(RecursiveChunker::new(256, 32))

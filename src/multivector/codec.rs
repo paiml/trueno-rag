@@ -68,9 +68,7 @@ impl ResidualCodec {
         iterations: usize,
     ) -> Result<Self> {
         if nbits != 2 && nbits != 4 {
-            return Err(crate::Error::InvalidInput(
-                "nbits must be 2 or 4".to_string(),
-            ));
+            return Err(crate::Error::InvalidInput("nbits must be 2 or 4".to_string()));
         }
 
         let n = embeddings.len() / dim;
@@ -90,14 +88,7 @@ impl ResidualCodec {
         let (bucket_cutoffs, bucket_weights) =
             Self::learn_quantization_params(&residuals, dim, nbits);
 
-        Ok(Self {
-            centroids,
-            num_centroids,
-            dim,
-            bucket_cutoffs,
-            bucket_weights,
-            nbits,
-        })
+        Ok(Self { centroids, num_centroids, dim, bucket_cutoffs, bucket_weights, nbits })
     }
 
     /// Create a codec with pre-trained parameters.
@@ -110,14 +101,7 @@ impl ResidualCodec {
         bucket_weights: Vec<f32>,
         nbits: u8,
     ) -> Self {
-        Self {
-            centroids,
-            num_centroids,
-            dim,
-            bucket_cutoffs,
-            bucket_weights,
-            nbits,
-        }
+        Self { centroids, num_centroids, dim, bucket_cutoffs, bucket_weights, nbits }
     }
 
     /// Get the number of centroids.
@@ -183,11 +167,8 @@ impl ResidualCodec {
         let centroid = self.centroid(centroid_id);
 
         // Compute residual
-        let residual: Vec<f32> = embedding
-            .iter()
-            .zip(centroid.iter())
-            .map(|(e, c)| e - c)
-            .collect();
+        let residual: Vec<f32> =
+            embedding.iter().zip(centroid.iter()).map(|(e, c)| e - c).collect();
 
         // Quantize residual
         let codes = self.quantize_residual(&residual);
@@ -255,10 +236,7 @@ impl ResidualCodec {
                 let cutoffs = &self.bucket_cutoffs[cutoff_start..cutoff_start + num_buckets - 1];
 
                 // Find first cutoff >= value
-                cutoffs
-                    .iter()
-                    .position(|&c| value < c)
-                    .unwrap_or(num_buckets - 1) as u8
+                cutoffs.iter().position(|&c| value < c).unwrap_or(num_buckets - 1) as u8
             })
             .collect()
     }
@@ -501,16 +479,12 @@ impl ResidualCodec {
     }
 
     fn simple_random(state: &mut u64, max: usize) -> usize {
-        *state = state
-            .wrapping_mul(6_364_136_223_846_793_005)
-            .wrapping_add(1);
+        *state = state.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1);
         ((*state >> 33) as usize) % max
     }
 
     fn simple_random_f32(state: &mut u64) -> f32 {
-        *state = state
-            .wrapping_mul(6_364_136_223_846_793_005)
-            .wrapping_add(1);
+        *state = state.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1);
         ((*state >> 33) as f32) / (u32::MAX as f32)
     }
 }

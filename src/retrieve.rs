@@ -140,12 +140,7 @@ impl<E: Embedder> HybridRetriever<E> {
     /// Create a new hybrid retriever
     #[must_use]
     pub fn new(dense: VectorStore, sparse: BM25Index, embedder: E) -> Self {
-        Self {
-            dense,
-            sparse,
-            embedder,
-            config: HybridRetrieverConfig::default(),
-        }
+        Self { dense, sparse, embedder, config: HybridRetrieverConfig::default() }
     }
 
     /// Set the configuration
@@ -209,11 +204,8 @@ impl<E: Embedder> HybridRetriever<E> {
         };
 
         // Sparse retrieval
-        let sparse_results = if self.config.use_sparse {
-            self.sparse.search(query, candidates)
-        } else {
-            Vec::new()
-        };
+        let sparse_results =
+            if self.config.use_sparse { self.sparse.search(query, candidates) } else { Vec::new() };
 
         // Fuse results
         let fused = self.config.fusion.fuse(&dense_results, &sparse_results);
@@ -331,10 +323,7 @@ impl SparseRetriever {
     /// Create a new sparse retriever
     #[must_use]
     pub fn new() -> Self {
-        Self {
-            index: BM25Index::new(),
-            chunks: std::collections::HashMap::new(),
-        }
+        Self { index: BM25Index::new(), chunks: std::collections::HashMap::new() }
     }
 
     /// Index a chunk
@@ -572,15 +561,13 @@ mod tests {
         let chunk = Chunk::new(DocumentId::new(), "test".to_string(), 0, 4);
 
         // Rerank takes priority
-        let result = RetrievalResult::new(chunk.clone())
-            .with_dense_score(0.5)
-            .with_rerank_score(0.9);
+        let result =
+            RetrievalResult::new(chunk.clone()).with_dense_score(0.5).with_rerank_score(0.9);
         assert!((result.best_score() - 0.9).abs() < 0.001);
 
         // Fused takes priority over dense/sparse
-        let result = RetrievalResult::new(chunk.clone())
-            .with_dense_score(0.5)
-            .with_fused_score(0.7);
+        let result =
+            RetrievalResult::new(chunk.clone()).with_dense_score(0.5).with_fused_score(0.7);
         assert!((result.best_score() - 0.7).abs() < 0.001);
 
         // Dense used when nothing else available
@@ -658,20 +645,12 @@ mod tests {
 
         // Index some chunks
         retriever
-            .index(create_test_chunk(
-                "machine learning algorithms",
-                vec![1.0, 0.0, 0.0],
-            ))
+            .index(create_test_chunk("machine learning algorithms", vec![1.0, 0.0, 0.0]))
             .unwrap();
         retriever
-            .index(create_test_chunk(
-                "deep learning neural networks",
-                vec![0.9, 0.1, 0.0],
-            ))
+            .index(create_test_chunk("deep learning neural networks", vec![0.9, 0.1, 0.0]))
             .unwrap();
-        retriever
-            .index(create_test_chunk("cooking recipes", vec![0.0, 0.0, 1.0]))
-            .unwrap();
+        retriever.index(create_test_chunk("cooking recipes", vec![0.0, 0.0, 1.0])).unwrap();
 
         let results = retriever.retrieve("machine learning", 2).unwrap();
 
@@ -687,9 +666,7 @@ mod tests {
 
         let mut retriever = HybridRetriever::new(dense, sparse, embedder);
 
-        retriever
-            .index(create_test_chunk("test doc", vec![1.0, 0.0, 0.0]))
-            .unwrap();
+        retriever.index(create_test_chunk("test doc", vec![1.0, 0.0, 0.0])).unwrap();
 
         let results = retriever.retrieve_dense("test", 10).unwrap();
         assert!(!results.is_empty());
@@ -705,12 +682,7 @@ mod tests {
 
         let mut retriever = HybridRetriever::new(dense, sparse, embedder);
 
-        retriever
-            .index(create_test_chunk(
-                "machine learning test",
-                vec![1.0, 0.0, 0.0],
-            ))
-            .unwrap();
+        retriever.index(create_test_chunk("machine learning test", vec![1.0, 0.0, 0.0])).unwrap();
 
         let results = retriever.retrieve_sparse("machine", 10).unwrap();
         assert!(!results.is_empty());
@@ -744,9 +716,7 @@ mod tests {
         let store = VectorStore::with_dimension(3);
         let mut retriever = DenseRetriever::new(store, embedder);
 
-        retriever
-            .index(create_test_chunk("test document", vec![1.0, 0.0, 0.0]))
-            .unwrap();
+        retriever.index(create_test_chunk("test document", vec![1.0, 0.0, 0.0])).unwrap();
 
         let results = retriever.retrieve("test", 10).unwrap();
         assert_eq!(results.len(), 1);
@@ -765,12 +735,7 @@ mod tests {
     #[test]
     fn test_sparse_retriever_index() {
         let mut retriever = SparseRetriever::new();
-        let chunk = Chunk::new(
-            DocumentId::new(),
-            "machine learning test".to_string(),
-            0,
-            20,
-        );
+        let chunk = Chunk::new(DocumentId::new(), "machine learning test".to_string(), 0, 20);
 
         retriever.index(chunk);
         let results = retriever.retrieve("machine", 10);
@@ -831,9 +796,7 @@ mod tests {
         let mut retriever = HybridRetriever::new(dense, sparse, embedder);
         assert!(retriever.is_empty());
 
-        retriever
-            .index(create_test_chunk("test", vec![0.0; 64]))
-            .unwrap();
+        retriever.index(create_test_chunk("test", vec![0.0; 64])).unwrap();
         assert!(!retriever.is_empty());
     }
 
@@ -868,12 +831,7 @@ mod tests {
 
         let mut retriever = HybridRetriever::new(dense, sparse, embedder).with_config(config);
 
-        retriever
-            .index(create_test_chunk(
-                "machine learning test",
-                vec![1.0, 0.0, 0.0],
-            ))
-            .unwrap();
+        retriever.index(create_test_chunk("machine learning test", vec![1.0, 0.0, 0.0])).unwrap();
 
         // Should still work, using only sparse
         let results = retriever.retrieve("machine", 10).unwrap();
@@ -896,9 +854,7 @@ mod tests {
 
         let mut retriever = HybridRetriever::new(dense, sparse, embedder).with_config(config);
 
-        retriever
-            .index(create_test_chunk("test content", vec![1.0, 0.0, 0.0]))
-            .unwrap();
+        retriever.index(create_test_chunk("test content", vec![1.0, 0.0, 0.0])).unwrap();
 
         // Should still work, using only dense
         let results = retriever.retrieve("test", 10).unwrap();
@@ -917,10 +873,7 @@ mod tests {
         let json = serde_json::to_string(&config).unwrap();
         let deserialized: HybridRetrieverConfig = serde_json::from_str(&json).unwrap();
 
-        assert_eq!(
-            config.candidates_per_source,
-            deserialized.candidates_per_source
-        );
+        assert_eq!(config.candidates_per_source, deserialized.candidates_per_source);
         assert_eq!(config.use_dense, deserialized.use_dense);
         assert_eq!(config.use_sparse, deserialized.use_sparse);
     }

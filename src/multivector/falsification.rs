@@ -200,10 +200,8 @@ fn test_experimentum_crucis() -> crate::Result<ConjectureResult> {
         all_texts.push(neg.to_string());
     }
 
-    let training_embeddings: Vec<MultiVectorEmbedding> = all_texts
-        .iter()
-        .map(|t| embedder.embed_tokens(t))
-        .collect::<crate::Result<Vec<_>>>()?;
+    let training_embeddings: Vec<MultiVectorEmbedding> =
+        all_texts.iter().map(|t| embedder.embed_tokens(t)).collect::<crate::Result<Vec<_>>>()?;
 
     if let Err(e) = index.train(&training_embeddings) {
         return Ok(ConjectureResult {
@@ -241,10 +239,7 @@ fn test_experimentum_crucis() -> crate::Result<ConjectureResult> {
         let warp_rank = warp_results
             .iter()
             .position(|(chunk_id, _)| {
-                index
-                    .get_chunk(chunk_id)
-                    .map(|c| c.content == *positive)
-                    .unwrap_or(false)
+                index.get_chunk(chunk_id).map(|c| c.content == *positive).unwrap_or(false)
             })
             .map(|r| r + 1);
 
@@ -268,10 +263,8 @@ fn test_experimentum_crucis() -> crate::Result<ConjectureResult> {
 
         single_vec_scores.sort_by(|a, b| b.1.total_cmp(&a.1));
 
-        let single_rank = single_vec_scores
-            .iter()
-            .position(|(i, _)| *i == positive_doc_idx)
-            .map(|r| r + 1);
+        let single_rank =
+            single_vec_scores.iter().position(|(i, _)| *i == positive_doc_idx).map(|r| r + 1);
 
         if let Some(rank) = single_rank {
             single_vector_mrr_sum += 1.0 / rank as f64;
@@ -280,41 +273,23 @@ fn test_experimentum_crucis() -> crate::Result<ConjectureResult> {
 
     let warp_mrr = warp_mrr_sum / num_queries as f64;
     let single_mrr = single_vector_mrr_sum / num_queries as f64;
-    let delta_percent = if single_mrr > 0.0 {
-        ((warp_mrr - single_mrr) / single_mrr) * 100.0
-    } else {
-        100.0
-    };
+    let delta_percent =
+        if single_mrr > 0.0 { ((warp_mrr - single_mrr) / single_mrr) * 100.0 } else { 100.0 };
 
     let observed = format!(
         "WARP MRR@10={:.4}, Single-Vector MRR@10={:.4}, Delta={:.2}%",
         warp_mrr, single_mrr, delta_percent
     );
 
-    let verdict = if delta_percent >= 15.0 {
-        Verdict::Corroborated
-    } else {
-        Verdict::Falsified
-    };
+    let verdict = if delta_percent >= 15.0 { Verdict::Corroborated } else { Verdict::Falsified };
 
     let details = format!(
         "Tested {} hard negative pairs. WARP {} the 15% improvement threshold.",
         num_queries,
-        if verdict == Verdict::Corroborated {
-            "met"
-        } else {
-            "failed to meet"
-        }
+        if verdict == Verdict::Corroborated { "met" } else { "failed to meet" }
     );
 
-    Ok(ConjectureResult {
-        name,
-        hypothesis,
-        threshold,
-        observed_value: observed,
-        verdict,
-        details,
-    })
+    Ok(ConjectureResult { name, hypothesis, threshold, observed_value: observed, verdict, details })
 }
 
 // =============================================================================
@@ -348,15 +323,11 @@ fn test_conjecture_1_compression() -> crate::Result<ConjectureResult> {
         .collect();
 
     // Train codec
-    let doc_embeddings: Vec<MultiVectorEmbedding> = documents
-        .iter()
-        .map(|d| embedder.embed_tokens(d))
-        .collect::<crate::Result<Vec<_>>>()?;
+    let doc_embeddings: Vec<MultiVectorEmbedding> =
+        documents.iter().map(|d| embedder.embed_tokens(d)).collect::<crate::Result<Vec<_>>>()?;
 
-    let all_tokens: Vec<f32> = doc_embeddings
-        .iter()
-        .flat_map(|e| e.as_slice().iter().copied())
-        .collect();
+    let all_tokens: Vec<f32> =
+        doc_embeddings.iter().flat_map(|e| e.as_slice().iter().copied()).collect();
 
     // Use 4-bit quantization for higher fidelity (spec suggests 2-bit has 3-5% quality loss)
     // With 8 centroids and ~650 tokens (50 docs * ~13 tokens), we have enough data
@@ -381,10 +352,8 @@ fn test_conjecture_1_compression() -> crate::Result<ConjectureResult> {
         "fundamental discussion of ideas".to_string(),
     ];
 
-    let query_embeddings: Vec<MultiVectorEmbedding> = queries
-        .iter()
-        .map(|q| embedder.embed_tokens(q))
-        .collect::<crate::Result<Vec<_>>>()?;
+    let query_embeddings: Vec<MultiVectorEmbedding> =
+        queries.iter().map(|q| embedder.embed_tokens(q)).collect::<crate::Result<Vec<_>>>()?;
 
     // Compute exact and approximate scores
     let mut exact_scores: Vec<f64> = Vec::new();
@@ -407,30 +376,15 @@ fn test_conjecture_1_compression() -> crate::Result<ConjectureResult> {
 
     let observed = format!("Kendall's tau = {:.4}", tau);
 
-    let verdict = if tau >= 0.90 {
-        Verdict::Corroborated
-    } else {
-        Verdict::Falsified
-    };
+    let verdict = if tau >= 0.90 { Verdict::Corroborated } else { Verdict::Falsified };
 
     let details = format!(
         "Computed rank correlation over {} score pairs. Tau {} threshold.",
         exact_scores.len(),
-        if verdict == Verdict::Corroborated {
-            "meets"
-        } else {
-            "below"
-        }
+        if verdict == Verdict::Corroborated { "meets" } else { "below" }
     );
 
-    Ok(ConjectureResult {
-        name,
-        hypothesis,
-        threshold,
-        observed_value: observed,
-        verdict,
-        details,
-    })
+    Ok(ConjectureResult { name, hypothesis, threshold, observed_value: observed, verdict, details })
 }
 
 // =============================================================================
@@ -463,10 +417,8 @@ fn test_conjecture_2_pruning() -> crate::Result<ConjectureResult> {
     let config = WarpIndexConfig::new(2, 4, 32).with_kmeans_iterations(10);
     let mut index = WarpIndex::new(config);
 
-    let embeddings: Vec<MultiVectorEmbedding> = documents
-        .iter()
-        .map(|d| embedder.embed_tokens(d))
-        .collect::<crate::Result<Vec<_>>>()?;
+    let embeddings: Vec<MultiVectorEmbedding> =
+        documents.iter().map(|d| embedder.embed_tokens(d)).collect::<crate::Result<Vec<_>>>()?;
 
     if let Err(e) = index.train(&embeddings) {
         return Ok(ConjectureResult {
@@ -486,11 +438,8 @@ fn test_conjecture_2_pruning() -> crate::Result<ConjectureResult> {
     index.build()?;
 
     // Test queries
-    let queries = vec![
-        "information about topic 5",
-        "document in category 2",
-        "number contains information",
-    ];
+    let queries =
+        vec!["information about topic 5", "document in category 2", "number contains information"];
 
     let mut total_recall = 0.0;
     let num_queries = queries.len();
@@ -501,10 +450,8 @@ fn test_conjecture_2_pruning() -> crate::Result<ConjectureResult> {
         // Exhaustive search (high nprobe)
         let exhaustive_config = WarpSearchConfig::with_k(10).nprobe(8).bound(1000);
         let exhaustive_results = index.search(&query_emb, &exhaustive_config)?;
-        let exhaustive_ids: std::collections::HashSet<_> = exhaustive_results
-            .iter()
-            .map(|(id, _)| id.clone())
-            .collect();
+        let exhaustive_ids: std::collections::HashSet<_> =
+            exhaustive_results.iter().map(|(id, _)| id.clone()).collect();
 
         // Pruned search (nprobe=4)
         let pruned_config = WarpSearchConfig::with_k(10).nprobe(4).bound(128);
@@ -525,30 +472,15 @@ fn test_conjecture_2_pruning() -> crate::Result<ConjectureResult> {
     let avg_recall = total_recall / num_queries as f64;
     let observed = format!("recall@10 = {:.4} ({:.2}%)", avg_recall, avg_recall * 100.0);
 
-    let verdict = if avg_recall >= 0.95 {
-        Verdict::Corroborated
-    } else {
-        Verdict::Falsified
-    };
+    let verdict = if avg_recall >= 0.95 { Verdict::Corroborated } else { Verdict::Falsified };
 
     let details = format!(
         "Tested {} queries. Recall {} 95% threshold.",
         num_queries,
-        if verdict == Verdict::Corroborated {
-            "meets"
-        } else {
-            "below"
-        }
+        if verdict == Verdict::Corroborated { "meets" } else { "below" }
     );
 
-    Ok(ConjectureResult {
-        name,
-        hypothesis,
-        threshold,
-        observed_value: observed,
-        verdict,
-        details,
-    })
+    Ok(ConjectureResult { name, hypothesis, threshold, observed_value: observed, verdict, details })
 }
 
 // =============================================================================
@@ -666,30 +598,15 @@ fn test_conjecture_3_scaling() -> crate::Result<ConjectureResult> {
             .join(", ")
     );
 
-    let verdict = if memory_ok && latency_ok {
-        Verdict::Corroborated
-    } else {
-        Verdict::Falsified
-    };
+    let verdict = if memory_ok && latency_ok { Verdict::Corroborated } else { Verdict::Falsified };
 
     let details = format!(
         "Memory scaling: {}, Latency scaling: {}",
         if memory_ok { "OK" } else { "FAILED" },
-        if latency_ok {
-            "sub-linear (OK)"
-        } else {
-            "linear with N (FAILED)"
-        }
+        if latency_ok { "sub-linear (OK)" } else { "linear with N (FAILED)" }
     );
 
-    Ok(ConjectureResult {
-        name,
-        hypothesis,
-        threshold,
-        observed_value: observed,
-        verdict,
-        details,
-    })
+    Ok(ConjectureResult { name, hypothesis, threshold, observed_value: observed, verdict, details })
 }
 
 // =============================================================================
@@ -741,18 +658,12 @@ fn average_embedding(mv: &MultiVectorEmbedding) -> Vec<f32> {
 
 /// Dot product of two f32 slices in f64 precision.
 fn dot_product_f64(a: &[f32], b: &[f32]) -> f64 {
-    a.iter()
-        .zip(b.iter())
-        .map(|(x, y)| (*x as f64) * (*y as f64))
-        .sum()
+    a.iter().zip(b.iter()).map(|(x, y)| (*x as f64) * (*y as f64)).sum()
 }
 
 /// L2 norm of an f32 slice computed in f64 precision.
 fn l2_norm_f64(v: &[f32]) -> f64 {
-    v.iter()
-        .map(|x| (*x as f64) * (*x as f64))
-        .sum::<f64>()
-        .sqrt()
+    v.iter().map(|x| (*x as f64) * (*x as f64)).sum::<f64>().sqrt()
 }
 
 /// Safe division: returns 0.0 when divisor is zero.
@@ -901,10 +812,7 @@ mod tests {
 
         // We don't assert on Corroborated because the goal is to try to falsify
         // But we track the results
-        println!(
-            "\nTest completed. Overall verdict: {}",
-            report.overall_verdict
-        );
+        println!("\nTest completed. Overall verdict: {}", report.overall_verdict);
     }
 
     /// Specific test for Experimentum Crucis

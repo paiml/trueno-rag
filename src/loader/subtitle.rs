@@ -25,17 +25,10 @@ impl DocumentLoader for SubtitleLoader {
         let raw = std::fs::read_to_string(path).map_err(crate::Error::Io)?;
         let track = parse_subtitles(&raw)?;
 
-        let title = path
-            .file_stem()
-            .and_then(|s| s.to_str())
-            .unwrap_or("Untitled")
-            .to_string();
+        let title = path.file_stem().and_then(|s| s.to_str()).unwrap_or("Untitled").to_string();
 
         let mut metadata = HashMap::new();
-        metadata.insert(
-            "duration_secs".into(),
-            serde_json::json!(track.duration_secs()),
-        );
+        metadata.insert("duration_secs".into(), serde_json::json!(track.duration_secs()));
         metadata.insert("format".into(), serde_json::json!(track.format.to_string()));
         metadata.insert("cue_count".into(), serde_json::json!(track.cues.len()));
         metadata.insert(

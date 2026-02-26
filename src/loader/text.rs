@@ -18,15 +18,9 @@ impl DocumentLoader for TextLoader {
 
     fn load(&self, path: &Path) -> Result<Document> {
         let content = std::fs::read_to_string(path).map_err(crate::Error::Io)?;
-        let title = path
-            .file_stem()
-            .and_then(|s| s.to_str())
-            .unwrap_or("Untitled")
-            .to_string();
+        let title = path.file_stem().and_then(|s| s.to_str()).unwrap_or("Untitled").to_string();
 
-        Ok(Document::new(content)
-            .with_title(title)
-            .with_source(path.to_string_lossy()))
+        Ok(Document::new(content).with_title(title).with_source(path.to_string_lossy()))
     }
 }
 

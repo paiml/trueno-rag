@@ -72,11 +72,7 @@ fn test_demo_custom_top_k() {
 
 #[test]
 fn test_demo_shows_citations() {
-    cli()
-        .arg("demo")
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("Citations:"));
+    cli().arg("demo").assert().success().stdout(predicate::str::contains("Citations:"));
 }
 
 // ============================================================================
@@ -157,13 +153,7 @@ fn test_index_with_chunk_size() {
 #[test]
 fn test_index_nonexistent_path_fails() {
     cli()
-        .args([
-            "index",
-            "--path",
-            "/nonexistent/path",
-            "--output",
-            "/tmp/out",
-        ])
+        .args(["index", "--path", "/nonexistent/path", "--output", "/tmp/out"])
         .assert()
         .failure()
         .stderr(predicate::str::contains("not found").or(predicate::str::contains("No such file")));
@@ -179,12 +169,7 @@ fn test_query_requires_index() {
     let index_path = tmp.path().join("nonexistent_index");
 
     cli()
-        .args([
-            "query",
-            "test query",
-            "--index",
-            index_path.to_str().unwrap(),
-        ])
+        .args(["query", "test query", "--index", index_path.to_str().unwrap()])
         .assert()
         .failure()
         .stderr(predicate::str::contains("index").or(predicate::str::contains("not found")));
@@ -196,11 +181,7 @@ fn test_query_with_index() {
 
     // First, create an index
     let doc_path = tmp.path().join("test.txt");
-    fs::write(
-        &doc_path,
-        "Machine learning is a field of artificial intelligence.",
-    )
-    .unwrap();
+    fs::write(&doc_path, "Machine learning is a field of artificial intelligence.").unwrap();
 
     let index_path = tmp.path().join("index");
 
@@ -217,12 +198,7 @@ fn test_query_with_index() {
 
     // Now query
     cli()
-        .args([
-            "query",
-            "What is machine learning?",
-            "--index",
-            index_path.to_str().unwrap(),
-        ])
+        .args(["query", "What is machine learning?", "--index", index_path.to_str().unwrap()])
         .assert()
         .success()
         .stdout(predicate::str::contains("Results"));
@@ -251,14 +227,7 @@ fn test_query_json_output() {
 
     // Query with JSON output
     cli()
-        .args([
-            "query",
-            "test",
-            "--index",
-            index_path.to_str().unwrap(),
-            "--format",
-            "json",
-        ])
+        .args(["query", "test", "--index", index_path.to_str().unwrap(), "--format", "json"])
         .assert()
         .success()
         .stdout(predicate::str::contains("{").and(predicate::str::contains("}")));
@@ -272,11 +241,7 @@ fn test_query_top_k() {
     let docs_dir = tmp.path().join("docs");
     fs::create_dir(&docs_dir).unwrap();
     for i in 0..5 {
-        fs::write(
-            docs_dir.join(format!("doc{i}.txt")),
-            format!("Document {i} content."),
-        )
-        .unwrap();
+        fs::write(docs_dir.join(format!("doc{i}.txt")), format!("Document {i} content.")).unwrap();
     }
 
     let index_path = tmp.path().join("index");
@@ -294,14 +259,7 @@ fn test_query_top_k() {
 
     // Query with limited results
     cli()
-        .args([
-            "query",
-            "document",
-            "--index",
-            index_path.to_str().unwrap(),
-            "--top-k",
-            "2",
-        ])
+        .args(["query", "document", "--index", index_path.to_str().unwrap(), "--top-k", "2"])
         .assert()
         .success();
 }
@@ -315,12 +273,7 @@ fn test_transcribe_dry_run_no_media() {
     let tmp = TempDir::new().unwrap();
     // Empty directory — no media files
     cli()
-        .args([
-            "transcribe",
-            "--path",
-            tmp.path().to_str().unwrap(),
-            "--dry-run",
-        ])
+        .args(["transcribe", "--path", tmp.path().to_str().unwrap(), "--dry-run"])
         .assert()
         .success()
         .stdout(predicate::str::contains("No media files found"));
@@ -333,12 +286,7 @@ fn test_transcribe_dry_run_with_media() {
     fs::write(tmp.path().join("talk.wav"), b"").unwrap();
 
     cli()
-        .args([
-            "transcribe",
-            "--path",
-            tmp.path().to_str().unwrap(),
-            "--dry-run",
-        ])
+        .args(["transcribe", "--path", tmp.path().to_str().unwrap(), "--dry-run"])
         .assert()
         .success()
         .stdout(predicate::str::contains("2 media files"))
@@ -351,20 +299,12 @@ fn test_transcribe_dry_run_with_media() {
 fn test_transcribe_skips_existing_sidecars() {
     let tmp = TempDir::new().unwrap();
     fs::write(tmp.path().join("lecture.mp4"), b"").unwrap();
-    fs::write(
-        tmp.path().join("lecture.srt"),
-        "1\n00:00:01,000 --> 00:00:05,000\nHello.\n",
-    )
-    .unwrap();
+    fs::write(tmp.path().join("lecture.srt"), "1\n00:00:01,000 --> 00:00:05,000\nHello.\n")
+        .unwrap();
     fs::write(tmp.path().join("talk.wav"), b"").unwrap();
 
     cli()
-        .args([
-            "transcribe",
-            "--path",
-            tmp.path().to_str().unwrap(),
-            "--dry-run",
-        ])
+        .args(["transcribe", "--path", tmp.path().to_str().unwrap(), "--dry-run"])
         .assert()
         .success()
         .stdout(predicate::str::contains("1 with .srt/.vtt"))
@@ -376,19 +316,11 @@ fn test_transcribe_skips_existing_sidecars() {
 fn test_transcribe_all_have_sidecars() {
     let tmp = TempDir::new().unwrap();
     fs::write(tmp.path().join("lecture.mp4"), b"").unwrap();
-    fs::write(
-        tmp.path().join("lecture.srt"),
-        "1\n00:00:01,000 --> 00:00:05,000\nHello.\n",
-    )
-    .unwrap();
+    fs::write(tmp.path().join("lecture.srt"), "1\n00:00:01,000 --> 00:00:05,000\nHello.\n")
+        .unwrap();
 
     cli()
-        .args([
-            "transcribe",
-            "--path",
-            tmp.path().to_str().unwrap(),
-            "--dry-run",
-        ])
+        .args(["transcribe", "--path", tmp.path().to_str().unwrap(), "--dry-run"])
         .assert()
         .success()
         .stdout(predicate::str::contains("Nothing to do"));
@@ -567,11 +499,7 @@ fn test_help() {
 
 #[test]
 fn test_version() {
-    cli()
-        .arg("--version")
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("trueno-rag"));
+    cli().arg("--version").assert().success().stdout(predicate::str::contains("trueno-rag"));
 }
 
 #[test]

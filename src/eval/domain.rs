@@ -49,14 +49,7 @@ pub fn classify_domain(course_dir: &str) -> &'static str {
     // Kubernetes / Containers
     if matches_any(
         &lower,
-        &[
-            "kubernetes",
-            "docker",
-            "assimilate-containers",
-            "container",
-            "minikube",
-            "k8s",
-        ],
+        &["kubernetes", "docker", "assimilate-containers", "container", "minikube", "k8s"],
     ) {
         return "k8s";
     }
@@ -102,16 +95,7 @@ pub fn classify_domain(course_dir: &str) -> &'static str {
     // Data Engineering
     if matches_any(
         &lower,
-        &[
-            "data-engineering",
-            "databricks",
-            "pandas",
-            "sql",
-            "snowflake",
-            "spark",
-            "etl",
-            "dbt",
-        ],
+        &["data-engineering", "databricks", "pandas", "sql", "snowflake", "spark", "etl", "dbt"],
     ) {
         return "data";
     }

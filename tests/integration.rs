@@ -85,9 +85,7 @@ fn test_different_chunking_strategies() {
     // Test StructuralChunker with markdown
     let md_doc = Document::new("# Header 1\n\nContent 1.\n\n# Header 2\n\nContent 2.");
     let struct_chunker = StructuralChunker::new(true, 500);
-    let struct_chunks = struct_chunker
-        .chunk(&md_doc)
-        .expect("StructuralChunker failed");
+    let struct_chunks = struct_chunker.chunk(&md_doc).expect("StructuralChunker failed");
     assert_eq!(struct_chunks.len(), 2);
 }
 
@@ -113,11 +111,7 @@ fn test_fusion_strategies_produce_results() {
             .expect("Failed to index");
 
         let results = pipeline.query("test", 5).expect("Query failed");
-        assert!(
-            results.len() <= 5,
-            "Strategy {:?} returned too many results",
-            strategy
-        );
+        assert!(results.len() <= 5, "Strategy {:?} returned too many results", strategy);
     }
 }
 
@@ -133,18 +127,13 @@ fn test_context_assembly_with_citations() {
     let doc = Document::new("Important content for citation.").with_title("Test Document");
     pipeline.index_document(&doc).expect("Failed to index");
 
-    let (_, context) = pipeline
-        .query_with_context("important content", 5)
-        .expect("Query failed");
+    let (_, context) = pipeline.query_with_context("important content", 5).expect("Query failed");
 
     let formatted = context.format_with_citations();
     assert!(formatted.contains("[1]"), "Expected citation marker");
 
     let citation_list = context.citation_list();
-    assert!(
-        citation_list.contains("Test Document"),
-        "Expected document title in citations"
-    );
+    assert!(citation_list.contains("Test Document"), "Expected document title in citations");
 }
 
 #[test]
@@ -165,10 +154,7 @@ fn test_large_document_chunking() {
     let chunks = chunker.chunk(&doc).expect("Chunking failed");
 
     // Should produce multiple chunks
-    assert!(
-        chunks.len() > 1,
-        "Large document should produce multiple chunks"
-    );
+    assert!(chunks.len() > 1, "Large document should produce multiple chunks");
 
     // Each chunk should be within size limit (with some tolerance)
     for chunk in &chunks {
@@ -196,9 +182,7 @@ fn test_query_ranking_consistency() {
         .index_document(&Document::new("completely unrelated content"))
         .expect("Failed to index");
 
-    let results = pipeline
-        .query("exact match query", 5)
-        .expect("Query failed");
+    let results = pipeline.query("exact match query", 5).expect("Query failed");
 
     if results.len() >= 2 {
         // First result should have higher score than second
@@ -263,9 +247,7 @@ Computer vision focuses on image and video analysis using convolutional networks
 
     pipeline.index_document(&doc).expect("Failed to index");
 
-    let results = pipeline
-        .query("neural networks deep learning", 3)
-        .expect("Query failed");
+    let results = pipeline.query("neural networks deep learning", 3).expect("Query failed");
 
     assert!(!results.is_empty(), "Should return results for SRT content");
 
@@ -299,10 +281,8 @@ fn test_timestamp_metadata_survives_pipeline() {
 
     let mut doc = Document::new("Introduction to distributed systems. Consensus algorithms like Raft and Paxos. Fault tolerance and replication strategies.")
         .with_title("Distributed Systems Lecture");
-    doc.metadata
-        .insert("subtitle_cues".into(), serde_json::to_value(&cues).unwrap());
-    doc.metadata
-        .insert("duration_secs".into(), serde_json::json!(90.0));
+    doc.metadata.insert("subtitle_cues".into(), serde_json::to_value(&cues).unwrap());
+    doc.metadata.insert("duration_secs".into(), serde_json::json!(90.0));
 
     // Chunk with TimestampChunker
     let chunker = TimestampChunker::new(45.0).with_min_duration(0.0);
@@ -316,10 +296,7 @@ fn test_timestamp_metadata_survives_pipeline() {
             chunk.metadata.custom.contains_key("start_secs"),
             "Chunk missing start_secs metadata"
         );
-        assert!(
-            chunk.metadata.custom.contains_key("end_secs"),
-            "Chunk missing end_secs metadata"
-        );
+        assert!(chunk.metadata.custom.contains_key("end_secs"), "Chunk missing end_secs metadata");
         assert!(
             chunk.metadata.custom.contains_key("start_display"),
             "Chunk missing start_display metadata"
@@ -344,9 +321,7 @@ fn test_timestamp_metadata_survives_pipeline() {
 
     pipeline.index_document(&doc).expect("Failed to index");
 
-    let results = pipeline
-        .query("consensus Raft Paxos", 3)
-        .expect("Query failed");
+    let results = pipeline.query("consensus Raft Paxos", 3).expect("Query failed");
     assert!(!results.is_empty());
 
     // Retrieved chunks should still have timestamp metadata
@@ -367,11 +342,7 @@ fn test_sidecar_resolution_selects_subtitle_loader() {
     let mp4 = dir.join("lecture.mp4");
     let srt = dir.join("lecture.srt");
     std::fs::write(&mp4, b"fake mp4 data").unwrap();
-    std::fs::write(
-        &srt,
-        "1\n00:00:01,000 --> 00:00:05,000\nSidecar content here.\n",
-    )
-    .unwrap();
+    std::fs::write(&srt, "1\n00:00:01,000 --> 00:00:05,000\nSidecar content here.\n").unwrap();
 
     // LoaderRegistry should find the sidecar
     let sidecar = LoaderRegistry::find_sidecar(&mp4);
@@ -388,11 +359,8 @@ fn test_sidecar_resolution_selects_subtitle_loader() {
     let mp4_2 = dir.join("talk.mp4");
     let vtt = dir.join("talk.vtt");
     std::fs::write(&mp4_2, b"fake mp4").unwrap();
-    std::fs::write(
-        &vtt,
-        "WEBVTT\n\n00:00:01.000 --> 00:00:05.000\nVTT sidecar content.\n",
-    )
-    .unwrap();
+    std::fs::write(&vtt, "WEBVTT\n\n00:00:01.000 --> 00:00:05.000\nVTT sidecar content.\n")
+        .unwrap();
 
     let sidecar2 = LoaderRegistry::find_sidecar(&mp4_2);
     assert!(sidecar2.is_some());

@@ -51,7 +51,7 @@ fn main() -> trueno_rag::Result<()> {
         let chunks: Vec<(String, String)> = chunk_texts
             .iter()
             .enumerate()
-            .map(|(i, text)| (format!("{doc_id}#chunk-{i}"), text.to_string()))
+            .map(|(i, text)| (format!("{doc_id}#chunk-{i}"), (*text).to_string()))
             .collect();
 
         index.insert_document(doc_id, Some(title), Some(doc_id), &full_content, &chunks, None)?;
@@ -60,11 +60,7 @@ fn main() -> trueno_rag::Result<()> {
     // 3. Optimize FTS5 segments for search performance
     index.optimize()?;
 
-    println!(
-        "Indexed {} documents, {} chunks\n",
-        index.document_count()?,
-        index.chunk_count()?
-    );
+    println!("Indexed {} documents, {} chunks\n", index.document_count()?, index.chunk_count()?);
 
     // 4. BM25 full-text search
     // Note: FTS5 uses implicit AND — all terms must appear in a single chunk.

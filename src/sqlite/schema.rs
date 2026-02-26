@@ -158,11 +158,7 @@ fn set_schema_version(conn: &Connection) -> Result<()> {
 /// Check if the schema version matches the current version.
 pub fn check_version(conn: &Connection) -> Result<bool> {
     let version: Option<String> = conn
-        .query_row(
-            "SELECT value FROM metadata WHERE key = 'schema_version'",
-            [],
-            |row| row.get(0),
-        )
+        .query_row("SELECT value FROM metadata WHERE key = 'schema_version'", [], |row| row.get(0))
         .ok();
     Ok(version.as_deref() == Some(SCHEMA_VERSION))
 }
@@ -177,19 +173,16 @@ mod tests {
         initialize(&conn).unwrap();
 
         // Verify tables exist by querying them
-        let doc_count: i64 = conn
-            .query_row("SELECT COUNT(*) FROM documents", [], |r| r.get(0))
-            .unwrap();
+        let doc_count: i64 =
+            conn.query_row("SELECT COUNT(*) FROM documents", [], |r| r.get(0)).unwrap();
         assert_eq!(doc_count, 0);
 
-        let chunk_count: i64 = conn
-            .query_row("SELECT COUNT(*) FROM chunks", [], |r| r.get(0))
-            .unwrap();
+        let chunk_count: i64 =
+            conn.query_row("SELECT COUNT(*) FROM chunks", [], |r| r.get(0)).unwrap();
         assert_eq!(chunk_count, 0);
 
-        let fp_count: i64 = conn
-            .query_row("SELECT COUNT(*) FROM fingerprints", [], |r| r.get(0))
-            .unwrap();
+        let fp_count: i64 =
+            conn.query_row("SELECT COUNT(*) FROM fingerprints", [], |r| r.get(0)).unwrap();
         assert_eq!(fp_count, 0);
     }
 
@@ -214,9 +207,7 @@ mod tests {
         initialize(&conn).unwrap();
         // In-memory databases use "memory" journal mode, not WAL
         // but the pragma should not error
-        let mode: String = conn
-            .query_row("PRAGMA journal_mode", [], |r| r.get(0))
-            .unwrap();
+        let mode: String = conn.query_row("PRAGMA journal_mode", [], |r| r.get(0)).unwrap();
         assert!(!mode.is_empty());
     }
 
@@ -233,10 +224,7 @@ mod tests {
                 |row| row.get(0),
             )
             .unwrap();
-        assert!(
-            !has_content_table,
-            "External content FTS5 should not create chunks_fts_content"
-        );
+        assert!(!has_content_table, "External content FTS5 should not create chunks_fts_content");
     }
 
     #[test]
@@ -279,11 +267,8 @@ mod tests {
         .unwrap();
 
         // Insert test data under v1 schema
-        conn.execute(
-            "INSERT INTO documents (id, content) VALUES ('doc1', 'test document')",
-            [],
-        )
-        .unwrap();
+        conn.execute("INSERT INTO documents (id, content) VALUES ('doc1', 'test document')", [])
+            .unwrap();
         conn.execute(
             "INSERT INTO chunks (id, doc_id, content, position) VALUES ('c1', 'doc1', 'SIMD vector operations', 0)",
             [],
@@ -318,11 +303,9 @@ mod tests {
 
         // Verify FTS search still works (data was rebuilt)
         let count: i64 = conn
-            .query_row(
-                "SELECT COUNT(*) FROM chunks_fts WHERE chunks_fts MATCH 'SIMD'",
-                [],
-                |r| r.get(0),
-            )
+            .query_row("SELECT COUNT(*) FROM chunks_fts WHERE chunks_fts MATCH 'SIMD'", [], |r| {
+                r.get(0)
+            })
             .unwrap();
         assert_eq!(count, 1, "FTS search should find migrated data");
     }

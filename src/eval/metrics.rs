@@ -74,10 +74,7 @@ pub fn compute_metrics_from_judgments(
         timestamp,
         config: EvalRunConfig {
             num_queries: retrieval_results.len(),
-            top_k: retrieval_results
-                .first()
-                .map(|r| r.results.len())
-                .unwrap_or(10),
+            top_k: retrieval_results.first().map(|r| r.results.len()).unwrap_or(10),
             judge_model: "claude-code".to_string(),
             cache_hits: 0,
             api_calls: 0,
@@ -191,16 +188,14 @@ mod tests {
     #[test]
     fn test_metrics_no_relevant() {
         let results = vec![make_retrieval_entry("obscure query", 3)];
-        let judgments = vec![
-            JudgmentEntry {
-                query: "obscure query".to_string(),
-                rank: 1,
-                relevant: false,
-                reasoning: "not relevant".to_string(),
-                source: None,
-                score: None,
-            },
-        ];
+        let judgments = vec![JudgmentEntry {
+            query: "obscure query".to_string(),
+            rank: 1,
+            relevant: false,
+            reasoning: "not relevant".to_string(),
+            source: None,
+            score: None,
+        }];
 
         let output = compute_metrics_from_judgments(&results, &judgments);
         assert!((output.per_query[0].mrr).abs() < 0.001);

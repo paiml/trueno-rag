@@ -55,17 +55,14 @@ fn main() -> trueno_rag::Result<()> {
     let mut content_map: Vec<String> = Vec::new();
 
     for doc_text in &documents {
-        let mut chunk = Chunk::new(DocumentId::new(), doc_text.to_string(), 0, doc_text.len());
+        let mut chunk = Chunk::new(DocumentId::new(), (*doc_text).to_string(), 0, doc_text.len());
         chunk.embedding = Some(embed.embed(doc_text)?);
         chunk_ids.push(chunk.id);
-        content_map.push(doc_text.to_string());
+        content_map.push((*doc_text).to_string());
         retriever.index(chunk)?;
     }
 
-    println!(
-        "Indexed {} documents into hybrid retriever\n",
-        documents.len()
-    );
+    println!("Indexed {} documents into hybrid retriever\n", documents.len());
 
     // Define queries with known relevant documents (by index)
     let queries: Vec<(&str, Vec<usize>)> = vec![
@@ -110,8 +107,7 @@ fn main() -> trueno_rag::Result<()> {
         // Sparse-only retrieval (BM25)
         let sparse_results = retriever.retrieve_sparse(query, k)?;
         let sparse_retrieved: Vec<ChunkId> = sparse_results.iter().map(|r| r.chunk.id).collect();
-        let sparse_metrics =
-            RetrievalMetrics::compute(&sparse_retrieved, &relevant_ids, &k_values);
+        let sparse_metrics = RetrievalMetrics::compute(&sparse_retrieved, &relevant_ids, &k_values);
 
         // Print comparison table
         println!(

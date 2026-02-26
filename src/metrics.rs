@@ -25,15 +25,9 @@ impl RetrievalMetrics {
         let mut metrics = Self::default();
 
         for &k in k_values {
-            metrics
-                .recall
-                .insert(k, Self::recall_at_k(retrieved, relevant, k));
-            metrics
-                .precision
-                .insert(k, Self::precision_at_k(retrieved, relevant, k));
-            metrics
-                .ndcg
-                .insert(k, Self::ndcg_at_k(retrieved, relevant, k));
+            metrics.recall.insert(k, Self::recall_at_k(retrieved, relevant, k));
+            metrics.precision.insert(k, Self::precision_at_k(retrieved, relevant, k));
+            metrics.ndcg.insert(k, Self::ndcg_at_k(retrieved, relevant, k));
         }
 
         metrics.mrr = Self::mean_reciprocal_rank(retrieved, relevant);
@@ -194,10 +188,7 @@ impl AggregatedMetrics {
         }
 
         let n = metrics.len() as f32;
-        let mut agg = Self {
-            query_count: metrics.len(),
-            ..Default::default()
-        };
+        let mut agg = Self { query_count: metrics.len(), ..Default::default() };
 
         // Aggregate MRR and MAP
         agg.mean_mrr = metrics.iter().map(|m| m.mrr).sum::<f32>() / n;
@@ -209,11 +200,8 @@ impl AggregatedMetrics {
                 let mean_recall = metrics.iter().filter_map(|m| m.recall.get(&k)).sum::<f32>() / n;
                 agg.mean_recall.insert(k, mean_recall);
 
-                let mean_precision = metrics
-                    .iter()
-                    .filter_map(|m| m.precision.get(&k))
-                    .sum::<f32>()
-                    / n;
+                let mean_precision =
+                    metrics.iter().filter_map(|m| m.precision.get(&k)).sum::<f32>() / n;
                 agg.mean_precision.insert(k, mean_precision);
 
                 let mean_ndcg = metrics.iter().filter_map(|m| m.ndcg.get(&k)).sum::<f32>() / n;

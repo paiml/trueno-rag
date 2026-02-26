@@ -42,12 +42,7 @@ pub struct GroundTruthGenerator {
 impl GroundTruthGenerator {
     /// Create a new generator
     pub fn new(client: AnthropicClient, model: &str, sample_size: usize, seed: u64) -> Self {
-        Self {
-            client,
-            model: model.to_string(),
-            sample_size,
-            seed,
-        }
+        Self { client, model: model.to_string(), sample_size, seed }
     }
 
     /// Sample chunks using stratified sampling by course directory
@@ -124,10 +119,7 @@ impl GroundTruthGenerator {
     pub async fn generate_question(&self, content: &str) -> Result<Option<String>, String> {
         let user_msg = format!("Transcript chunk:\n---\n{content}\n---");
 
-        let result = self
-            .client
-            .complete(&self.model, Some(SYSTEM_PROMPT), &user_msg, 150)
-            .await?;
+        let result = self.client.complete(&self.model, Some(SYSTEM_PROMPT), &user_msg, 150).await?;
 
         let text = result.text.trim().to_string();
         if text == "SKIP" || text.starts_with("SKIP") {
@@ -144,10 +136,7 @@ impl GroundTruthGenerator {
     }
 
     /// Generate ground truth for all sampled chunks
-    pub async fn generate(
-        &self,
-        chunks: &[IndexChunk],
-    ) -> Result<Vec<GroundTruthEntry>, String> {
+    pub async fn generate(&self, chunks: &[IndexChunk]) -> Result<Vec<GroundTruthEntry>, String> {
         let sampled = self.sample_chunks(chunks);
         let total = sampled.len();
         let mut results = Vec::new();
@@ -155,13 +144,7 @@ impl GroundTruthGenerator {
         let mut errors = 0usize;
 
         for (i, sample) in sampled.iter().enumerate() {
-            eprint!(
-                "[{}/{}] {} ({})...",
-                i + 1,
-                total,
-                sample.course,
-                sample.domain
-            );
+            eprint!("[{}/{}] {} ({})...", i + 1, total, sample.course, sample.domain);
 
             match self.generate_question(&sample.content).await {
                 Ok(Some(question)) => {
@@ -187,12 +170,7 @@ impl GroundTruthGenerator {
             }
         }
 
-        eprintln!(
-            "\nGenerated {} queries, {} skipped, {} errors",
-            results.len(),
-            skipped,
-            errors
-        );
+        eprintln!("\nGenerated {} queries, {} skipped, {} errors", results.len(), skipped, errors);
 
         Ok(results)
     }
@@ -222,8 +200,7 @@ fn is_eligible(chunk: &IndexChunk) -> bool {
         return false;
     }
     let lowered: Vec<String> = words.iter().map(|w| w.to_lowercase()).collect();
-    let unique: std::collections::HashSet<&str> =
-        lowered.iter().map(|w| w.as_str()).collect();
+    let unique: std::collections::HashSet<&str> = lowered.iter().map(|w| w.as_str()).collect();
     if unique.len() < 15 {
         return false;
     }

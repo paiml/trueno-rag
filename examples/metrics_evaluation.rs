@@ -9,15 +9,11 @@ fn main() {
     println!("=== Retrieval Metrics Evaluation ===\n");
 
     // Simulate retrieved results (chunk IDs in rank order)
-    let retrieved: Vec<ChunkId> = (1..=10)
-        .map(|n| ChunkId(uuid::Uuid::from_u128(n)))
-        .collect();
+    let retrieved: Vec<ChunkId> = (1..=10).map(|n| ChunkId(uuid::Uuid::from_u128(n))).collect();
 
     // Ground truth: relevant documents are 1, 3, 5, 7
-    let relevant: HashSet<ChunkId> = [1, 3, 5, 7]
-        .iter()
-        .map(|&n| ChunkId(uuid::Uuid::from_u128(n)))
-        .collect();
+    let relevant: HashSet<ChunkId> =
+        [1, 3, 5, 7].iter().map(|&n| ChunkId(uuid::Uuid::from_u128(n))).collect();
 
     println!("Retrieved order: 1, 2, 3, 4, 5, 6, 7, 8, 9, 10");
     println!("Relevant items: 1, 3, 5, 7");
@@ -42,10 +38,7 @@ fn main() {
         let precision = metrics.precision.get(k).unwrap_or(&0.0);
         let ndcg = metrics.ndcg.get(k).unwrap_or(&0.0);
 
-        println!(
-            "| {:2} | {:.3}    | {:.3}       | {:.3}  |",
-            k, recall, precision, ndcg
-        );
+        println!("| {:2} | {:.3}    | {:.3}       | {:.3}  |", k, recall, precision, ndcg);
     }
 
     println!();

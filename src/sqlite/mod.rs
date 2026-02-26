@@ -54,9 +54,7 @@ impl SqliteIndex {
         let conn = Connection::open(path.as_ref())
             .map_err(|e| crate::Error::Query(format!("Failed to open SQLite database: {e}")))?;
         schema::initialize(&conn)?;
-        Ok(Self {
-            conn: Mutex::new(conn),
-        })
+        Ok(Self { conn: Mutex::new(conn) })
     }
 
     /// Open an in-memory index (for testing).
@@ -64,9 +62,7 @@ impl SqliteIndex {
         let conn = Connection::open_in_memory()
             .map_err(|e| crate::Error::Query(format!("Failed to open in-memory database: {e}")))?;
         schema::initialize(&conn)?;
-        Ok(Self {
-            conn: Mutex::new(conn),
-        })
+        Ok(Self { conn: Mutex::new(conn) })
     }
 
     /// Get document count.
@@ -91,11 +87,9 @@ impl SqliteIndex {
     pub fn needs_reindex(&self, path: &str, hash: &[u8; 32]) -> Result<bool> {
         let conn = self.conn.lock().map_err(|e| lock_err(&e))?;
         let stored: Option<Vec<u8>> = conn
-            .query_row(
-                "SELECT blake3_hash FROM fingerprints WHERE doc_path = ?1",
-                [path],
-                |row| row.get(0),
-            )
+            .query_row("SELECT blake3_hash FROM fingerprints WHERE doc_path = ?1", [path], |row| {
+                row.get(0)
+            })
             .ok();
 
         match stored {
@@ -235,11 +229,7 @@ impl SqliteIndex {
     pub fn get_chunk(&self, chunk_id: &str) -> Result<Option<String>> {
         let conn = self.conn.lock().map_err(|e| lock_err(&e))?;
         let content: Option<String> = conn
-            .query_row(
-                "SELECT content FROM chunks WHERE id = ?1",
-                [chunk_id],
-                |row| row.get(0),
-            )
+            .query_row("SELECT content FROM chunks WHERE id = ?1", [chunk_id], |row| row.get(0))
             .ok();
         Ok(content)
     }
@@ -248,9 +238,7 @@ impl SqliteIndex {
     pub fn get_metadata(&self, key: &str) -> Result<Option<String>> {
         let conn = self.conn.lock().map_err(|e| lock_err(&e))?;
         let value: Option<String> = conn
-            .query_row("SELECT value FROM metadata WHERE key = ?1", [key], |row| {
-                row.get(0)
-            })
+            .query_row("SELECT value FROM metadata WHERE key = ?1", [key], |row| row.get(0))
             .ok();
         Ok(value)
     }
@@ -258,11 +246,8 @@ impl SqliteIndex {
     /// Set a metadata key-value pair.
     pub fn set_metadata(&self, key: &str, value: &str) -> Result<()> {
         let conn = self.conn.lock().map_err(|e| lock_err(&e))?;
-        conn.execute(
-            "INSERT OR REPLACE INTO metadata (key, value) VALUES (?1, ?2)",
-            [key, value],
-        )
-        .map_err(|e| crate::Error::Query(format!("Failed to set metadata: {e}")))?;
+        conn.execute("INSERT OR REPLACE INTO metadata (key, value) VALUES (?1, ?2)", [key, value])
+            .map_err(|e| crate::Error::Query(format!("Failed to set metadata: {e}")))?;
         Ok(())
     }
 
@@ -333,9 +318,7 @@ impl SparseIndex for SqliteIndex {
         results
             .into_iter()
             .filter_map(|r| {
-                uuid::Uuid::parse_str(&r.chunk_id)
-                    .ok()
-                    .map(|uuid| (ChunkId(uuid), r.score as f32))
+                uuid::Uuid::parse_str(&r.chunk_id).ok().map(|uuid| (ChunkId(uuid), r.score as f32))
             })
             .collect()
     }
@@ -378,9 +361,7 @@ pub struct SqliteStore {
 
 impl std::fmt::Debug for SqliteStore {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("SqliteStore")
-            .field("path", &self.path)
-            .finish_non_exhaustive()
+        f.debug_struct("SqliteStore").field("path", &self.path).finish_non_exhaustive()
     }
 }
 
@@ -389,10 +370,7 @@ impl SqliteStore {
     pub fn open(path: impl AsRef<Path>) -> Result<Self> {
         let path = path.as_ref().to_path_buf();
         let index = SqliteIndex::open(&path)?;
-        Ok(Self {
-            index,
-            path: Some(path),
-        })
+        Ok(Self { index, path: Some(path) })
     }
 
     /// Open an in-memory store (for testing).
@@ -409,10 +387,8 @@ impl SqliteStore {
         fingerprint: Option<(&str, &[u8; 32])>,
     ) -> Result<()> {
         let doc_id = doc.id.to_string();
-        let chunk_pairs: Vec<(String, String)> = chunks
-            .iter()
-            .map(|c| (c.id.to_string(), c.content.clone()))
-            .collect();
+        let chunk_pairs: Vec<(String, String)> =
+            chunks.iter().map(|c| (c.id.to_string(), c.content.clone())).collect();
 
         self.index.insert_document(
             &doc_id,
@@ -548,14 +524,8 @@ mod tests {
             None,
             "",
             &[
-                (
-                    "c1".into(),
-                    "machine learning algorithms for classification".into(),
-                ),
-                (
-                    "c2".into(),
-                    "database indexing and query optimization".into(),
-                ),
+                ("c1".into(), "machine learning algorithms for classification".into()),
+                ("c2".into(), "database indexing and query optimization".into()),
             ],
             None,
         )
@@ -596,15 +566,8 @@ mod tests {
     #[test]
     fn test_index_remove_document() {
         let idx = SqliteIndex::open_in_memory().unwrap();
-        idx.insert_document(
-            "doc1",
-            None,
-            None,
-            "",
-            &[("c1".into(), "some content".into())],
-            None,
-        )
-        .unwrap();
+        idx.insert_document("doc1", None, None, "", &[("c1".into(), "some content".into())], None)
+            .unwrap();
 
         assert_eq!(idx.document_count().unwrap(), 1);
         idx.remove_document("doc1").unwrap();
@@ -616,34 +579,17 @@ mod tests {
     fn test_index_metadata() {
         let idx = SqliteIndex::open_in_memory().unwrap();
         idx.set_metadata("version", "1.0.0").unwrap();
-        assert_eq!(
-            idx.get_metadata("version").unwrap(),
-            Some("1.0.0".to_string())
-        );
+        assert_eq!(idx.get_metadata("version").unwrap(), Some("1.0.0".to_string()));
         assert_eq!(idx.get_metadata("nonexistent").unwrap(), None);
     }
 
     #[test]
     fn test_index_update_document() {
         let idx = SqliteIndex::open_in_memory().unwrap();
-        idx.insert_document(
-            "doc1",
-            None,
-            None,
-            "",
-            &[("c1".into(), "old content".into())],
-            None,
-        )
-        .unwrap();
-        idx.insert_document(
-            "doc1",
-            None,
-            None,
-            "",
-            &[("c2".into(), "new content".into())],
-            None,
-        )
-        .unwrap();
+        idx.insert_document("doc1", None, None, "", &[("c1".into(), "old content".into())], None)
+            .unwrap();
+        idx.insert_document("doc1", None, None, "", &[("c2".into(), "new content".into())], None)
+            .unwrap();
 
         // Old chunk should be gone, new chunk present
         assert_eq!(idx.chunk_count().unwrap(), 1);
@@ -692,10 +638,7 @@ mod tests {
     fn test_store_index_and_search() {
         let store = SqliteStore::open_in_memory().unwrap();
         let doc = make_doc("SIMD vector operations for tensor computation");
-        let chunks = vec![make_chunk(
-            doc.id,
-            "SIMD vector operations for tensor computation",
-        )];
+        let chunks = vec![make_chunk(doc.id, "SIMD vector operations for tensor computation")];
         store.index_document(&doc, &chunks, None).unwrap();
 
         let results = store.search("SIMD tensor", 10).unwrap();
@@ -706,13 +649,8 @@ mod tests {
     fn test_store_stats() {
         let store = SqliteStore::open_in_memory().unwrap();
         let doc = make_doc("content");
-        let chunks = vec![
-            make_chunk(doc.id, "chunk one"),
-            make_chunk(doc.id, "chunk two"),
-        ];
-        store
-            .index_document(&doc, &chunks, Some(("/test.md", &[0u8; 32])))
-            .unwrap();
+        let chunks = vec![make_chunk(doc.id, "chunk one"), make_chunk(doc.id, "chunk two")];
+        store.index_document(&doc, &chunks, Some(("/test.md", &[0u8; 32]))).unwrap();
 
         let stats = store.stats().unwrap();
         assert_eq!(stats.document_count, 1);
@@ -726,9 +664,7 @@ mod tests {
         let doc = make_doc("content");
         let chunks = vec![make_chunk(doc.id, "chunk")];
         let hash = [42u8; 32];
-        store
-            .index_document(&doc, &chunks, Some(("/doc.md", &hash)))
-            .unwrap();
+        store.index_document(&doc, &chunks, Some(("/doc.md", &hash))).unwrap();
 
         assert!(!store.needs_reindex("/doc.md", &hash).unwrap());
         assert!(store.needs_reindex("/doc.md", &[0u8; 32]).unwrap());
@@ -739,10 +675,7 @@ mod tests {
     fn test_store_metadata() {
         let store = SqliteStore::open_in_memory().unwrap();
         store.set_metadata("batuta_version", "0.6.0").unwrap();
-        assert_eq!(
-            store.get_metadata("batuta_version").unwrap(),
-            Some("0.6.0".to_string())
-        );
+        assert_eq!(store.get_metadata("batuta_version").unwrap(), Some("0.6.0".to_string()));
     }
 
     #[test]
@@ -818,13 +751,23 @@ mod tests {
         let hash2 = [2u8; 32];
 
         idx.insert_document(
-            "doc1", None, Some("/a.md"), "", &[("c1".into(), "content a".into())],
+            "doc1",
+            None,
+            Some("/a.md"),
+            "",
+            &[("c1".into(), "content a".into())],
             Some(("/a.md", &hash1)),
-        ).unwrap();
+        )
+        .unwrap();
         idx.insert_document(
-            "doc2", None, Some("/b.md"), "", &[("c2".into(), "content b".into())],
+            "doc2",
+            None,
+            Some("/b.md"),
+            "",
+            &[("c2".into(), "content b".into())],
             Some(("/b.md", &hash2)),
-        ).unwrap();
+        )
+        .unwrap();
 
         let fps = idx.list_fingerprints().unwrap();
         assert_eq!(fps.len(), 2);
@@ -839,15 +782,23 @@ mod tests {
         let hash = [1u8; 32];
 
         idx.insert_document(
-            "doc1", None, Some("/a.md"), "full content",
+            "doc1",
+            None,
+            Some("/a.md"),
+            "full content",
             &[("c1".into(), "chunk 1".into()), ("c2".into(), "chunk 2".into())],
             Some(("/a.md", &hash)),
-        ).unwrap();
+        )
+        .unwrap();
         idx.insert_document(
-            "doc2", None, Some("/b.md"), "other content",
+            "doc2",
+            None,
+            Some("/b.md"),
+            "other content",
             &[("c3".into(), "chunk 3".into())],
             Some(("/b.md", &hash)),
-        ).unwrap();
+        )
+        .unwrap();
 
         assert_eq!(idx.document_count().unwrap(), 2);
         assert_eq!(idx.chunk_count().unwrap(), 3);

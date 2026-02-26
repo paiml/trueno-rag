@@ -1,0 +1,748 @@
+{
+  "work_item_id": "PMAT-012",
+  "created_at": "2026-02-23T20:43:29.697038960Z",
+  "baseline_commit": "4774666c79f78e686cb598275b45e90e7a575977",
+  "baseline_tdg": 0.0,
+  "baseline_coverage": 0.0,
+  "baseline_rust_score": 0.0,
+  "baseline_file_manifest": {
+    "files": {
+      "examples/eval_hybrid.rs": {
+        "content_hash": "a6a6b980496d4a8a90c57224e4dc4ffdbb538f44f53ee8e83784fcdf59912021",
+        "lines": 169,
+        "functions": 1,
+        "max_complexity": 0,
+        "category": "RustSource"
+      },
+      "src/eval/types.rs": {
+        "content_hash": "ac946377f15d10013dc1be7b7d887d884307cf33e4b53bc1120eb0078e557a0c",
+        "lines": 282,
+        "functions": 7,
+        "max_complexity": 0,
+        "category": "RustSource"
+      },
+      "src/loader/transcription.rs": {
+        "content_hash": "0290377df02efd2948c9b50fa328452c47af0fd9aef236208dc6c893a03ce66f",
+        "lines": 505,
+        "functions": 29,
+        "max_complexity": 0,
+        "category": "RustSource"
+      },
+      "src/multivector/index.rs": {
+        "content_hash": "b1267a111760c8da1db238da6c8059462fba6b9218281714ade9faebf8c2cccf",
+        "lines": 736,
+        "functions": 35,
+        "max_complexity": 0,
+        "category": "RustSource"
+      },
+      "src/error.rs": {
+        "content_hash": "caab1870c50230cf10451aa64a52ac12f63760fa2e2bff3d6ee420ba8492ec7b",
+        "lines": 127,
+        "functions": 7,
+        "max_complexity": 0,
+        "category": "RustSource"
+      },
+      "src/multivector/mod.rs": {
+        "content_hash": "3fa5f402859e801cffe5fe0101d6534f800c3923bc27e8d01e34951a59520413",
+        "lines": 313,
+        "functions": 5,
+        "max_complexity": 0,
+        "category": "RustSource"
+      },
+      "src/rerank.rs": {
+        "content_hash": "ead9c29cfe96504610d7e218ad73d548a5eb945e26e9431ae697d4375b6b3cac",
+        "lines": 534,
+        "functions": 36,
+        "max_complexity": 0,
+        "category": "RustSource"
+      },
+      "examples/compressed_index.rs": {
+        "content_hash": "fa8145d295176cbe464bc01f7216a342b0417101d58f3e6d289623f018849612",
+        "lines": 232,
+        "functions": 7,
+        "max_complexity": 0,
+        "category": "RustSource"
+      },
+      "src/multivector/search.rs": {
+        "content_hash": "ad7cd2157af7a2a50edf9808675f5db8dad1cefdebd257fcf8ec87a02457e276",
+        "lines": 560,
+        "functions": 28,
+        "max_complexity": 0,
+        "category": "RustSource"
+      },
+      "examples/nemotron_embeddings.rs": {
+        "content_hash": "77ed8a6750cbdd3f556f43dc5a4ae477267fb8a6a825783829571b15166529c6",
+        "lines": 114,
+        "functions": 2,
+        "max_complexity": 0,
+        "category": "RustSource"
+      },
+      "book/book/toc.js": {
+        "content_hash": "243937f5571260c9a279b52916eb146ec87ab439040e117c2e445e96cf0d71e3",
+        "lines": 70,
+        "functions": 2,
+        "max_complexity": 0,
+        "category": "TypeScriptSource"
+      },
+      "examples/basic_rag.rs": {
+        "content_hash": "2ea51b576d88b070f7e19d3e121bd86a996be16a68fe59bee1ff9c5950660b4c",
+        "lines": 93,
+        "functions": 1,
+        "max_complexity": 0,
+        "category": "RustSource"
+      },
+      "src/multivector/falsification.rs": {
+        "content_hash": "4460449828643aeac32f8b8fd96f12035b5326c85bb02186d711f35f9a943cef",
+        "lines": 945,
+        "functions": 36,
+        "max_complexity": 0,
+        "category": "RustSource"
+      },
+      "src/sqlite/schema.rs": {
+        "content_hash": "68cfd6e30daab9ed23f1f49d53b79c03f7e1ed8cd05ab8b025b76b924d0e62f7",
+        "lines": 336,
+        "functions": 14,
+        "max_complexity": 0,
+        "category": "RustSource"
+      },
+      "examples/metrics_evaluation.rs": {
+        "content_hash": "31e655a8c86b6bc8a1912c92fc3e4a67251364e122b23d797ac5d60c5f20b33d",
+        "lines": 69,
+        "functions": 1,
+        "max_complexity": 0,
+        "category": "RustSource"
+      },
+      "src/fusion.rs": {
+        "content_hash": "eda2f538a45fd9b32836fd066e7279f8d468dcd1f901c076bce156045abc1316",
+        "lines": 720,
+        "functions": 44,
+        "max_complexity": 0,
+        "category": "RustSource"
+      },
+      "book/book/highlight.js": {
+        "content_hash": "abc7f01d0ce8c64e4ba9e131d651e48ae1a567b2a1254fea8aab03502288de58",
+        "lines": 54,
+        "functions": 49,
+        "max_complexity": 0,
+        "category": "TypeScriptSource"
+      },
+      "book/book/searchindex.js": {
+        "content_hash": "147c04ab70f2aaa73f83fe6e6afeba80a1b1957d7ca0c2d0cf351b2e94ee9c13",
+        "lines": 1,
+        "functions": 1,
+        "max_complexity": 0,
+        "category": "TypeScriptSource"
+      },
+      "src/chunk/tests.rs": {
+        "content_hash": "a23e522a5e48b6de6d4f18dd66ae0674f4e0915f159006f81ce28b55d9806d4c",
+        "lines": 730,
+        "functions": 0,
+        "max_complexity": 0,
+        "category": "TestCode"
+      },
+      "src/multivector/embedder.rs": {
+        "content_hash": "9287d697caad3eb27d08a79311cacacaf2ecae04054bd98c392e7feab4b1c0b5",
+        "lines": 409,
+        "functions": 35,
+        "max_complexity": 0,
+        "category": "RustSource"
+      },
+      "tests/integration.rs": {
+        "content_hash": "247e75e68659da54efb93dea1d11f592084250f46512e8321ed53b59be06073b",
+        "lines": 403,
+        "functions": 0,
+        "max_complexity": 0,
+        "category": "TestCode"
+      },
+      "src/loader/subtitle.rs": {
+        "content_hash": "2f4ea07e317cdea2ab91eac326bc28a6dd9998b831b9eeb1ce50c97c86149129",
+        "lines": 186,
+        "functions": 9,
+        "max_complexity": 0,
+        "category": "RustSource"
+      },
+      "src/compressed.rs": {
+        "content_hash": "be3dc0a1d8c85f300516981db03549d60b897a67e06eb71818a6e5fe3ef24bb1",
+        "lines": 220,
+        "functions": 17,
+        "max_complexity": 0,
+        "category": "RustSource"
+      },
+      "src/sqlite/fts.rs": {
+        "content_hash": "256e5a2b2ba01cdba8392b8a2a9bb709fd8a0ac8499365930620121d7acf18df",
+        "lines": 213,
+        "functions": 13,
+        "max_complexity": 0,
+        "category": "RustSource"
+      },
+      "src/loader/mod.rs": {
+        "content_hash": "941822dfb634d6782b39dfef17081fc2a939cadbebadb61a05694acaadf34915",
+        "lines": 297,
+        "functions": 27,
+        "max_complexity": 0,
+        "category": "RustSource"
+      },
+      "src/multivector/types.rs": {
+        "content_hash": "add75c557a3d0c23b77e9b9ada851a1677a7e70f7e818a82e1dd2d320c214943",
+        "lines": 583,
+        "functions": 45,
+        "max_complexity": 0,
+        "category": "RustSource"
+      },
+      "src/eval/metrics.rs": {
+        "content_hash": "83704f23768c9fda705b5668f9e4b6223efb1594208e741b012b05f202c5d0cf",
+        "lines": 220,
+        "functions": 7,
+        "max_complexity": 0,
+        "category": "RustSource"
+      },
+      "src/embed/nemotron.rs": {
+        "content_hash": "fec2d7fac47057303ff8e17e0bcc495bd968c0beae7221e114b82f52d396093e",
+        "lines": 515,
+        "functions": 35,
+        "max_complexity": 0,
+        "category": "RustSource"
+      },
+      "examples/semantic_embeddings.rs": {
+        "content_hash": "84aedca05316e6815181cb22fc70a0d2aec03b275d7bf25355700ad6e54e3a30",
+        "lines": 174,
+        "functions": 7,
+        "max_complexity": 0,
+        "category": "RustSource"
+      },
+      "benches/retrieval.rs": {
+        "content_hash": "d9be41656e082d4213188ab4efba493d38d7cf47bd16e378fae50be440c32520",
+        "lines": 133,
+        "functions": 6,
+        "max_complexity": 0,
+        "category": "RustSource"
+      },
+      "src/embed/tests.rs": {
+        "content_hash": "0fe6eb02d753ac7f1fc0e34252994f3c041ba20614a91f5afe0d1fa2d0e731b2",
+        "lines": 739,
+        "functions": 0,
+        "max_complexity": 0,
+        "category": "TestCode"
+      },
+      "src/eval/mod.rs": {
+        "content_hash": "26381de0dc647e66aab5e49021e7f546068b06cfbc6d35397b1f0ec4cdacd40a",
+        "lines": 34,
+        "functions": 0,
+        "max_complexity": 0,
+        "category": "RustSource"
+      },
+      "src/loader/text.rs": {
+        "content_hash": "d1af424f4014115e05f6e6b713e001c4220e492bf0b686cdafcb74fc03a274e4",
+        "lines": 90,
+        "functions": 7,
+        "max_complexity": 0,
+        "category": "RustSource"
+      },
+      "book/book/searcher.js": {
+        "content_hash": "9289822a2feee1c578b4593e918333147ad9f68dc3ffa75edc38b68d04e57807",
+        "lines": 483,
+        "functions": 20,
+        "max_complexity": 0,
+        "category": "TypeScriptSource"
+      },
+      "crates/trueno-rag-cli/tests/cli_tests.rs": {
+        "content_hash": "fa90f9bec79b02b3621c972be9eee8943b9e3c0943a4ed8c6b99c2cd5e313077",
+        "lines": 523,
+        "functions": 0,
+        "max_complexity": 0,
+        "category": "TestCode"
+      },
+      "book/book/elasticlunr.min.js": {
+        "content_hash": "ef4e11c157b1e2e89782d30bd726f2d5ff7834ea5e26ad02474325f8b1f126c9",
+        "lines": 10,
+        "functions": 1,
+        "max_complexity": 0,
+        "category": "TypeScriptSource"
+      },
+      "book/book/mark.min.js": {
+        "content_hash": "09e88c2cfaf23ea8a37b5681433eafea97033af632ecc948c8c1ee9944647743",
+        "lines": 7,
+        "functions": 6,
+        "max_complexity": 0,
+        "category": "TypeScriptSource"
+      },
+      "src/embed/mod.rs": {
+        "content_hash": "c5e328f7c5c2cf178af5787cd23340658afc0e6474edab3e8d044c913b0439b0",
+        "lines": 578,
+        "functions": 52,
+        "max_complexity": 0,
+        "category": "RustSource"
+      },
+      "src/pipeline/tests.rs": {
+        "content_hash": "6f2373fadddd5d4186f6c14d3524ecf68a6b5ca2594b3f970a65f45deecfe771",
+        "lines": 742,
+        "functions": 0,
+        "max_complexity": 0,
+        "category": "TestCode"
+      },
+      "book/book/clipboard.min.js": {
+        "content_hash": "1626706afc88d95ebe1173b553ec732c6dc82a576989315fdf5e7779af738a44",
+        "lines": 7,
+        "functions": 10,
+        "max_complexity": 0,
+        "category": "TypeScriptSource"
+      },
+      "src/sqlite/mod.rs": {
+        "content_hash": "782deb29ac6a389d468eb53b750cd8752c5caffda9d04cc9276a3e61c55ad779",
+        "lines": 741,
+        "functions": 49,
+        "max_complexity": 0,
+        "category": "RustSource"
+      },
+      "examples/hybrid_search.rs": {
+        "content_hash": "394a1e0c44803e3311448d4631a0467e0eee280308fb3e910ab657bfc71b00ad",
+        "lines": 66,
+        "functions": 1,
+        "max_complexity": 0,
+        "category": "RustSource"
+      },
+      "crates/trueno-rag-cli/src/main.rs": {
+        "content_hash": "926532f63f2e1ebd0de41a5ffbc0ce2b30be2f3cfe14d23e729c7444b25debd3",
+        "lines": 2487,
+        "functions": 62,
+        "max_complexity": 0,
+        "category": "RustSource"
+      },
+      "src/chunk/mod.rs": {
+        "content_hash": "1611ed515c5b67e08d1dfdd1890c5b045552970968391b55f88277c4cd04b595",
+        "lines": 873,
+        "functions": 39,
+        "max_complexity": 0,
+        "category": "RustSource"
+      },
+      "src/index.rs": {
+        "content_hash": "125a5dd9abe13201aebe2cc6b4a7c00a94aae09c56736581a8aab1c7b84d5015",
+        "lines": 940,
+        "functions": 69,
+        "max_complexity": 0,
+        "category": "RustSource"
+      },
+      "tests/property_tests.rs": {
+        "content_hash": "fd351484380ea6869847f0b3010290fdfdc1bb6c895a603cd40ea4055bc69edf",
+        "lines": 261,
+        "functions": 0,
+        "max_complexity": 0,
+        "category": "TestCode"
+      },
+      "src/metrics.rs": {
+        "content_hash": "b900d78ce5e6692aa2f5a36036180f0827e6a0bd31a5051ece456f2c0b96a9ea",
+        "lines": 571,
+        "functions": 42,
+        "max_complexity": 0,
+        "category": "RustSource"
+      },
+      "src/preprocess.rs": {
+        "content_hash": "159ae12528a4a4f82c44d8411e9d01f9ac9803b4ddb2add05a166cabe89f0d44",
+        "lines": 838,
+        "functions": 69,
+        "max_complexity": 0,
+        "category": "RustSource"
+      },
+      "src/multivector/codec.rs": {
+        "content_hash": "460fb69be29686b5b0c49f8b888978b41d0f2f192f63f525f1992affed3ee8e7",
+        "lines": 779,
+        "functions": 42,
+        "max_complexity": 0,
+        "category": "RustSource"
+      },
+      "book/book/book.js": {
+        "content_hash": "f0cc07d85c8323c5fd3192aa303947ce5c1ed532049fa33d207d314f32956048",
+        "lines": 690,
+        "functions": 67,
+        "max_complexity": 0,
+        "category": "TypeScriptSource"
+      },
+      "examples/chunking_strategies.rs": {
+        "content_hash": "d438b074f6bcf16c9bbf1c6c7faba091b38cfb2eba4cb70c477816e454d02a41",
+        "lines": 85,
+        "functions": 1,
+        "max_complexity": 0,
+        "category": "RustSource"
+      },
+      "tests/nemotron_integration.rs": {
+        "content_hash": "e6dc76cb05109854b00ace9ae8a762c171a44881509721928232be9966cb5cdf",
+        "lines": 244,
+        "functions": 0,
+        "max_complexity": 0,
+        "category": "TestCode"
+      },
+      "src/eval/domain.rs": {
+        "content_hash": "f9e0e585e8d5eeb988bb851291e4c90f76a929720f5bbed5d00d266259f519ef",
+        "lines": 230,
+        "functions": 12,
+        "max_complexity": 0,
+        "category": "RustSource"
+      },
+      "src/eval/generate.rs": {
+        "content_hash": "710682c4a30df7457f02bc0884695970f9d0c039a611041f4f3c05cd41f0996f",
+        "lines": 298,
+        "functions": 9,
+        "max_complexity": 0,
+        "category": "RustSource"
+      },
+      "src/lib.rs": {
+        "content_hash": "a102d42a659c77bd89fc7142a39f21bd460a70c9281c6681d3b800cdb548457f",
+        "lines": 256,
+        "functions": 11,
+        "max_complexity": 0,
+        "category": "RustSource"
+      },
+      "src/chunk/timestamp.rs": {
+        "content_hash": "589cde91fcf438951a4ec06336e110dca24bfe335134501561f29dc3be4248a5",
+        "lines": 436,
+        "functions": 21,
+        "max_complexity": 0,
+        "category": "RustSource"
+      },
+      "src/pipeline/mod.rs": {
+        "content_hash": "e9bbd6d1718b82fc284253e09545d5cd5036f7477f9e1f4d4ff61c3b61fbf577",
+        "lines": 550,
+        "functions": 39,
+        "max_complexity": 0,
+        "category": "RustSource"
+      },
+      "src/eval/client.rs": {
+        "content_hash": "c1c2aac3244aaf87f7d5db87e73a0493d389449a7e33d75ca7d9222af9b21f0d",
+        "lines": 129,
+        "functions": 3,
+        "max_complexity": 0,
+        "category": "RustSource"
+      },
+      "src/retrieve.rs": {
+        "content_hash": "5da15d940dcb1158dd98f60d463fbc08fcb73caef55fff6627e9379fa9188c60",
+        "lines": 990,
+        "functions": 68,
+        "max_complexity": 0,
+        "category": "RustSource"
+      },
+      "src/eval/judge.rs": {
+        "content_hash": "3462489ebe1b8a8ce0804671dc28a4ed96ee5de5068e124ad27a72b12ccd4c8a",
+        "lines": 634,
+        "functions": 26,
+        "max_complexity": 0,
+        "category": "RustSource"
+      },
+      "src/media.rs": {
+        "content_hash": "34268b75206f8af8f09a3c4c074b655830286dcfb3c5e5b5a95a94cd8d13b580",
+        "lines": 742,
+        "functions": 60,
+        "max_complexity": 0,
+        "category": "SimdAvx"
+      }
+    },
+    "coverage_required": [
+      "src/compressed.rs",
+      "src/sqlite/mod.rs",
+      "src/sqlite/schema.rs",
+      "src/sqlite/fts.rs",
+      "src/rerank.rs",
+      "src/loader/subtitle.rs",
+      "src/loader/transcription.rs",
+      "src/loader/text.rs",
+      "src/loader/mod.rs",
+      "src/multivector/mod.rs",
+      "src/multivector/index.rs",
+      "src/multivector/codec.rs",
+      "src/multivector/types.rs",
+      "src/multivector/falsification.rs",
+      "src/multivector/search.rs",
+      "src/multivector/embedder.rs",
+      "src/fusion.rs",
+      "src/retrieve.rs",
+      "src/preprocess.rs",
+      "src/media.rs",
+      "src/index.rs",
+      "src/embed/mod.rs",
+      "src/embed/nemotron.rs",
+      "src/chunk/mod.rs",
+      "src/chunk/timestamp.rs",
+      "src/pipeline/mod.rs",
+      "src/metrics.rs",
+      "src/eval/judge.rs",
+      "src/eval/mod.rs",
+      "src/eval/generate.rs",
+      "src/eval/domain.rs",
+      "src/eval/metrics.rs",
+      "src/eval/client.rs",
+      "src/eval/types.rs",
+      "src/error.rs",
+      "src/lib.rs",
+      "benches/retrieval.rs",
+      "crates/trueno-rag-cli/src/main.rs",
+      "examples/eval_hybrid.rs",
+      "examples/compressed_index.rs",
+      "examples/nemotron_embeddings.rs",
+      "examples/chunking_strategies.rs",
+      "examples/basic_rag.rs",
+      "examples/semantic_embeddings.rs",
+      "examples/hybrid_search.rs",
+      "examples/metrics_evaluation.rs"
+    ],
+    "manifest_hash": "0f0df22eb4f907a0d7a0ad5b7cd04fb1b56229f62c2b5eac331e3ea3ab28c2e7"
+  },
+  "thresholds": {
+    "min_coverage_pct": 95.0,
+    "min_per_file_coverage_pct": 95.0,
+    "max_tdg_regression": 0.0,
+    "max_function_complexity": 20,
+    "max_file_lines": 500,
+    "min_spec_score": 95,
+    "require_github_sync": true,
+    "require_spec_update": true,
+    "require_roadmap_update": true,
+    "block_on_new_satd": true,
+    "block_on_new_dead_code": true,
+    "require_lint_pass": true,
+    "max_fix_chain": 3,
+    "block_on_untested_variants": true,
+    "block_on_cross_crate_failure": false,
+    "block_on_regression": false,
+    "require_proof_verification": false,
+    "max_sorry_count": 0,
+    "min_theorem_coverage": 0.0,
+    "block_on_file_size": true
+  },
+  "claims": [
+    {
+      "hypothesis": "All baseline files still exist",
+      "falsification_method": "ManifestIntegrity",
+      "evidence_required": {
+        "FileList": []
+      },
+      "result": null,
+      "override_info": null
+    },
+    {
+      "hypothesis": "The falsifier is active and detecting (Meta-Check)",
+      "falsification_method": "MetaFalsification",
+      "evidence_required": {
+        "CounterExample": {
+          "details": ""
+        }
+      },
+      "result": null,
+      "override_info": null
+    },
+    {
+      "hypothesis": "No coverage exclusion gaming",
+      "falsification_method": "CoverageGaming",
+      "evidence_required": {
+        "FileList": []
+      },
+      "result": null,
+      "override_info": null
+    },
+    {
+      "hypothesis": "All changed lines are covered",
+      "falsification_method": "DifferentialCoverage",
+      "evidence_required": {
+        "NumericComparison": {
+          "actual": 0.0,
+          "threshold": 100.0
+        }
+      },
+      "result": null,
+      "override_info": null
+    },
+    {
+      "hypothesis": "Total coverage >= 95%",
+      "falsification_method": "AbsoluteCoverage",
+      "evidence_required": {
+        "NumericComparison": {
+          "actual": 0.0,
+          "threshold": 95.0
+        }
+      },
+      "result": null,
+      "override_info": null
+    },
+    {
+      "hypothesis": "TDG score >= baseline",
+      "falsification_method": "TdgRegression",
+      "evidence_required": {
+        "NumericComparison": {
+          "actual": 0.0,
+          "threshold": 0.0
+        }
+      },
+      "result": null,
+      "override_info": null
+    },
+    {
+      "hypothesis": "No function exceeds complexity 20",
+      "falsification_method": "ComplexityRegression",
+      "evidence_required": {
+        "NumericComparison": {
+          "actual": 0.0,
+          "threshold": 20.0
+        }
+      },
+      "result": null,
+      "override_info": null
+    },
+    {
+      "hypothesis": "No vulnerable dependencies added",
+      "falsification_method": "SupplyChainIntegrity",
+      "evidence_required": {
+        "CounterExample": {
+          "details": ""
+        }
+      },
+      "result": null,
+      "override_info": null
+    },
+    {
+      "hypothesis": "No file exceeds 500 lines",
+      "falsification_method": "FileSizeRegression",
+      "evidence_required": {
+        "NumericComparison": {
+          "actual": 0.0,
+          "threshold": 500.0
+        }
+      },
+      "result": null,
+      "override_info": null
+    },
+    {
+      "hypothesis": "Spec & Roadmap Quality",
+      "falsification_method": "SpecQuality",
+      "evidence_required": {
+        "NumericComparison": {
+          "actual": 0.0,
+          "threshold": 95.0
+        }
+      },
+      "result": null,
+      "override_info": null
+    },
+    {
+      "hypothesis": "All changes pushed",
+      "falsification_method": "GitHubSync",
+      "evidence_required": {
+        "GitState": {
+          "unpushed_commits": 0,
+          "dirty_files": 0
+        }
+      },
+      "result": null,
+      "override_info": null
+    },
+    {
+      "hypothesis": "All examples compile and run",
+      "falsification_method": "ExamplesCompile",
+      "evidence_required": {
+        "CounterExample": {
+          "details": ""
+        }
+      },
+      "result": null,
+      "override_info": null
+    },
+    {
+      "hypothesis": "pmat-book validation passes",
+      "falsification_method": "BookValidation",
+      "evidence_required": {
+        "CounterExample": {
+          "details": ""
+        }
+      },
+      "result": null,
+      "override_info": null
+    },
+    {
+      "hypothesis": "No new SATD markers (TODO/FIXME/HACK)",
+      "falsification_method": "SatdDetection",
+      "evidence_required": {
+        "FileList": []
+      },
+      "result": null,
+      "override_info": null
+    },
+    {
+      "hypothesis": "No new dead code introduced",
+      "falsification_method": "DeadCodeDetection",
+      "evidence_required": {
+        "FileList": []
+      },
+      "result": null,
+      "override_info": null
+    },
+    {
+      "hypothesis": "All files have >= 95% coverage",
+      "falsification_method": "PerFileCoverage",
+      "evidence_required": {
+        "FileList": []
+      },
+      "result": null,
+      "override_info": null
+    },
+    {
+      "hypothesis": "make lint passes",
+      "falsification_method": "LintPass",
+      "evidence_required": {
+        "BooleanCheck": false
+      },
+      "result": null,
+      "override_info": null
+    },
+    {
+      "hypothesis": "All match arm variants have test coverage",
+      "falsification_method": "VariantCoverage",
+      "evidence_required": {
+        "FileList": []
+      },
+      "result": null,
+      "override_info": null
+    },
+    {
+      "hypothesis": "No fix-after-fix chains exceed limit",
+      "falsification_method": "FixChainLimit",
+      "evidence_required": {
+        "NumericComparison": {
+          "actual": 0.0,
+          "threshold": 3.0
+        }
+      },
+      "result": null,
+      "override_info": null
+    },
+    {
+      "hypothesis": "Cross-crate integration tests pass",
+      "falsification_method": "CrossCrateParity",
+      "evidence_required": {
+        "BooleanCheck": false
+      },
+      "result": null,
+      "override_info": null
+    },
+    {
+      "hypothesis": "No performance regressions detected",
+      "falsification_method": "RegressionGate",
+      "evidence_required": {
+        "NumericComparison": {
+          "actual": 0.0,
+          "threshold": 0.0
+        }
+      },
+      "result": null,
+      "override_info": null
+    },
+    {
+      "hypothesis": "No incomplete proofs (sorry) introduced",
+      "falsification_method": "FormalProofVerification",
+      "evidence_required": {
+        "NumericComparison": {
+          "actual": 0.0,
+          "threshold": 0.0
+        }
+      },
+      "result": null,
+      "override_info": null
+    }
+  ]
+}

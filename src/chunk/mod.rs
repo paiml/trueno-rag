@@ -258,11 +258,7 @@ impl RecursiveChunker {
             }
 
             // Move start, accounting for overlap
-            start = if end > self.overlap {
-                end - self.overlap
-            } else {
-                end
-            };
+            start = if end > self.overlap { end - self.overlap } else { end };
         }
 
         chunks
@@ -298,10 +294,7 @@ impl Chunker for RecursiveChunker {
     fn chunk(&self, document: &Document) -> Result<Vec<Chunk>> {
         if document.content.is_empty() {
             return Err(Error::EmptyDocument(
-                document
-                    .title
-                    .clone()
-                    .unwrap_or_else(|| "untitled".to_string()),
+                document.title.clone().unwrap_or_else(|| "untitled".to_string()),
             ));
         }
 
@@ -353,10 +346,7 @@ impl FixedSizeChunker {
     /// Create a new fixed-size chunker
     #[must_use]
     pub fn new(chunk_size: usize, overlap: usize) -> Self {
-        Self {
-            chunk_size,
-            overlap,
-        }
+        Self { chunk_size, overlap }
     }
 }
 
@@ -364,10 +354,7 @@ impl Chunker for FixedSizeChunker {
     fn chunk(&self, document: &Document) -> Result<Vec<Chunk>> {
         if document.content.is_empty() {
             return Err(Error::EmptyDocument(
-                document
-                    .title
-                    .clone()
-                    .unwrap_or_else(|| "untitled".to_string()),
+                document.title.clone().unwrap_or_else(|| "untitled".to_string()),
             ));
         }
 
@@ -422,11 +409,7 @@ pub struct SemanticChunker<E: crate::embed::Embedder> {
 impl<E: crate::embed::Embedder> SemanticChunker<E> {
     /// Create a new semantic chunker
     pub fn new(embedder: E, similarity_threshold: f32, max_chunk_size: usize) -> Self {
-        Self {
-            embedder,
-            similarity_threshold,
-            max_chunk_size,
-        }
+        Self { embedder, similarity_threshold, max_chunk_size }
     }
 
     /// Split text into sentences
@@ -461,20 +444,14 @@ impl<E: crate::embed::Embedder> Chunker for SemanticChunker<E> {
     fn chunk(&self, document: &Document) -> Result<Vec<Chunk>> {
         if document.content.is_empty() {
             return Err(Error::EmptyDocument(
-                document
-                    .title
-                    .clone()
-                    .unwrap_or_else(|| "untitled".to_string()),
+                document.title.clone().unwrap_or_else(|| "untitled".to_string()),
             ));
         }
 
         let sentences = Self::split_sentences(&document.content);
         if sentences.is_empty() {
             return Err(Error::EmptyDocument(
-                document
-                    .title
-                    .clone()
-                    .unwrap_or_else(|| "untitled".to_string()),
+                document.title.clone().unwrap_or_else(|| "untitled".to_string()),
             ));
         }
 
@@ -560,10 +537,7 @@ impl StructuralChunker {
     /// Create a new structural chunker
     #[must_use]
     pub fn new(respect_headers: bool, max_section_size: usize) -> Self {
-        Self {
-            respect_headers,
-            max_section_size,
-        }
+        Self { respect_headers, max_section_size }
     }
 
     /// Extract header text from a line
@@ -619,10 +593,7 @@ impl Chunker for StructuralChunker {
     fn chunk(&self, document: &Document) -> Result<Vec<Chunk>> {
         if document.content.is_empty() {
             return Err(Error::EmptyDocument(
-                document
-                    .title
-                    .clone()
-                    .unwrap_or_else(|| "untitled".to_string()),
+                document.title.clone().unwrap_or_else(|| "untitled".to_string()),
             ));
         }
 
@@ -634,10 +605,7 @@ impl Chunker for StructuralChunker {
 
         if sections.is_empty() {
             return Err(Error::EmptyDocument(
-                document
-                    .title
-                    .clone()
-                    .unwrap_or_else(|| "untitled".to_string()),
+                document.title.clone().unwrap_or_else(|| "untitled".to_string()),
             ));
         }
 
@@ -717,10 +685,7 @@ impl ParagraphChunker {
 
     /// Split text into paragraphs
     fn split_paragraphs(text: &str) -> Vec<&str> {
-        text.split("\n\n")
-            .map(|p| p.trim())
-            .filter(|p| !p.is_empty())
-            .collect()
+        text.split("\n\n").map(|p| p.trim()).filter(|p| !p.is_empty()).collect()
     }
 }
 
@@ -728,20 +693,14 @@ impl Chunker for ParagraphChunker {
     fn chunk(&self, document: &Document) -> Result<Vec<Chunk>> {
         if document.content.is_empty() {
             return Err(Error::EmptyDocument(
-                document
-                    .title
-                    .clone()
-                    .unwrap_or_else(|| "untitled".to_string()),
+                document.title.clone().unwrap_or_else(|| "untitled".to_string()),
             ));
         }
 
         let paragraphs = Self::split_paragraphs(&document.content);
         if paragraphs.is_empty() {
             return Err(Error::EmptyDocument(
-                document
-                    .title
-                    .clone()
-                    .unwrap_or_else(|| "untitled".to_string()),
+                document.title.clone().unwrap_or_else(|| "untitled".to_string()),
             ));
         }
 
@@ -788,10 +747,7 @@ impl SentenceChunker {
     /// Create a new sentence chunker
     #[must_use]
     pub fn new(max_sentences: usize, overlap_sentences: usize) -> Self {
-        Self {
-            max_sentences,
-            overlap_sentences,
-        }
+        Self { max_sentences, overlap_sentences }
     }
 
     fn split_sentences(text: &str) -> Vec<&str> {
@@ -827,10 +783,7 @@ impl Chunker for SentenceChunker {
     fn chunk(&self, document: &Document) -> Result<Vec<Chunk>> {
         if document.content.is_empty() {
             return Err(Error::EmptyDocument(
-                document
-                    .title
-                    .clone()
-                    .unwrap_or_else(|| "untitled".to_string()),
+                document.title.clone().unwrap_or_else(|| "untitled".to_string()),
             ));
         }
 

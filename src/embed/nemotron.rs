@@ -48,10 +48,7 @@ impl NemotronConfig {
     /// Create a new config with a model path
     #[must_use]
     pub fn new(model_path: impl AsRef<std::path::Path>) -> Self {
-        Self {
-            model_path: model_path.as_ref().to_path_buf(),
-            ..Default::default()
-        }
+        Self { model_path: model_path.as_ref().to_path_buf(), ..Default::default() }
     }
 
     /// Set the model path
@@ -182,12 +179,7 @@ impl NemotronEmbedder {
         // Get hidden dimension from config (should be 4096 for Nemotron 8B)
         let dimension = transformer.config.hidden_dim;
 
-        Ok(Self {
-            transformer,
-            model,
-            config,
-            dimension,
-        })
+        Ok(Self { transformer, model, config, dimension })
     }
 
     /// Get the configuration
@@ -198,11 +190,7 @@ impl NemotronEmbedder {
 
     /// Embed text with an optional prefix
     fn embed_with_prefix(&self, text: &str, prefix: &str) -> Result<Vec<f32>> {
-        let prefixed = if prefix.is_empty() {
-            text.to_string()
-        } else {
-            format!("{prefix}{text}")
-        };
+        let prefixed = if prefix.is_empty() { text.to_string() } else { format!("{prefix}{text}") };
 
         // Tokenize
         let tokens = self
@@ -358,9 +346,7 @@ impl Embedder for NemotronEmbedder {
 
     fn embed_document(&self, document: &str) -> Result<Vec<f32>> {
         if document.is_empty() {
-            return Err(Error::EmptyDocument(
-                "empty document for embedding".to_string(),
-            ));
+            return Err(Error::EmptyDocument("empty document for embedding".to_string()));
         }
         self.embed_with_prefix(document, &self.config.passage_prefix)
     }
@@ -393,10 +379,7 @@ mod tests {
     #[test]
     fn test_nemotron_config_new() {
         let config = NemotronConfig::new("/tmp/model.gguf");
-        assert_eq!(
-            config.model_path,
-            std::path::PathBuf::from("/tmp/model.gguf")
-        );
+        assert_eq!(config.model_path, std::path::PathBuf::from("/tmp/model.gguf"));
         assert!(config.use_gpu);
     }
 
@@ -411,10 +394,7 @@ mod tests {
             .with_query_prefix("Query: ")
             .with_passage_prefix("Passage: ");
 
-        assert_eq!(
-            config.model_path,
-            std::path::PathBuf::from("/tmp/model.gguf")
-        );
+        assert_eq!(config.model_path, std::path::PathBuf::from("/tmp/model.gguf"));
         assert!(!config.use_gpu);
         assert_eq!(config.batch_size, 16);
         assert_eq!(config.max_length, 4096);

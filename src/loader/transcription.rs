@@ -100,25 +100,19 @@ impl TranscriptionLoader {
     /// If `config.model_path` is set, loads the whisper-apr model eagerly.
     /// Otherwise, transcription of files without sidecars will fail gracefully.
     pub fn new(config: TranscriptionConfig) -> Self {
-        let whisper = config
-            .model_path
-            .as_ref()
-            .and_then(|path| match std::fs::read(path) {
-                Ok(data) => match WhisperApr::load_from_apr(&data) {
-                    Ok(w) => Some(w),
-                    Err(e) => {
-                        eprintln!(
-                            "Warning: failed to load whisper model from {}: {e}",
-                            path.display()
-                        );
-                        None
-                    }
-                },
+        let whisper = config.model_path.as_ref().and_then(|path| match std::fs::read(path) {
+            Ok(data) => match WhisperApr::load_from_apr(&data) {
+                Ok(w) => Some(w),
                 Err(e) => {
-                    eprintln!("Warning: failed to read model file {}: {e}", path.display());
+                    eprintln!("Warning: failed to load whisper model from {}: {e}", path.display());
                     None
                 }
-            });
+            },
+            Err(e) => {
+                eprintln!("Warning: failed to read model file {}: {e}", path.display());
+                None
+            }
+        });
         Self { config, whisper }
     }
 
@@ -212,8 +206,7 @@ impl DocumentLoader for TranscriptionLoader {
 
         // 7. Build document
         let mut doc = build_transcription_document(path, &track)?;
-        doc.metadata
-            .insert("language".into(), serde_json::json!(result.language));
+        doc.metadata.insert("language".into(), serde_json::json!(result.language));
         Ok(doc)
     }
 }
@@ -242,25 +235,15 @@ pub fn segments_to_track(segments: &[Segment]) -> SubtitleTrack {
             text: seg.text.trim().to_string(),
         })
         .collect();
-    SubtitleTrack {
-        format: SubtitleFormat::Srt,
-        cues,
-    }
+    SubtitleTrack { format: SubtitleFormat::Srt, cues }
 }
 
 /// Build a [`Document`] from a transcription result.
 pub fn build_transcription_document(path: &Path, track: &SubtitleTrack) -> Result<Document> {
-    let title = path
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .unwrap_or("Untitled")
-        .to_string();
+    let title = path.file_stem().and_then(|s| s.to_str()).unwrap_or("Untitled").to_string();
 
     let mut metadata = HashMap::new();
-    metadata.insert(
-        "duration_secs".into(),
-        serde_json::json!(track.duration_secs()),
-    );
+    metadata.insert("duration_secs".into(), serde_json::json!(track.duration_secs()));
     metadata.insert("format".into(), serde_json::json!("transcription"));
     metadata.insert("cue_count".into(), serde_json::json!(track.cues.len()));
     metadata.insert(
@@ -268,9 +251,8 @@ pub fn build_transcription_document(path: &Path, track: &SubtitleTrack) -> Resul
         serde_json::to_value(&track.cues).map_err(Error::Serialization)?,
     );
 
-    let mut doc = Document::new(track.to_plain_text())
-        .with_title(title)
-        .with_source(path.to_string_lossy());
+    let mut doc =
+        Document::new(track.to_plain_text()).with_title(title).with_source(path.to_string_lossy());
     doc.metadata = metadata;
     Ok(doc)
 }
@@ -307,10 +289,7 @@ mod tests {
             prompt: Some("This is a lecture about AWS and Kubernetes.".into()),
             ..TranscriptionConfig::default()
         };
-        assert_eq!(
-            config.prompt.as_deref(),
-            Some("This is a lecture about AWS and Kubernetes.")
-        );
+        assert_eq!(config.prompt.as_deref(), Some("This is a lecture about AWS and Kubernetes."));
     }
 
     #[test]
@@ -349,18 +328,8 @@ mod tests {
     #[test]
     fn test_segments_to_track() {
         let segments = vec![
-            Segment {
-                start: 0.0,
-                end: 3.0,
-                text: "Hello world.".into(),
-                tokens: vec![],
-            },
-            Segment {
-                start: 3.5,
-                end: 6.0,
-                text: "How are you?".into(),
-                tokens: vec![],
-            },
+            Segment { start: 0.0, end: 3.0, text: "Hello world.".into(), tokens: vec![] },
+            Segment { start: 3.5, end: 6.0, text: "How are you?".into(), tokens: vec![] },
         ];
         let track = segments_to_track(&segments);
         assert_eq!(track.cues.len(), 2);
@@ -410,18 +379,8 @@ mod tests {
         let track = SubtitleTrack {
             format: SubtitleFormat::Srt,
             cues: vec![
-                SubtitleCue {
-                    index: 0,
-                    start_secs: 0.0,
-                    end_secs: 3.0,
-                    text: "Hello".into(),
-                },
-                SubtitleCue {
-                    index: 1,
-                    start_secs: 3.0,
-                    end_secs: 6.0,
-                    text: "World".into(),
-                },
+                SubtitleCue { index: 0, start_secs: 0.0, end_secs: 3.0, text: "Hello".into() },
+                SubtitleCue { index: 1, start_secs: 3.0, end_secs: 6.0, text: "World".into() },
             ],
         };
         let doc = build_transcription_document(Path::new("/tmp/test.wav"), &track).unwrap();
