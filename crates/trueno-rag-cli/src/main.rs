@@ -636,7 +636,8 @@ fn run_extract_frames(
 ) -> Result<()> {
     // Verify ffmpeg is available
     let ffmpeg_check = std::process::Command::new("ffmpeg").arg("-version").output();
-    if ffmpeg_check.is_err() || !ffmpeg_check.unwrap().status.success() {
+    let ffmpeg_ok = ffmpeg_check.ok().map_or(false, |output| output.status.success());
+    if !ffmpeg_ok {
         anyhow::bail!("ffmpeg not found. Install with: apt install ffmpeg");
     }
 
@@ -1101,13 +1102,21 @@ fn run_transcription_batch(
 
         match loader.load(file) {
             Ok(_doc) => {
-                *success.lock().unwrap() += 1;
-                manifest.lock().unwrap().completed.push(file.to_string_lossy().to_string());
+                *success.lock().expect("success counter mutex poisoned") += 1;
+                manifest
+                    .lock()
+                    .expect("manifest mutex poisoned")
+                    .completed
+                    .push(file.to_string_lossy().to_string());
                 println!("  {} ... ok", filename);
             }
             Err(e) => {
-                *errors.lock().unwrap() += 1;
-                manifest.lock().unwrap().failed.push(file.to_string_lossy().to_string());
+                *errors.lock().expect("error counter mutex poisoned") += 1;
+                manifest
+                    .lock()
+                    .expect("manifest mutex poisoned")
+                    .failed
+                    .push(file.to_string_lossy().to_string());
                 println!("  {} ... FAILED: {e}", filename);
             }
         }
@@ -1127,11 +1136,11 @@ fn run_transcription_batch(
     }
 
     // Final manifest save
-    let manifest = manifest.into_inner().unwrap();
+    let manifest = manifest.into_inner().expect("manifest mutex poisoned");
     manifest.save(root)?;
 
-    let success = success.into_inner().unwrap();
-    let errors = errors.into_inner().unwrap();
+    let success = success.into_inner().expect("success counter mutex poisoned");
+    let errors = errors.into_inner().expect("error counter mutex poisoned");
     let elapsed = batch_start.elapsed();
     println!(
         "\nComplete: {} succeeded, {} failed out of {} total ({:.1}s, {:.1} files/sec)",
@@ -1346,16 +1355,18 @@ fn load_documents_parallel(
 
     pool.install(|| {
         files.par_iter().for_each(|file| match registry.load(file) {
-            Ok(doc) => documents.lock().unwrap().push(doc),
+            Ok(doc) => {
+                documents.lock().expect("documents mutex poisoned").push(doc);
+            }
             Err(e) => {
                 eprintln!("  Warning: failed to load {}: {}", file.display(), e);
-                *load_errors.lock().unwrap() += 1;
+                *load_errors.lock().expect("load_errors mutex poisoned") += 1;
             }
         });
     });
 
-    let documents = documents.into_inner().unwrap();
-    let load_errors = load_errors.into_inner().unwrap();
+    let documents = documents.into_inner().expect("documents mutex poisoned");
+    let load_errors = load_errors.into_inner().expect("load_errors mutex poisoned");
     finish_load_report(documents, load_errors)
 }
 
