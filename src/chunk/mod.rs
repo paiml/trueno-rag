@@ -7,6 +7,20 @@ use crate::{Document, DocumentId, Error, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+/// Stable replacement for `str::ceil_char_boundary` (unstable).
+/// Returns the smallest index >= `i` that is a valid UTF-8 char boundary.
+fn ceil_char_boundary(s: &str, i: usize) -> usize {
+    if i >= s.len() {
+        s.len()
+    } else {
+        let mut pos = i;
+        while pos < s.len() && !s.is_char_boundary(pos) {
+            pos += 1;
+        }
+        pos
+    }
+}
+
 /// Unique chunk identifier
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct ChunkId(pub uuid::Uuid);
@@ -278,7 +292,7 @@ impl RecursiveChunker {
                 let prev = &chunks[i - 1];
                 let overlap_text = if prev.len() > self.overlap {
                     let start = prev.len() - self.overlap;
-                    let start = prev.ceil_char_boundary(start);
+                    let start = ceil_char_boundary(prev, start);
                     &prev[start..]
                 } else {
                     prev.as_str()
@@ -306,7 +320,7 @@ impl Chunker for RecursiveChunker {
 
         for content in overlapped {
             // Snap offset to a valid char boundary
-            let safe_offset = document.content.ceil_char_boundary(offset);
+            let safe_offset = ceil_char_boundary(&document.content, offset);
             // Find actual position in document
             let start = document.content[safe_offset..]
                 .find(&content)
@@ -317,7 +331,7 @@ impl Chunker for RecursiveChunker {
             chunk.metadata.title = document.title.clone();
 
             chunks.push(chunk);
-            offset = document.content.ceil_char_boundary(start + 1);
+            offset = ceil_char_boundary(&document.content, start + 1);
         }
 
         Ok(chunks)
