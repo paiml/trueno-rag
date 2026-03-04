@@ -4745,7 +4745,7 @@ dependencies = [
 
 [[package]]
 name = "trueno-rag"
-version = "0.2.2"
+version = "0.2.4"
 dependencies = [
  "async-trait",
  "batuta-common",
@@ -4772,6 +4772,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "trueno-rag"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1ad9b10493d9af8befce7cf7c3db9f7bb92c9d04957cca8a543d01601345203a"
+dependencies = [
+ "async-trait",
+ "batuta-common",
+ "fastembed",
+ "rand 0.8.5",
+ "realizar",
+ "reqwest",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "sha2",
+ "thiserror 2.0.17",
+ "tokio",
+ "trueno 0.15.0",
+ "trueno-db",
+ "uuid",
+ "whisper-apr",
+]
+
+[[package]]
 name = "trueno-rag-cli"
 version = "0.1.5"
 dependencies = [
@@ -4786,7 +4810,7 @@ dependencies = [
  "serde_json",
  "tempfile",
  "tokio",
- "trueno-rag",
+ "trueno-rag 0.2.4 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]

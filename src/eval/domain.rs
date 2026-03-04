@@ -207,7 +207,7 @@ mod tests {
             "52-weeks-aws"
         );
         assert_eq!(
-            extract_course_dir("/home/noah/data/courses/pytorch/build/lesson1.srt"),
+            extract_course_dir("/data/courses/pytorch/build/lesson1.srt"),
             "pytorch"
         );
     }
