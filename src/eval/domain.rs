@@ -206,9 +206,6 @@ mod tests {
             extract_course_dir("/data/courses/52-weeks-aws/build/week1.srt"),
             "52-weeks-aws"
         );
-        assert_eq!(
-            extract_course_dir("/data/courses/pytorch/build/lesson1.srt"),
-            "pytorch"
-        );
+        assert_eq!(extract_course_dir("/data/courses/pytorch/build/lesson1.srt"), "pytorch");
     }
 }
