@@ -1,12 +1,18 @@
-# cargo-deny configuration (v0.18+)
-# https://embarkstudios.github.io/cargo-deny/
+# cargo-deny configuration
+# Deployed from paiml/infra — do not edit manually.
+# Spec: docs/specifications/unified-ci-pipeline.md
+
+[graph]
+targets = []
+all-features = false
+no-default-features = false
 
 [advisories]
-# Transitive deps via trueno-db → parquet; can't upgrade without upstream releases
-ignore = [
-    "RUSTSEC-2026-0007", # bytes: integer overflow in BytesMut::reserve (transitive via parquet)
-    "RUSTSEC-2024-0436", # paste: unmaintained (transitive via parquet)
-]
+vulnerability = "deny"
+unmaintained = "warn"
+yanked = "deny"
+notice = "warn"
+ignore = []
 
 [licenses]
 allow = [
@@ -16,16 +22,19 @@ allow = [
     "BSD-2-Clause",
     "BSD-3-Clause",
     "ISC",
-    "Zlib",
-    "Unicode-DFS-2016",
     "Unicode-3.0",
-    "CC0-1.0",
+    "Unicode-DFS-2016",
+    "Zlib",
+    "BSL-1.0",
     "OpenSSL",
+    "0BSD",
+    "CC0-1.0",
+    "MPL-2.0",
 ]
 confidence-threshold = 0.8
 
 [bans]
-multiple-versions = "allow"
+multiple-versions = "warn"
 wildcards = "deny"
 highlight = "all"
 
@@ -33,3 +42,4 @@ highlight = "all"
 unknown-registry = "deny"
 unknown-git = "deny"
 allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []
