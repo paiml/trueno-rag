@@ -806,43 +806,14 @@ fn discover_media_files(
     recursive: bool,
     exclude: &Option<GlobSet>,
 ) -> Result<Vec<PathBuf>> {
-    let mut files = Vec::new();
-
     if root.is_file() {
         if is_media_file(root) {
-            files.push(root.to_path_buf());
-        } else {
-            anyhow::bail!("Not a media file: {}", root.display());
+            return Ok(vec![root.to_path_buf()]);
         }
-        return Ok(files);
+        anyhow::bail!("Not a media file: {}", root.display());
     }
 
-    let mut dirs_to_visit = vec![root.to_path_buf()];
-    let mut excluded_count = 0usize;
-    while let Some(dir) = dirs_to_visit.pop() {
-        let entries = fs::read_dir(&dir)
-            .with_context(|| format!("Failed to read directory: {}", dir.display()))?;
-
-        for entry in entries {
-            let path = entry?.path();
-            if is_excluded(&path, exclude) {
-                excluded_count += 1;
-                continue;
-            }
-            if path.is_dir() && recursive {
-                dirs_to_visit.push(path);
-            } else if path.is_file() && is_media_file(&path) {
-                files.push(path);
-            }
-        }
-    }
-
-    if excluded_count > 0 {
-        println!("Excluded {} paths by glob pattern", excluded_count);
-    }
-
-    files.sort();
-    Ok(files)
+    walk_directory(root, recursive, exclude, |p| is_media_file(p))
 }
 
 /// Check if a file has a media extension.
@@ -1243,43 +1214,54 @@ fn is_excluded(path: &Path, exclude: &Option<GlobSet>) -> bool {
     }
 }
 
-/// Discover files from a path using the loader registry.
-fn discover_files(
+/// Process a single directory entry, returning it for collection or recursion.
+enum DirEntryAction {
+    AcceptFile(PathBuf),
+    Recurse(PathBuf),
+    Excluded,
+    Skip,
+}
+
+/// Classify a directory entry for the walk.
+fn classify_entry(
+    path: PathBuf,
+    recursive: bool,
+    exclude: &Option<GlobSet>,
+    accept: &impl Fn(&Path) -> bool,
+) -> DirEntryAction {
+    if is_excluded(&path, exclude) {
+        return DirEntryAction::Excluded;
+    }
+    if path.is_dir() && recursive {
+        return DirEntryAction::Recurse(path);
+    }
+    if path.is_file() && accept(&path) {
+        return DirEntryAction::AcceptFile(path);
+    }
+    DirEntryAction::Skip
+}
+
+/// Walk a directory tree, collecting files that match `accept`.
+fn walk_directory(
     root: &Path,
     recursive: bool,
-    registry: &LoaderRegistry,
     exclude: &Option<GlobSet>,
+    accept: impl Fn(&Path) -> bool,
 ) -> Result<Vec<PathBuf>> {
     let mut files = Vec::new();
-
-    if root.is_file() {
-        if registry.loader_for(root).is_some() {
-            files.push(root.to_path_buf());
-        } else {
-            anyhow::bail!(
-                "Unsupported file format: {}",
-                root.extension().and_then(|e| e.to_str()).unwrap_or("(none)")
-            );
-        }
-        return Ok(files);
-    }
-
     let mut dirs_to_visit = vec![root.to_path_buf()];
     let mut excluded_count = 0usize;
+
     while let Some(dir) = dirs_to_visit.pop() {
         let entries = fs::read_dir(&dir)
             .with_context(|| format!("Failed to read directory: {}", dir.display()))?;
 
         for entry in entries {
-            let path = entry?.path();
-            if is_excluded(&path, exclude) {
-                excluded_count += 1;
-                continue;
-            }
-            if path.is_dir() && recursive {
-                dirs_to_visit.push(path);
-            } else if path.is_file() && registry.loader_for(&path).is_some() {
-                files.push(path);
+            match classify_entry(entry?.path(), recursive, exclude, &accept) {
+                DirEntryAction::AcceptFile(p) => files.push(p),
+                DirEntryAction::Recurse(p) => dirs_to_visit.push(p),
+                DirEntryAction::Excluded => excluded_count += 1,
+                DirEntryAction::Skip => {}
             }
         }
     }
@@ -1288,9 +1270,28 @@ fn discover_files(
         println!("Excluded {} paths by glob pattern", excluded_count);
     }
 
-    // Sort for deterministic ordering
     files.sort();
     Ok(files)
+}
+
+/// Discover files from a path using the loader registry.
+fn discover_files(
+    root: &Path,
+    recursive: bool,
+    registry: &LoaderRegistry,
+    exclude: &Option<GlobSet>,
+) -> Result<Vec<PathBuf>> {
+    if root.is_file() {
+        if registry.loader_for(root).is_some() {
+            return Ok(vec![root.to_path_buf()]);
+        }
+        anyhow::bail!(
+            "Unsupported file format: {}",
+            root.extension().and_then(|e| e.to_str()).unwrap_or("(none)")
+        );
+    }
+
+    walk_directory(root, recursive, exclude, |p| registry.loader_for(p).is_some())
 }
 
 /// Classify discovered files by format for progress reporting.
@@ -1384,6 +1385,65 @@ fn finish_load_report(documents: Vec<Document>, load_errors: usize) -> Result<Ve
     Ok(documents)
 }
 
+/// Select the appropriate chunker for a document based on strategy.
+fn chunk_document(
+    doc: &Document,
+    strategy: ChunkStrategy,
+    recursive_chunker: &RecursiveChunker,
+    timestamp_chunker: &TimestampChunker,
+) -> Result<Vec<Chunk>> {
+    let use_timestamps = match strategy {
+        ChunkStrategy::Timestamp => true,
+        ChunkStrategy::Recursive => false,
+        ChunkStrategy::Auto => doc.metadata.contains_key("subtitle_cues"),
+    };
+    if use_timestamps {
+        timestamp_chunker.chunk(doc)
+    } else {
+        recursive_chunker.chunk(doc)
+    }
+}
+
+/// Convert a raw Chunk into a PersistedChunk, carrying forward document source.
+fn to_persisted_chunk(chunk: &Chunk, doc: &Document) -> PersistedChunk {
+    PersistedChunk {
+        content: chunk.content.clone(),
+        title: chunk.metadata.title.clone(),
+        source: doc.source.clone(),
+        start_secs: chunk.metadata.custom.get("start_secs").and_then(serde_json::Value::as_f64),
+        end_secs: chunk.metadata.custom.get("end_secs").and_then(serde_json::Value::as_f64),
+    }
+}
+
+/// Check if a chunk is a duplicate based on content hash. Returns true if novel.
+fn is_novel_chunk(seen: &mut HashSet<u64>, content: &str) -> bool {
+    let mut hasher = std::hash::DefaultHasher::new();
+    content.hash(&mut hasher);
+    seen.insert(hasher.finish())
+}
+
+/// Embed and collect chunks from a single document, deduplicating if enabled.
+fn embed_doc_chunks(
+    doc: &Document,
+    chunks: Vec<Chunk>,
+    embedder: &dyn Embedder,
+    dedup: bool,
+    seen: &mut HashSet<u64>,
+    all_chunks: &mut Vec<PersistedChunk>,
+    all_embeddings: &mut Vec<Vec<f32>>,
+) -> Result<usize> {
+    let mut dedup_count = 0usize;
+    for chunk in chunks {
+        if dedup && !is_novel_chunk(seen, &chunk.content) {
+            dedup_count += 1;
+            continue;
+        }
+        all_embeddings.push(embedder.embed(&chunk.content)?);
+        all_chunks.push(to_persisted_chunk(&chunk, doc));
+    }
+    Ok(dedup_count)
+}
+
 /// Chunk documents and compute embeddings, returning parallel vectors.
 fn chunk_and_embed(
     documents: &[Document],
@@ -1404,39 +1464,16 @@ fn chunk_and_embed(
             skipped_empty += 1;
             continue;
         }
-        let use_timestamps = match strategy {
-            ChunkStrategy::Timestamp => true,
-            ChunkStrategy::Recursive => false,
-            ChunkStrategy::Auto => doc.metadata.contains_key("subtitle_cues"),
-        };
-        let chunks: Vec<Chunk> = if use_timestamps {
-            timestamp_chunker.chunk(doc)?
-        } else {
-            recursive_chunker.chunk(doc)?
-        };
-
-        for chunk in chunks {
-            if dedup {
-                let mut hasher = std::hash::DefaultHasher::new();
-                chunk.content.hash(&mut hasher);
-                if !seen.insert(hasher.finish()) {
-                    dedup_count += 1;
-                    continue;
-                }
-            }
-            all_embeddings.push(embedder.embed(&chunk.content)?);
-            all_chunks.push(PersistedChunk {
-                content: chunk.content.clone(),
-                title: chunk.metadata.title.clone(),
-                source: doc.source.clone(),
-                start_secs: chunk
-                    .metadata
-                    .custom
-                    .get("start_secs")
-                    .and_then(serde_json::Value::as_f64),
-                end_secs: chunk.metadata.custom.get("end_secs").and_then(serde_json::Value::as_f64),
-            });
-        }
+        let chunks = chunk_document(doc, strategy, recursive_chunker, timestamp_chunker)?;
+        dedup_count += embed_doc_chunks(
+            doc,
+            chunks,
+            embedder,
+            dedup,
+            &mut seen,
+            &mut all_chunks,
+            &mut all_embeddings,
+        )?;
     }
 
     if skipped_empty > 0 {
@@ -1769,14 +1806,7 @@ fn run_index_incremental_inner(
     println!("{} files changed/new, {} files deleted", changed.len(), deleted.len());
 
     // Remove deleted files
-    for del_path in &deleted {
-        let removed = sqlite_index
-            .remove_by_source(del_path)
-            .map_err(|e| anyhow::anyhow!("Failed to remove {del_path}: {e}"))?;
-        if removed > 0 {
-            println!("  Removed: {} ({} docs)", del_path, removed);
-        }
-    }
+    remove_deleted_sources(&sqlite_index, &deleted)?;
 
     if changed.is_empty() {
         println!("Only deletions — no re-indexing needed.");
@@ -1808,14 +1838,37 @@ fn run_index_incremental_inner(
     // Insert changed documents into SQLite
     incremental_insert(&sqlite_index, &all_chunks, &changed)?;
 
-    sqlite_index.optimize().map_err(|e| anyhow::anyhow!("Failed to optimize: {e}"))?;
+    optimize_and_report(&sqlite_index)?;
 
+    Ok(())
+}
+
+/// Remove deleted sources from the SQLite index, printing each removal.
+#[cfg(feature = "sqlite")]
+fn remove_deleted_sources(
+    sqlite_index: &trueno_rag::SqliteIndex,
+    deleted: &[String],
+) -> Result<()> {
+    for del_path in deleted {
+        let removed = sqlite_index
+            .remove_by_source(del_path)
+            .map_err(|e| anyhow::anyhow!("Failed to remove {del_path}: {e}"))?;
+        if removed > 0 {
+            println!("  Removed: {} ({} docs)", del_path, removed);
+        }
+    }
+    Ok(())
+}
+
+/// Optimize the SQLite index and print final document/chunk counts.
+#[cfg(feature = "sqlite")]
+fn optimize_and_report(sqlite_index: &trueno_rag::SqliteIndex) -> Result<()> {
+    sqlite_index.optimize().map_err(|e| anyhow::anyhow!("Failed to optimize: {e}"))?;
     let stats =
         sqlite_index.document_count().map_err(|e| anyhow::anyhow!("Failed to count docs: {e}"))?;
     let chunk_count =
         sqlite_index.chunk_count().map_err(|e| anyhow::anyhow!("Failed to count chunks: {e}"))?;
     println!("Incremental update complete: {} docs, {} chunks total", stats, chunk_count);
-
     Ok(())
 }
 
@@ -2609,18 +2662,8 @@ fn run_eval_retrieve(
     };
 
     // HyDE: pre-expand all queries if enabled (batches API calls before retrieval loop)
-    let expanded_queries: Option<Vec<String>> = if hyde {
-        println!("HyDE enabled — expanding {} queries via Claude API...", queries.len());
-        let mut expanded = Vec::with_capacity(queries.len());
-        for (i, entry) in queries.iter().enumerate() {
-            eprint!("[HyDE {}/{}] ", i + 1, queries.len());
-            expanded.push(expand_query_hyde(&entry.query)?);
-        }
-        println!("HyDE expansion complete.");
-        Some(expanded)
-    } else {
-        None
-    };
+    let expanded_queries: Option<Vec<String>> =
+        if hyde { Some(expand_all_queries_hyde(&queries)?) } else { None };
 
     // Helper: get effective query (HyDE-expanded or original)
     let effective_query = |i: usize, original: &str| -> String {
@@ -2670,6 +2713,21 @@ fn run_eval_retrieve(
 
     println!("\nRetrieval results saved to: {output_path}");
     Ok(())
+}
+
+/// Expand all ground-truth queries via HyDE (Hypothetical Document Embeddings).
+#[cfg(feature = "eval")]
+fn expand_all_queries_hyde(
+    queries: &[trueno_rag::eval::types::GroundTruthEntry],
+) -> Result<Vec<String>> {
+    println!("HyDE enabled — expanding {} queries via Claude API...", queries.len());
+    let mut expanded = Vec::with_capacity(queries.len());
+    for (i, entry) in queries.iter().enumerate() {
+        eprint!("[HyDE {}/{}] ", i + 1, queries.len());
+        expanded.push(expand_query_hyde(&entry.query)?);
+    }
+    println!("HyDE expansion complete.");
+    Ok(expanded)
 }
 
 /// Dense eval retrieval: cosine similarity over embeddings.

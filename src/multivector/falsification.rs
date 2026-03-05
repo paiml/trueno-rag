@@ -222,57 +222,10 @@ fn test_experimentum_crucis() -> crate::Result<ConjectureResult> {
     }
     index.build()?;
 
-    // Compute MRR@10 for WARP
-    let mut warp_mrr_sum = 0.0;
-    let mut single_vector_mrr_sum = 0.0;
+    // Compute MRR@10 for WARP and single-vector
     let num_queries = hard_negative_pairs.len();
-
-    for (query_idx, (positive, _negative)) in hard_negative_pairs.iter().enumerate() {
-        let query_embedding = embedder.embed_tokens(positive)?;
-
-        // WARP search
-        let search_config = WarpSearchConfig::with_k(10);
-        let warp_results = index.search(&query_embedding, &search_config)?;
-
-        // Find rank of the positive document
-        let positive_doc_idx = query_idx * 2; // Index of positive in all_texts
-        let warp_rank = warp_results
-            .iter()
-            .position(|(chunk_id, _)| {
-                index.get_chunk(chunk_id).map(|c| c.content == *positive).unwrap_or(false)
-            })
-            .map(|r| r + 1);
-
-        if let Some(rank) = warp_rank {
-            warp_mrr_sum += 1.0 / rank as f64;
-        }
-
-        // Single-vector comparison: use centroid of multi-vector as single vector
-        // Compare against all documents using average embedding similarity
-        let query_avg = average_embedding(&query_embedding);
-        let mut single_vec_scores: Vec<(usize, f64)> = all_texts
-            .iter()
-            .enumerate()
-            .map(|(i, text)| {
-                let doc_emb = embedder.embed_tokens(text)?;
-                let doc_avg = average_embedding(&doc_emb);
-                let score = cosine_similarity(&query_avg, &doc_avg);
-                Ok((i, score))
-            })
-            .collect::<crate::Result<Vec<_>>>()?;
-
-        single_vec_scores.sort_by(|a, b| b.1.total_cmp(&a.1));
-
-        let single_rank =
-            single_vec_scores.iter().position(|(i, _)| *i == positive_doc_idx).map(|r| r + 1);
-
-        if let Some(rank) = single_rank {
-            single_vector_mrr_sum += 1.0 / rank as f64;
-        }
-    }
-
-    let warp_mrr = warp_mrr_sum / num_queries as f64;
-    let single_mrr = single_vector_mrr_sum / num_queries as f64;
+    let (warp_mrr, single_mrr) =
+        compute_warp_vs_single_mrr(&hard_negative_pairs, &embedder, &index, &all_texts)?;
     let delta_percent =
         if single_mrr > 0.0 { ((warp_mrr - single_mrr) / single_mrr) * 100.0 } else { 100.0 };
 
@@ -290,6 +243,70 @@ fn test_experimentum_crucis() -> crate::Result<ConjectureResult> {
     );
 
     Ok(ConjectureResult { name, hypothesis, threshold, observed_value: observed, verdict, details })
+}
+
+/// Compute MRR@10 for WARP vs single-vector baseline over hard negative pairs.
+fn compute_warp_vs_single_mrr(
+    hard_negative_pairs: &[(&str, &str)],
+    embedder: &MockMultiVectorEmbedder,
+    index: &WarpIndex,
+    all_texts: &[String],
+) -> crate::Result<(f64, f64)> {
+    let mut warp_mrr_sum = 0.0;
+    let mut single_vector_mrr_sum = 0.0;
+    let num_queries = hard_negative_pairs.len();
+
+    for (query_idx, (positive, _negative)) in hard_negative_pairs.iter().enumerate() {
+        let query_embedding = embedder.embed_tokens(positive)?;
+
+        // WARP search
+        let search_config = WarpSearchConfig::with_k(10);
+        let warp_results = index.search(&query_embedding, &search_config)?;
+
+        let warp_rank = warp_results
+            .iter()
+            .position(|(chunk_id, _)| {
+                index.get_chunk(chunk_id).map(|c| c.content == *positive).unwrap_or(false)
+            })
+            .map(|r| r + 1);
+
+        if let Some(rank) = warp_rank {
+            warp_mrr_sum += 1.0 / rank as f64;
+        }
+
+        // Single-vector comparison
+        let positive_doc_idx = query_idx * 2;
+        let single_rank =
+            compute_single_vector_rank(embedder, &query_embedding, all_texts, positive_doc_idx)?;
+        if let Some(rank) = single_rank {
+            single_vector_mrr_sum += 1.0 / rank as f64;
+        }
+    }
+
+    Ok((warp_mrr_sum / num_queries as f64, single_vector_mrr_sum / num_queries as f64))
+}
+
+/// Compute the rank of a target document using single-vector (average embedding) similarity.
+fn compute_single_vector_rank(
+    embedder: &MockMultiVectorEmbedder,
+    query_embedding: &MultiVectorEmbedding,
+    all_texts: &[String],
+    target_idx: usize,
+) -> crate::Result<Option<usize>> {
+    let query_avg = average_embedding(query_embedding);
+    let mut scores: Vec<(usize, f64)> = all_texts
+        .iter()
+        .enumerate()
+        .map(|(i, text)| {
+            let doc_emb = embedder.embed_tokens(text)?;
+            let doc_avg = average_embedding(&doc_emb);
+            let score = cosine_similarity(&query_avg, &doc_avg);
+            Ok((i, score))
+        })
+        .collect::<crate::Result<Vec<_>>>()?;
+
+    scores.sort_by(|a, b| b.1.total_cmp(&a.1));
+    Ok(scores.iter().position(|(i, _)| *i == target_idx).map(|r| r + 1))
 }
 
 // =============================================================================
