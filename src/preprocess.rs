@@ -388,6 +388,8 @@ impl ChainedPreprocessor {
     }
 
     /// Add a preprocessor to the chain.
+    #[must_use]
+    #[allow(clippy::should_implement_trait)]
     pub fn add<P: QueryPreprocessor + 'static>(mut self, preprocessor: P) -> Self {
         self.preprocessors.push(Box::new(preprocessor));
         self

@@ -86,6 +86,7 @@ impl TimestampChunker {
 
     /// Build a chunk from a slice of cues.
     #[allow(clippy::cast_sign_loss)]
+    #[allow(clippy::disallowed_methods)] // json! macro internally uses unwrap
     fn build_chunk(
         document: &Document,
         cues: &[&crate::media::SubtitleCue],
