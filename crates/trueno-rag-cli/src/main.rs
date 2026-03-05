@@ -1398,9 +1398,9 @@ fn chunk_document(
         ChunkStrategy::Auto => doc.metadata.contains_key("subtitle_cues"),
     };
     if use_timestamps {
-        timestamp_chunker.chunk(doc)
+        Ok(timestamp_chunker.chunk(doc)?)
     } else {
-        recursive_chunker.chunk(doc)
+        Ok(recursive_chunker.chunk(doc)?)
     }
 }
 
