@@ -67,6 +67,8 @@
 
 #![deny(missing_docs)]
 #![deny(clippy::all)]
+#![allow(clippy::disallowed_methods)] // json! macro internally uses unwrap
+#![allow(clippy::return_self_not_must_use)]
 #![warn(clippy::pedantic)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
