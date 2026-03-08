@@ -64,6 +64,9 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
+      - name: Ensure target is installed
+        run: rustup target add ${{ matrix.target }}
+
       - name: Build
         run: cargo build --release --target ${{ matrix.target }} --package trueno-rag-cli
 
