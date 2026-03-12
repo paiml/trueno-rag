@@ -42,7 +42,7 @@ SIMD-accelerated RAG pipeline built on [Trueno](https://crates.io/crates/trueno)
 
 ```toml
 [dependencies]
-trueno-rag = "0.1.8"
+trueno-rag = "0.2"
 ```
 
 ## Usage
@@ -96,7 +96,7 @@ NEMOTRON_MODEL_PATH=/path/to/model.gguf cargo run --example nemotron_embeddings 
 Production-quality vector embeddings via FastEmbed (ONNX Runtime):
 
 ```toml
-trueno-rag = { version = "0.1.8", features = ["embeddings"] }
+trueno-rag = { version = "0.2", features = ["embeddings"] }
 ```
 
 ```rust
@@ -119,7 +119,7 @@ Available models:
 High-quality 4096-dimensional embeddings via GGUF model inference:
 
 ```toml
-trueno-rag = { version = "0.1.8", features = ["nemotron"] }
+trueno-rag = { version = "0.2", features = ["nemotron"] }
 ```
 
 ```rust
@@ -140,7 +140,7 @@ let doc_emb = embedder.embed_document("Machine learning is a branch of AI...")?;
 LZ4/ZSTD compressed index persistence:
 
 ```toml
-trueno-rag = { version = "0.1.8", features = ["compression"] }
+trueno-rag = { version = "0.2", features = ["compression"] }
 ```
 
 ```rust
@@ -194,9 +194,9 @@ trueno-rag is part of the Sovereign AI Stack:
 
 | Crate | Version | Purpose |
 |-------|---------|---------|
-| [trueno](https://crates.io/crates/trueno) | 0.11 | SIMD/GPU compute primitives |
-| [trueno-db](https://crates.io/crates/trueno-db) | 0.3.10 | GPU-first analytics database |
-| [realizar](https://crates.io/crates/realizar) | 0.5.1 | GGUF/APR model inference |
+| [trueno](https://crates.io/crates/trueno) | 0.15 | SIMD/GPU compute primitives |
+| [trueno-db](https://crates.io/crates/trueno-db) | 0.3.14 | GPU-first analytics database |
+| [realizar](https://crates.io/crates/realizar) | 0.7 | GGUF/APR model inference |
 | [fastembed](https://crates.io/crates/fastembed) | 5.x | ONNX embeddings |
 
 ## Development
