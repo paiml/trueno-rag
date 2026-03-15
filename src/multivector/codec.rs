@@ -71,6 +71,9 @@ impl ResidualCodec {
             return Err(crate::Error::InvalidInput("nbits must be 2 or 4".to_string()));
         }
 
+        if dim == 0 {
+            return Err(crate::Error::InvalidInput("dim must be > 0".to_string()));
+        }
         let n = embeddings.len() / dim;
         if n < num_centroids {
             return Err(crate::Error::InvalidInput(format!(

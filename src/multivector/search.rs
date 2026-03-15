@@ -37,6 +37,9 @@ impl CentroidSelector {
         dim: usize,
         config: &WarpSearchConfig,
     ) -> Vec<Vec<(usize, f32)>> {
+        if dim == 0 || centroids.is_empty() {
+            return query.tokens().map(|_| vec![]).collect();
+        }
         let num_centroids = centroids.len() / dim;
 
         query
@@ -69,6 +72,9 @@ impl CentroidSelector {
     /// Returns scores for all centroids sorted by score descending.
     #[must_use]
     pub fn batch_scores(query_token: &[f32], centroids: &[f32], dim: usize) -> Vec<(usize, f32)> {
+        if dim == 0 || centroids.is_empty() {
+            return vec![];
+        }
         let num_centroids = centroids.len() / dim;
 
         let mut scores: Vec<(usize, f32)> = (0..num_centroids)
