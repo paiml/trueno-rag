@@ -1,3 +1,4 @@
+#![allow(clippy::disallowed_methods)]
 //! Integration tests for trueno-rag
 
 use trueno_rag::{

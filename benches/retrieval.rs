@@ -1,3 +1,4 @@
+#![allow(clippy::disallowed_methods)]
 //! Benchmarks for retrieval operations
 
 use criterion::{criterion_group, criterion_main, Criterion};

@@ -1,3 +1,4 @@
+#![allow(clippy::disallowed_methods)]
 //! Property-based tests for trueno-rag
 
 use proptest::prelude::*;
