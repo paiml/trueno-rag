@@ -2070,7 +2070,8 @@ fn create_query_embedder(persisted: &PersistedIndex) -> Result<Box<dyn Embedder>
                 Some(name) if name.contains("bge-small") => EmbeddingModelType::BgeSmallEnV15,
                 _ => EmbeddingModelType::AllMiniLmL6V2,
             };
-            println!(
+            // GH-16: Status message goes to stderr to avoid contaminating --format json output
+            eprintln!(
                 "Using semantic embedder: {} (dim={})",
                 model_type.model_name(),
                 model_type.dimension()
@@ -2427,7 +2428,14 @@ fn run_eval(action: EvalAction) -> Result<()> {
             hyde,
         ),
 
-        EvalAction::Judge { retrieval_results, ground_truth: _, output, cache, top_k, model } => {
+        EvalAction::Judge { retrieval_results, ground_truth, output, cache, top_k, model } => {
+            // GH-16: Warn that --ground-truth is accepted but not yet used by the judge
+            if !ground_truth.is_empty() {
+                eprintln!(
+                    "Warning: --ground-truth '{}' is not yet used by eval judge (LLM judges relevance without reference answers). Flag accepted for future use.",
+                    ground_truth
+                );
+            }
             let rt = tokio::runtime::Runtime::new().context("Failed to create tokio runtime")?;
             rt.block_on(run_eval_judge(&retrieval_results, &output, &cache, top_k, &model))
         }
@@ -2985,11 +2993,11 @@ async fn run_eval_judge(
         .collect::<std::result::Result<_, _>>()
         .context("Failed to parse retrieval results JSONL")?;
 
-    println!("Loaded {} retrieval results", results.len());
+    eprintln!("Loaded {} retrieval results", results.len());
 
     // Load cache
     let cache = JudgeCache::load(Path::new(cache_path));
-    println!("Cache: {} entries loaded from {}", cache.entries.len(), cache_path);
+    eprintln!("Cache: {} entries loaded from {}", cache.entries.len(), cache_path);
 
     let client = AnthropicClient::from_env().map_err(|e| anyhow::anyhow!("{e}"))?;
     let mut judge = RelevanceJudge::new(client, model, cache);
@@ -2998,12 +3006,12 @@ async fn run_eval_judge(
 
     // Save cache
     judge.cache().save(Path::new(cache_path)).context("Failed to save judge cache")?;
-    println!("Cache saved: {} entries to {}", judge.cache().entries.len(), cache_path);
+    eprintln!("Cache saved: {} entries to {}", judge.cache().entries.len(), cache_path);
 
     // Save results
     let json = serde_json::to_string_pretty(&eval_output)?;
     fs::write(output_path, json)?;
-    println!("Results saved to: {output_path}");
+    eprintln!("Results saved to: {output_path}");
 
     Ok(())
 }
