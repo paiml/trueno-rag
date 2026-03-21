@@ -2,6 +2,8 @@
 
 <img src=".github/trueno-rag-hero.svg" alt="trueno-rag" width="600">
 
+**Pure-Rust Retrieval-Augmented Generation with BM25, semantic embeddings, and hybrid RRF fusion.**
+
 ## Table of Contents
 
 - [Installation](#installation)
