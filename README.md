@@ -1,4 +1,5 @@
 <div align="center">
+<h1 align="center">trueno-rag</h1>
 
 <img src=".github/trueno-rag-hero.svg" alt="trueno-rag" width="600">
 
