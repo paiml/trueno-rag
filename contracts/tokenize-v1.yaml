@@ -45,17 +45,17 @@ proof_obligations:
 falsification_tests:
   - id: FALSIFY-TOK-001
     rule: "Non-empty output tokens"
-    test: "test_tokenize_no_empty_tokens"
+    test: "test_bm25_tokenize"
     prediction: "verified"
     if_fails: "Tokenizer produces empty strings from consecutive delimiters"
   - id: FALSIFY-TOK-002
     rule: "Lowercase normalization"
-    test: "test_tokenize_all_lowercase"
+    test: "test_bm25_tokenize_lowercase"
     prediction: "verified"
     if_fails: "Case normalization not applied"
   - id: FALSIFY-TOK-003
     rule: "IDF monotonicity"
-    test: "test_idf_decreasing_with_df"
+    test: "test_bm25_idf_calculation"
     prediction: "verified"
     if_fails: "BM25 IDF formula incorrect"
 
@@ -79,6 +79,6 @@ qa_gate:
   min_coverage: 0.90
   max_complexity: 20
   required_tests:
-    - test_tokenize_no_empty_tokens
-    - test_tokenize_all_lowercase
-    - test_idf_decreasing_with_df
+    - test_bm25_tokenize
+    - test_bm25_tokenize_lowercase
+    - test_bm25_idf_calculation

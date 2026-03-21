@@ -47,22 +47,22 @@ proof_obligations:
 falsification_tests:
   - id: FALSIFY-BATCH-001
     rule: "Output count equals input count"
-    test: "test_batch_retrieve_count_matches"
+    test: "test_hybrid_retriever_index_batch"
     prediction: "verified"
     if_fails: "Batch retrieval drops or duplicates queries"
   - id: FALSIFY-BATCH-002
     rule: "Per-query result bounded by k"
-    test: "test_batch_retrieve_k_bound"
+    test: "test_bm25_search_top_k"
     prediction: "verified"
     if_fails: "Top-k truncation not applied"
   - id: FALSIFY-BATCH-003
     rule: "RRF monotonicity"
-    test: "test_rrf_score_decreasing"
+    test: "test_rrf_score_calculation"
     prediction: "verified"
     if_fails: "RRF fusion formula error"
   - id: FALSIFY-BATCH-004
     rule: "No duplicate documents after fusion"
-    test: "test_rrf_no_duplicates"
+    test: "test_rrf_combines_ranks"
     prediction: "verified"
     if_fails: "Deduplication not applied in RRF merge"
 
@@ -86,7 +86,7 @@ qa_gate:
   min_coverage: 0.90
   max_complexity: 20
   required_tests:
-    - test_batch_retrieve_count_matches
-    - test_batch_retrieve_k_bound
-    - test_rrf_score_decreasing
-    - test_rrf_no_duplicates
+    - test_hybrid_retriever_index_batch
+    - test_bm25_search_top_k
+    - test_rrf_score_calculation
+    - test_rrf_combines_ranks
