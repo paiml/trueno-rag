@@ -1,131 +1,21 @@
-# Unified CI — self-hosted clean-room runners for sovereignty (§2.1.1)
-# Spec: docs/specifications/unified-ci-pipeline.md
-#
-# The unified gate runs the full clean-room pipeline (paiml/.github).
-# Local quality-gates run lightweight checks directly for fast feedback.
-
+# Sovereign CI — calls reusable workflow from paiml/.github
+# Change once in paiml/.github → applies to all repos
 name: CI
 
 on:
-  pull_request_target:
-    branches: [main, master]
   push:
     branches: [main, master]
-  workflow_dispatch:  # manual trigger for testing
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
 
-# One CI run per branch/PR; cancel stale runs on same branch
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
-  # -- Unified clean-room gate (full pipeline) --
-  unified:
-    uses: paiml/.github/.github/workflows/unified-gate.yml@main
+  ci:
+    uses: paiml/.github/.github/workflows/sovereign-ci.yml@main
     with:
       repo: ${{ github.event.repository.name }}
-      pr_sha: ${{ github.event.pull_request.head.sha || github.sha }}
     secrets: inherit
-
-  # -- Local quality gates (fast feedback) --
-  test:
-    name: Test
-    runs-on: [self-hosted, clean-room]
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: dtolnay/rust-toolchain@stable
-
-      - uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-test-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: ${{ runner.os }}-cargo-test-
-
-      - name: Run tests
-        run: cargo test --lib --workspace
-
-  lint:
-    name: Lint
-    runs-on: [self-hosted, clean-room]
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy, rustfmt
-
-      - uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-lint-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: ${{ runner.os }}-cargo-lint-
-
-      - name: Clippy
-        run: cargo clippy -- -D warnings
-
-      - name: Rustfmt
-        run: cargo fmt --check
-
-  coverage:
-    name: Coverage
-    runs-on: [self-hosted, clean-room]
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: llvm-tools-preview
-
-      - uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-cov-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: ${{ runner.os }}-cargo-cov-
-
-      - name: Install cargo-llvm-cov
-        run: cargo install cargo-llvm-cov --locked
-
-      - name: Generate coverage (lcov)
-        run: cargo llvm-cov test --lib --workspace --lcov --output-path lcov.info
-
-      - name: Upload coverage artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-lcov
-          path: lcov.info
-
-  security:
-    name: Security Audit
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: dtolnay/rust-toolchain@stable
-
-      - name: Install cargo-audit
-        run: cargo install cargo-audit --locked
-
-      - name: Run cargo audit
-        run: cargo audit
-
-  gate:
-    name: gate
-    runs-on: [self-hosted, clean-room]
-    if: always()
-    needs: [test, lint, coverage, security]
-    steps:
-      - name: Check all jobs
-        run: |
-          if [ "${{ needs.test.result }}" = "failure" ] || [ "${{ needs.lint.result }}" = "failure" ]; then
-            exit 1
-          fi
