@@ -54,3 +54,4 @@ proptest-regressions/
 .pmat/context.db-wal
 .pmat/coverage-cache.json
 .pmat/dead-code-cache.json
+src/generated_contracts.rs
