@@ -108,6 +108,9 @@ impl SqliteIndex {
         chunks: &[(String, String)],
         fingerprint: Option<(&str, &[u8; 32])>,
     ) -> Result<()> {
+        // Contract: configuration-v1.yaml precondition (pv codegen)
+        contract_pre_configuration!(doc_id.as_bytes());
+
         let mut conn = self.conn.lock().map_err(|e| lock_err(&e))?;
         let tx = conn
             .transaction()

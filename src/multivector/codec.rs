@@ -147,6 +147,8 @@ impl ResidualCodec {
     /// Find the nearest centroid for a vector.
     #[must_use]
     pub fn find_nearest_centroid(&self, embedding: &[f32]) -> usize {
+        // Contract: configuration-v1.yaml precondition (pv codegen)
+        contract_pre_configuration!(embedding);
         let mut best_id = 0;
         let mut best_dist = f32::MAX;
 
