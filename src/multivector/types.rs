@@ -56,6 +56,8 @@ impl MultiVectorEmbedding {
             dim,
             embeddings.len()
         );
+        // Contract: embedding-algebra-v1.yaml precondition (pv codegen)
+        contract_pre_embedding_lookup!(embeddings);
         Self { embeddings, num_tokens, dim }
     }
 
@@ -103,8 +105,16 @@ impl MultiVectorEmbedding {
     }
 
     /// Iterate over token embeddings.
+    ///
+    /// Returns an empty iterator if `dim == 0` (poka-yoke: prevents
+    /// `chunks_exact(0)` panic from uninitialized embedding config).
     pub fn tokens(&self) -> impl Iterator<Item = &[f32]> {
-        self.embeddings.chunks_exact(self.dim)
+        if self.dim == 0 {
+            // chunks_exact(0) panics — return empty iterator instead
+            [].chunks_exact(1)
+        } else {
+            self.embeddings.chunks_exact(self.dim)
+        }
     }
 
     /// Get the raw flattened embeddings.
@@ -348,6 +358,24 @@ mod tests {
         let mv = MultiVectorEmbedding::from_tokens(&tokens);
 
         assert_eq!(mv.num_tokens(), 0);
+        assert!(mv.is_empty());
+    }
+
+    /// Regression test for paiml/trueno-rag#15: division by zero when dim is 0.
+    /// `from_tokens(&[])` produces dim=0; `tokens()` must not panic.
+    #[test]
+    fn test_multivector_dim_zero_tokens_no_panic() {
+        let mv = MultiVectorEmbedding::from_tokens(&[]);
+        assert_eq!(mv.dim(), 0);
+        assert_eq!(mv.tokens().count(), 0); // must not panic
+    }
+
+    /// Regression: `new(vec![], 0, 0)` is valid (empty embedding) and
+    /// iterating tokens must return an empty iterator, not div-by-zero.
+    #[test]
+    fn test_multivector_new_zero_dim_zero_tokens() {
+        let mv = MultiVectorEmbedding::new(vec![], 0, 0);
+        assert_eq!(mv.tokens().count(), 0);
         assert!(mv.is_empty());
     }
 

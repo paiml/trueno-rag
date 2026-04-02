@@ -40,12 +40,13 @@ SIMD-accelerated RAG pipeline built on [Trueno](https://crates.io/crates/trueno)
 - **Semantic Embeddings** - Production ONNX models via FastEmbed (optional)
 - **Nemotron Embeddings** - NVIDIA Embed Nemotron 8B via GGUF (optional)
 - **Index Compression** - LZ4/ZSTD compressed persistence (optional)
+- **Multivector Safety** - Division-by-zero guard on dim=0 inputs with 6 regression tests
 
 ## Installation
 
 ```toml
 [dependencies]
-trueno-rag = "0.2"
+trueno-rag = "0.2.4"
 ```
 
 ## Usage
@@ -99,7 +100,7 @@ NEMOTRON_MODEL_PATH=/path/to/model.gguf cargo run --example nemotron_embeddings 
 Production-quality vector embeddings via FastEmbed (ONNX Runtime):
 
 ```toml
-trueno-rag = { version = "0.2", features = ["embeddings"] }
+trueno-rag = { version = "0.2.4", features = ["embeddings"] }
 ```
 
 ```rust
@@ -122,7 +123,7 @@ Available models:
 High-quality 4096-dimensional embeddings via GGUF model inference:
 
 ```toml
-trueno-rag = { version = "0.2", features = ["nemotron"] }
+trueno-rag = { version = "0.2.4", features = ["nemotron"] }
 ```
 
 ```rust
@@ -143,7 +144,7 @@ let doc_emb = embedder.embed_document("Machine learning is a branch of AI...")?;
 LZ4/ZSTD compressed index persistence:
 
 ```toml
-trueno-rag = { version = "0.2", features = ["compression"] }
+trueno-rag = { version = "0.2.4", features = ["compression"] }
 ```
 
 ```rust
@@ -184,12 +185,12 @@ let bytes = index.to_compressed_bytes(Compression::Zstd)?;
 
 ```bash
 cargo test --lib          # Unit tests
-cargo test                # All tests including integration
+cargo test                # All tests including integration (548 passing)
 make coverage             # Coverage report (target: >=95%)
 make lint                 # Clippy lints
 ```
 
-Property-based tests cover chunking boundary conditions, BM25 scoring invariants, and fusion correctness.
+548 tests passing. Property-based tests cover chunking boundary conditions, BM25 scoring invariants, fusion correctness, and multivector dim=0 regression.
 
 ## Stack Dependencies
 

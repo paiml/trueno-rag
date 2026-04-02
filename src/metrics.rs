@@ -22,6 +22,8 @@ pub struct RetrievalMetrics {
 impl RetrievalMetrics {
     /// Compute all metrics for a single query
     pub fn compute(retrieved: &[ChunkId], relevant: &HashSet<ChunkId>, k_values: &[usize]) -> Self {
+        // Contract: configuration-v1.yaml precondition (pv codegen)
+        contract_pre_configuration!(retrieved);
         let mut metrics = Self::default();
 
         for &k in k_values {
@@ -45,6 +47,8 @@ impl RetrievalMetrics {
             return 0.0;
         }
 
+        // Contract: configuration-v1.yaml precondition (pv codegen)
+        contract_pre_configuration!(retrieved);
         let retrieved_k: HashSet<ChunkId> = retrieved.iter().take(k).copied().collect();
         let relevant_retrieved = retrieved_k.intersection(relevant).count();
 
@@ -60,6 +64,8 @@ impl RetrievalMetrics {
             return 0.0;
         }
 
+        // Contract: configuration-v1.yaml precondition (pv codegen)
+        contract_pre_configuration!(retrieved);
         let retrieved_k: HashSet<ChunkId> = retrieved.iter().take(k).copied().collect();
         let relevant_retrieved = retrieved_k.intersection(relevant).count();
 
@@ -71,6 +77,8 @@ impl RetrievalMetrics {
     /// MRR = 1 / rank of first relevant result
     #[must_use]
     pub fn mean_reciprocal_rank(retrieved: &[ChunkId], relevant: &HashSet<ChunkId>) -> f32 {
+        // Contract: pagerank-kernel-v1.yaml precondition (pv codegen)
+        contract_pre_pagerank!(retrieved);
         for (rank, id) in retrieved.iter().enumerate() {
             if relevant.contains(id) {
                 return 1.0 / (rank + 1) as f32;
@@ -84,6 +92,8 @@ impl RetrievalMetrics {
     /// NDCG@k = DCG@k / IDCG@k
     #[must_use]
     pub fn ndcg_at_k(retrieved: &[ChunkId], relevant: &HashSet<ChunkId>, k: usize) -> f32 {
+        // Contract: configuration-v1.yaml precondition (pv codegen)
+        contract_pre_configuration!(retrieved);
         let dcg = Self::dcg_at_k(retrieved, relevant, k);
         let idcg = Self::ideal_dcg_at_k(relevant.len(), k);
 
@@ -125,6 +135,8 @@ impl RetrievalMetrics {
             return 0.0;
         }
 
+        // Contract: configuration-v1.yaml precondition (pv codegen)
+        contract_pre_configuration!(retrieved);
         let mut sum_precision = 0.0;
         let mut relevant_count = 0;
 
@@ -141,6 +153,8 @@ impl RetrievalMetrics {
     /// Compute F1 score at k
     #[must_use]
     pub fn f1_at_k(retrieved: &[ChunkId], relevant: &HashSet<ChunkId>, k: usize) -> f32 {
+        // Contract: configuration-v1.yaml precondition (pv codegen)
+        contract_pre_configuration!(retrieved);
         let precision = Self::precision_at_k(retrieved, relevant, k);
         let recall = Self::recall_at_k(retrieved, relevant, k);
 
@@ -154,6 +168,8 @@ impl RetrievalMetrics {
     /// Compute Hit Rate (1 if any relevant in top-k, else 0)
     #[must_use]
     pub fn hit_rate_at_k(retrieved: &[ChunkId], relevant: &HashSet<ChunkId>, k: usize) -> f32 {
+        // Contract: configuration-v1.yaml precondition (pv codegen)
+        contract_pre_configuration!(retrieved);
         let retrieved_k: HashSet<ChunkId> = retrieved.iter().take(k).copied().collect();
         if retrieved_k.intersection(relevant).next().is_some() {
             1.0

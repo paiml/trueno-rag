@@ -343,6 +343,24 @@ mod tests {
         }
     }
 
+    /// Regression test for paiml/trueno-rag#15: dim=0 must not divide by zero.
+    #[test]
+    fn test_centroid_selector_dim_zero_no_panic() {
+        let query = MultiVectorEmbedding::from_tokens(&[]);
+        let centroids: Vec<f32> = vec![];
+        let config = WarpSearchConfig::with_k(10);
+
+        let selected = CentroidSelector::select(&query, &centroids, 0, &config);
+        assert!(selected.is_empty());
+    }
+
+    /// Regression test for paiml/trueno-rag#15: batch_scores with dim=0.
+    #[test]
+    fn test_batch_scores_dim_zero_no_panic() {
+        let scores = CentroidSelector::batch_scores(&[], &[], 0);
+        assert!(scores.is_empty());
+    }
+
     #[test]
     fn test_batch_scores() {
         let query_token = vec![1.0, 0.0, 0.0, 0.0];

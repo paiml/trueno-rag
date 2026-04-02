@@ -193,6 +193,8 @@ impl<E: Embedder> HybridRetriever<E> {
 
     /// Retrieve relevant chunks for a query
     pub fn retrieve(&self, query: &str, k: usize) -> Result<Vec<RetrievalResult>> {
+        // Contract: configuration-v1.yaml precondition (pv codegen)
+        contract_pre_configuration!(query.as_bytes());
         let candidates = self.config.candidates_per_source;
 
         // Dense retrieval
@@ -238,6 +240,8 @@ impl<E: Embedder> HybridRetriever<E> {
 
     /// Retrieve using only dense (vector) search
     pub fn retrieve_dense(&self, query: &str, k: usize) -> Result<Vec<RetrievalResult>> {
+        // Contract: configuration-v1.yaml precondition (pv codegen)
+        contract_pre_configuration!(query.as_bytes());
         let query_embedding = self.embedder.embed_query(query)?;
         let results = self.dense.search(&query_embedding, k)?;
 
@@ -253,6 +257,8 @@ impl<E: Embedder> HybridRetriever<E> {
 
     /// Retrieve using only sparse (BM25) search
     pub fn retrieve_sparse(&self, query: &str, k: usize) -> Result<Vec<RetrievalResult>> {
+        // Contract: configuration-v1.yaml precondition (pv codegen)
+        contract_pre_configuration!(query.as_bytes());
         let results = self.sparse.search(query, k);
 
         let mut retrieval_results = Vec::with_capacity(results.len());
@@ -507,6 +513,8 @@ impl<E: crate::multivector::MultiVectorEmbedder> MultiVectorRetriever<E> {
     /// Get the embedder.
     #[must_use]
     pub fn embedder(&self) -> &E {
+        // Contract: embedding-algebra-v1.yaml precondition (pv codegen)
+        contract_pre_embedding_lookup!();
         &self.embedder
     }
 

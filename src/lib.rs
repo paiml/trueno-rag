@@ -127,18 +127,18 @@ pub use loader::ImageLoader;
 pub use loader::{DocumentLoader, LoaderRegistry, SubtitleLoader, TextLoader};
 pub use media::{parse_subtitles, SubtitleCue, SubtitleFormat, SubtitleTrack};
 pub use metrics::{AggregatedMetrics, RetrievalMetrics};
-pub use pipeline::{ContextAssembler, RagPipeline};
-pub use rerank::Reranker;
-pub use retrieve::{HybridRetriever, RetrievalResult};
-#[cfg(feature = "sqlite")]
-pub use sqlite::{SqliteIndex, SqliteStore};
 #[cfg(feature = "multivector")]
 pub use multivector::{
     exact_maxsim, MockMultiVectorEmbedder, MultiVectorEmbedder, MultiVectorEmbedding,
     ResidualCodec, WarpIndex, WarpIndexConfig, WarpSearchConfig,
 };
+pub use pipeline::{ContextAssembler, RagPipeline};
+pub use rerank::Reranker;
 #[cfg(feature = "multivector")]
 pub use retrieve::MultiVectorRetriever;
+pub use retrieve::{HybridRetriever, RetrievalResult};
+#[cfg(feature = "sqlite")]
+pub use sqlite::{SqliteIndex, SqliteStore};
 /// Document identifier
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct DocumentId(pub uuid::Uuid);

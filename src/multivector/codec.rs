@@ -81,6 +81,9 @@ impl ResidualCodec {
             )));
         }
 
+        // Contract: embedding-algebra-v1.yaml precondition (pv codegen)
+        contract_pre_embedding_lookup!(embeddings);
+
         // Step 1: K-means clustering to find centroids
         let centroids = Self::kmeans_clustering(embeddings, dim, num_centroids, iterations);
 
@@ -95,6 +98,10 @@ impl ResidualCodec {
     }
 
     /// Create a codec with pre-trained parameters.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `dim == 0` (poka-yoke: division-by-zero guard).
     #[must_use]
     pub fn with_params(
         centroids: Vec<f32>,
@@ -104,6 +111,7 @@ impl ResidualCodec {
         bucket_weights: Vec<f32>,
         nbits: u8,
     ) -> Self {
+        assert!(dim > 0, "dim must be > 0: division by zero in centroid/residual arithmetic");
         Self { centroids, num_centroids, dim, bucket_cutoffs, bucket_weights, nbits }
     }
 
@@ -167,6 +175,8 @@ impl ResidualCodec {
     /// Compress an embedding to (centroid_id, packed_residual).
     #[must_use]
     pub fn compress(&self, embedding: &[f32]) -> (usize, Vec<u8>) {
+        // Contract: embedding-algebra-v1.yaml precondition (pv codegen)
+        contract_pre_embedding_lookup!(embedding);
         // Find nearest centroid
         let centroid_id = self.find_nearest_centroid(embedding);
         let centroid = self.centroid(centroid_id);
@@ -508,6 +518,8 @@ impl ResidualCodecBuilder {
 
     /// Train the codec from sample embeddings.
     pub fn train(&self, embeddings: &[f32]) -> Result<ResidualCodec> {
+        // Contract: embedding-algebra-v1.yaml precondition (pv codegen)
+        contract_pre_embedding_lookup!(embeddings);
         ResidualCodec::train(
             embeddings,
             self.config.token_dim,
@@ -569,6 +581,20 @@ mod tests {
         let result = ResidualCodec::train(&embeddings, 32, 16, 3, 5);
 
         assert!(result.is_err());
+    }
+
+    /// Regression test for paiml/trueno-rag#15: train() rejects dim=0.
+    #[test]
+    fn test_codec_train_dim_zero() {
+        let result = ResidualCodec::train(&[], 0, 4, 2, 3);
+        assert!(result.is_err());
+    }
+
+    /// Regression test for paiml/trueno-rag#15: with_params() rejects dim=0.
+    #[test]
+    #[should_panic(expected = "dim must be > 0")]
+    fn test_codec_with_params_dim_zero() {
+        let _ = ResidualCodec::with_params(vec![], 0, 0, vec![], vec![], 2);
     }
 
     // ============ Compression Tests ============

@@ -217,6 +217,9 @@ impl WarpIndex {
             ));
         }
 
+        // Contract: embedding-algebra-v1.yaml precondition (pv codegen)
+        contract_pre_embedding_lookup!(embedding.as_slice());
+
         let chunk_id = chunk.id;
         self.chunks.insert(chunk_id, chunk);
         self.pending.push((chunk_id, embedding));

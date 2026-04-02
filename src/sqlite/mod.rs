@@ -76,6 +76,8 @@ impl SqliteIndex {
 
     /// Get chunk count.
     pub fn chunk_count(&self) -> Result<usize> {
+        // Contract: configuration-v1.yaml precondition (pv codegen)
+        contract_pre_configuration!();
         let conn = self.conn.lock().map_err(|e| lock_err(&e))?;
         let count: i64 = conn
             .query_row("SELECT COUNT(*) FROM chunks", [], |r| r.get(0))
@@ -230,6 +232,8 @@ impl SqliteIndex {
 
     /// Get chunk content by ID.
     pub fn get_chunk(&self, chunk_id: &str) -> Result<Option<String>> {
+        // Contract: configuration-v1.yaml precondition (pv codegen)
+        contract_pre_configuration!(chunk_id.as_bytes());
         let conn = self.conn.lock().map_err(|e| lock_err(&e))?;
         let content: Option<String> = conn
             .query_row("SELECT content FROM chunks WHERE id = ?1", [chunk_id], |row| row.get(0))

@@ -111,6 +111,8 @@ impl Chunk {
 
     /// Set the embedding vector
     pub fn set_embedding(&mut self, embedding: Vec<f32>) {
+        // Contract: embedding-algebra-v1.yaml precondition (pv codegen)
+        contract_pre_embedding_lookup!(embedding);
         self.embedding = Some(embedding);
     }
 }
