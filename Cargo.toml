@@ -86,8 +86,8 @@ exclude = [
 
 [dependencies]
 # Core compute
-trueno = "0.15"
-trueno-db = "0.3.14"
+trueno = "0.16.5"
+trueno-db = "0.3.16"
 
 # Async runtime
 tokio = { version = "1.49", features = ["full"] }
