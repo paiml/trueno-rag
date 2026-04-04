@@ -48,4 +48,3 @@ proptest-regressions/
 .pmat-work.toml
 .pmat-tickets/
 .pmat-metrics/
-src/generated_contracts.rs
